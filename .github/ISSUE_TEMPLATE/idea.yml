@@ -1,0 +1,15 @@
+name: Idea / Fikir
+description: Something that would make SiberSentez easier or more useful. / SiberSentez'i daha kolay ya da daha yararlı yapacak bir şey.
+labels: [idea]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you wanted to do / Ne yapmak istedin
+      description: The situation, in your own words, before any solution. / Çözümden önce, durumu kendi sözlerinle anlat.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea / Fikrin

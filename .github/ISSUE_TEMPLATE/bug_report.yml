@@ -1,0 +1,42 @@
+name: Bug report / Hata bildirimi
+description: Something does not work as it should. / Bir şey olması gerektiği gibi çalışmıyor.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you! Please do not paste API keys, tokens or private file contents. A security problem goes to the private report (Security tab), not here.
+        Teşekkürler! API anahtarı, token ya da özel dosya içeriği yapıştırma. Güvenlik sorunlarını buraya değil, Security sekmesindeki gizli bildirime yaz.
+  - type: input
+    id: version
+    attributes:
+      label: Version / Sürüm
+      description: The first line of Settings → Help → Diagnostic info, or the installer's name (SiberSentez-Setup-x.y.z.exe) / Ayarlar → Yardım → Tanılama bilgisi ilk satırı ya da kurulum dosyasının adı
+      placeholder: 0.14.0
+    validations:
+      required: true
+  - type: dropdown
+    id: tool
+    attributes:
+      label: AI tool / Yapay zekâ aracı
+      options: [Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor CLI, Other / Diğer, None / Yok]
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / Ne oldu
+      description: What you did, what you saw, and what you expected. / Ne yaptın, ne gördün, ne bekliyordun.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps / Adımlar
+      placeholder: |
+        1. ...
+        2. ...
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics / Tanılama
+      description: Settings → Help → Diagnostic info → Copy gives a short report without paths or names; paste it here. / Ayarlar → Yardım → Tanılama bilgisi → Kopyala, yol ve ad içermeyen kısa bir rapor verir; buraya yapıştır.
+      render: text

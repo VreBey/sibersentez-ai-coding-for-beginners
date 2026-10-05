@@ -1,0 +1,112 @@
+# SiberSentez License 1.0
+
+Required Notice: Copyright (c) 2026 Samet Nazlım (https://sibersentez.com)
+
+SiberSentez is free of charge, but it is not open source. This licence lets you install and use it; it does not give
+you its source code or the right to copy, change or distribute it. The Turkish text below is the binding one; the
+English text follows it as a translation.
+
+Applies to SiberSentez 0.14.0 and later. Copies of earlier versions that were received under the PolyForm Shield
+License 1.0.0 keep that licence.
+
+---
+
+## SiberSentez Lisansı 1.0 (Türkçe, bağlayıcı metin)
+
+**1. Taraflar.** "Lisans veren": Samet Nazlım (https://sibersentez.com). "Sen": SiberSentez'i kuran ya da kullanan kişi
+veya kurum. "Uygulama": SiberSentez masaüstü programı, kurulum dosyası, belgeleri ve içindeki SiberSentez Kiti.
+
+**2. Verilen hak.** Lisans veren sana Uygulamayı resmî kaynaklardan (sibersentez.com ve oradan bağlantı verilen GitHub
+sürüm sayfası) indirip kendi bilgisayarlarına kurma ve kişisel, eğitim ya da ticari her türlü işinde ücretsiz kullanma
+hakkı verir. Bu hak münhasır değildir, devredilemez ve bu lisansa uyduğun sürece geçerlidir.
+
+**3. Senin işin.** Uygulamayla yaptığın projeler, yazdığın ve yapay zekâ araçlarına yazdırdığın kod ve içerik senindir.
+Lisans veren bunlar üzerinde hiçbir hak iddia etmez.
+
+**4. SiberSentez Kiti.** Uygulamanın projelerine kopyaladığı skill ve ajan dosyalarını o projelerde kullanabilir,
+kopyalarını değiştirebilir ve projelerini paylaşırken ya da yayımlarken projenin içinde bırakabilirsin. Kitin
+kendisini ya da öğelerini projeden bağımsız olarak toplayıp dağıtamaz, satamaz ve SiberSentez ile rekabet eden bir ürün
+ya da hizmette kullanamazsın. Kopyalarındaki lisans bildirimini silmemelisin.
+
+**5. Yasaklar.** Yasaların açıkça izin verdiği durumlar dışında şunları yapamazsın:
+- Uygulamayı ya da kurulum dosyasını kopyalayıp başkalarına dağıtmak, başka bir yerde yayımlamak (paylaşmak istersen
+  resmî indirme bağlantısını paylaş);
+- Uygulamayı satmak, kiralamak, ödünç vermek ya da alt lisans vermek;
+- Uygulamayı değiştirmek, çevirmek ya da ondan türetilmiş bir ürün yapmak;
+- Uygulamayı kaynak koda dönüştürmek, parçalarına ayırmak ya da tersine mühendislik yapmak;
+- Uygulamadaki telif, lisans ve marka bildirimlerini kaldırmak ya da değiştirmek;
+- "SiberSentez" adını ve logosunu, Uygulamayı ya da ondan yapılmış bir şeyi kendi ürününmüş gibi sunmak için kullanmak.
+
+**6. Haklar saklıdır.** Bu lisansta açıkça verilmeyen bütün haklar, kaynak kodu dahil, Lisans verene aittir.
+
+**7. Üçüncü taraf bileşenler.** Uygulama, kendi lisanslarıyla gelen açık kaynak bileşenler içerir; bunların listesi ve
+lisansları `THIRD_PARTY_NOTICES.md` dosyasındadır. Bu lisans, o bileşenlerin lisanslarının sana verdiği hakları
+kısıtlamaz.
+
+**8. Yapay zekâ araçları.** Uygulama kendi yapay zekâsını getirmez; senin kurduğun araçları başlatır. Bu araçların
+hesapları, ücretleri ve koşulları kendi sağlayıcılarına aittir.
+
+**9. Garanti yok.** Uygulama "olduğu gibi" sunulur. Belirli bir amaca uygunluğu ya da hatasız çalışacağı garanti
+edilmez. Yasaların izin verdiği ölçüde Lisans veren, Uygulamanın kullanımından doğan zararlardan sorumlu değildir.
+Önemli projelerinin ayrıca yedeğini al.
+
+**10. Sona erme.** Bu lisansa uymazsan verilen hak kendiliğinden sona erer; bu durumda Uygulamayı kullanmayı bırakıp
+kopyalarını silmelisin. 3. madde (senin işin) sona ermeden etkilenmez.
+
+**11. Değişiklik.** Lisans veren sonraki sürümler için lisansı değiştirebilir. Elindeki sürüm, birlikte geldiği
+lisansla kalır.
+
+**12. Uygulanacak hukuk.** Bu lisansa Türkiye Cumhuriyeti hukuku uygulanır.
+
+**13. İletişim.** destek@sibersentez.com
+
+---
+
+## SiberSentez License 1.0 (English translation)
+
+**1. Parties.** "Licensor": Samet Nazlım (https://sibersentez.com). "You": the person or organisation that installs or
+uses SiberSentez. "The App": the SiberSentez desktop program, its installer, its documents and the SiberSentez Kit in it.
+
+**2. Grant.** The Licensor gives you the right to download the App from official sources (sibersentez.com and the GitHub
+release page it links to), install it on your own computers and use it free of charge for any personal, educational
+or commercial work. This right is non-exclusive, non-transferable and lasts as long as you follow this licence.
+
+**3. Your work.** The projects you make with the App, and the code and content you write or have AI tools write, are
+yours. The Licensor claims no rights in them.
+
+**4. The SiberSentez Kit.** You may use the skill and agent files that the App copies into your projects in those
+projects, change your copies, and leave them in your projects when you share or publish them. You may not collect or
+distribute the Kit or its items on their own, apart from a project, sell them, or use them in a product or service that
+competes with SiberSentez. Keep the licence notice in your copies.
+
+**5. Restrictions.** Except where the law expressly allows it, you may not:
+- copy the App or its installer and distribute it to others or publish it elsewhere (share the official download link
+  instead);
+- sell, rent, lend or sublicense the App;
+- modify or translate the App, or make a product derived from it;
+- decompile, disassemble or reverse engineer the App;
+- remove or change the copyright, licence or brand notices in the App;
+- use the name "SiberSentez" or its logo to present the App, or anything made from it, as your own product.
+
+**6. Rights reserved.** All rights not expressly given in this licence, the source code included, remain with the
+Licensor.
+
+**7. Third-party components.** The App contains open source components under their own licences; they are listed with
+their licences in `THIRD_PARTY_NOTICES.md`. This licence does not limit the rights their licences give you.
+
+**8. AI tools.** The App brings no AI of its own; it starts the tools you installed. Their accounts, fees and terms
+belong to their providers.
+
+**9. No warranty.** The App is provided "as is", with no warranty that it fits a purpose or runs without errors. As far
+as the law allows, the Licensor is not liable for damage arising from its use. Keep your own backups of important
+projects.
+
+**10. Termination.** If you do not follow this licence, the rights given end by themselves; you must then stop using the
+App and delete your copies. Section 3 (your work) is not affected.
+
+**11. Changes.** The Licensor may change the licence for later versions. The version you have keeps the licence it came
+with.
+
+**12. Governing law.** This licence is governed by the law of the Republic of Türkiye.
+
+**13. Contact.** destek@sibersentez.com
