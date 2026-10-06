@@ -266,7 +266,7 @@ test('one row per name: library > kit > project copy; the others in alsoIn; the 
   assert.equal(plan[0]._src, path.join(w.lib, 'testing', 'agents', 'tester.md'));
   assert.equal(plan[0]._kit, null);
   assert.equal(plan[1]._src, path.join(KIT, 'quality', 'skills', 'debug-helper'));
-  assert.deepEqual(plan[1]._kit, { kitVersion: '0.5.0', itemVersion: '0.1.2' });
+  assert.deepEqual(plan[1]._kit, { kitVersion: '0.6.0', itemVersion: '0.1.2' });
   assert.equal(findSourceItem([], 'skill', 'no-such-item'), null);
   assert.equal(findSourceItem([], 'skill', 'debug-helper', null), null, 'no kit given: library only');
   assert.equal(findSourceItem([], 'skill', 'debug-helper').origin, 'kit', 'the kit of this process by default');
@@ -441,8 +441,8 @@ test('skills-apply live: kit items are copied straight from the kit (with their 
     assert.deepEqual(
       rec.map((x) => [x.kind, x.name, x.source, x.kitVersion, x.itemVersion, x.kitPath]).sort(),
       [
-        ['agent', 'planner', 'kit', '0.5.0', '0.2.2', 'planning/agents/planner.md'],
-        ['skill', 'idea-to-plan', 'kit', '0.5.0', '0.2.0', 'planning/skills/idea-to-plan'],
+        ['agent', 'planner', 'kit', '0.6.0', '0.2.2', 'planning/agents/planner.md'],
+        ['skill', 'idea-to-plan', 'kit', '0.6.0', '0.2.0', 'planning/skills/idea-to-plan'],
       ],
     );
     const skillRec = rec.find((x) => x.name === 'idea-to-plan');
