@@ -35,8 +35,10 @@ a marker that is a link, a folder or a large file stops the start with its own r
 marker that cannot be read just now asks to try again (`job-marker-busy`). Kit 0.6.2 tells a job started outside
 the app to write its own marker so the app follows it.
 
-Tool lifecycle support, layout, restore presentation and performance work remain proposals. No installer was
-built and the installed app was not updated by this source change.
+After 0.15.2 the four remaining proposals were carried out too (each "Done" note below says what and what is still
+open): honest tool states and a restore guard over every embedded AI tool (§2), the next-step strip (§3), the restore
+coverage next to the job (§4) and the measured performance changes (§5). The only part left is the one no code can do:
+validating the next-step strip with real users.
 
 ## Scope and baseline
 
@@ -108,6 +110,15 @@ Introduce explicit per-tool capabilities (launch, process state, session events,
 
 Exit criterion: Codex and Gemini launches show correct running/exited state; unsupported approval/usage data is not guessed; an active supported tool cannot race a restore unnoticed.
 
+Done (after 0.15.2): the embedded terminal keeps the tool and the app job of every AI start
+(`electron/terminals.mjs`) and tells the server after every open, exit and close, and again to a restarted server
+(`terminal-state` over the shell channel, `actions.terminalState`). A restore is refused while any AI tool runs in the
+project's embedded terminal, not only a Claude session with logs (`aiActiveIn`). The building no longer reads a recent
+file of Codex, Gemini and the others as "working": a recent trace is "active recently (state not known)", a tool open
+in SiberSentez's terminal for the project is "open in the terminal", and only a verified state turns the sign to
+working. A Codex or Gemini tab that ends never offers to resume a Claude session. A resumed start keeps its project.
+Still not known and not guessed: whether such a tool waits for an answer, and its usage.
+
 ### 3. Put the user's next action ahead of secondary controls
 
 The shipped hero screenshot presents onboarding, a job field, counters, a building toolbar and a team panel together. Preserve the approved building design, but make one state-dependent instruction and primary action prominent: create a project, give a job, answer the plan, inspect the result, or continue an interrupted job. Keep the simulated example clearly distinguishable from live activity.
@@ -115,6 +126,15 @@ The shipped hero screenshot presents onboarding, a job field, counters, a buildi
 Start with a small layout prototype and test it at a laptop-sized viewport and with keyboard navigation. Do not infer mobile support from the Windows desktop scope.
 
 Exit criterion: a first-time user can identify the next required action without opening a help panel; simulated activity is never mistaken for a running job. Validate with actual users before calling this a proven improvement.
+
+Done (after 0.15.2): `public/js/nextStep.js` decides the one next step from what is known about the shown project
+(demo, no project, an AI error, the plan, the result, a waiting session, a stopped job, working, a tool open in the
+terminal, else "say what should be done"). A strip above the building says it in one sentence with at most one
+button, before the job box, the toolbar and the hidden navigation buttons; the sign reads the same step, so an error
+or a stopped job is never "resting". The demo says it is an example in which nothing runs, with a way back; a rewound
+past moment says so and goes back to now. Checked by the packaged app's QA run at a 1366 x 768 laptop screen, in a
+live state and in the example (`qaLaptopProbe`): the strip is in the first screen, fits one line, causes no sideways
+scroll, and its button is the first control the keyboard reaches. Not yet validated with users.
 
 ### 4. Make restore coverage understandable
 
@@ -124,6 +144,13 @@ Audit existing notices, then show the latest point's scope, skipped content and 
 
 Exit criterion: the user can tell whether this job has a restore point and what it will not restore; full, lean and failed cases are covered by UI checks.
 
+Done (after 0.15.2): the start answer carries what its point holds (scope, files left out, files, bytes); no hub is
+said (`no-hub`), not silent. The job box says, next to the job, whether a full copy, a lean one (how many big files
+and logs it left out) or none was kept, with a way to the restore points; the start notice says a lean copy too. The
+drawer shows what a copy never holds in plain sight. The point problem texts name the real limits (a lean copy first:
+150 MB, 6000 files); README and the site no longer promise "always". The hub keeps what each app job's start kept
+(`start-points.json`, docs/restore.md §8), so the job box says it after a reload and in another window too.
+
 ### 5. Improve responsiveness and maintainability after correctness
 
 The documented roster scan still performs synchronous disk work; terminal backpressure does not yet use xterm write acknowledgements. Measure responsiveness under large libraries and sustained terminal output before choosing a worker or queue design. Keep these separate from cosmetic changes.
@@ -131,6 +158,26 @@ The documented roster scan still performs synchronous disk work; terminal backpr
 Large modules include `public/js/views/drawer.js` (~116 KB), `server/actions.mjs` (~80 KB), and `electron/helpers.mjs` (~74 KB). Extract a coherent responsibility when touching these files; avoid a wholesale rewrite without a user-facing reason.
 
 Exit criterion: measured worst-case interaction latency improves on the same fixture; terminal output remains complete and ordered; project discovery results remain unchanged.
+
+Measured 2026-10-06 on the owner's machine (2,378 skills and agents, 30 projects, 6 tools): the minute's reload is
+about 0.1 s (projects 84 ms, views 20 ms, JSON 11 ms, 1.4 MB); the skill and agent scan 0.45-0.5 s in one piece (60 %
+of it file system calls: stat, readdir, lstat), cold 1.5 s once at start. Done: the five-minute rescan runs in steps
+(`catalog.loadRosterInSteps`: the library and the kit, each tool's global items, each project folder) and gives the
+loop back between them; the roster, the counts, the hub and the kit change together at the end, and a full scan after
+an action wins. Same fixture: the longest pause 515 ms -> about 220 ms (the largest step was Codex's global items,
+about 0.13-0.2 s in one adapter call: 165 cached plugins). Then the tools that read many plugins hand their global
+items over in parts (`globalItemSteps`: Codex one part per cached plugin, Claude Code one per plugin) and the rescan
+gives the loop back inside one tool's read once 16 ms went by: the longest pause about 145 ms -> about 60 ms (now one
+project folder); the total stays about 0.45 s; the answer is the same item for item (2,378 items and every project's
+counts compared with the code before). An action still rescans in one piece, so its reply counts the change.
+
+Terminal output, measured 2026-10-06 in the app's page in an Electron window (off screen, rendering, the QA stand-in
+terminal fed at the rate the main process sends at most: 128 KB every 32 ms, about 3.9 MB/s for 4 s, 15 MB of
+coloured build lines): no task of 50 ms or more, frames at the display's 144 fps, a timer (a key's echo) waits at most
+6 ms, and the last line is on screen 35 ms after the output stops. With the CPU slowed four times (a weak laptop):
+86 fps, the longest frame 25 ms, a timer at most 39 ms, 48 ms to settle. xterm keeps up with everything the window can
+be sent, so an xterm write acknowledgement is not needed: the 32 ms batches and the pty paused at 128 KB waiting are
+enough. Not measured here: the IPC hop from the main process (one structured-clone message per 32 ms).
 
 ## Suggested implementation sequence
 

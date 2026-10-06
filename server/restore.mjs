@@ -1,16 +1,17 @@
 // Restore points (docs/restore.md, docs/direction.md §3.4 "see, try, undo"): before an AI tool starts in a project,
 // SiberSentez keeps a copy of the project's files in the hub, and the person can put the project back to it with one
 // click. It works with or without git: a point is a plain copy under <hub>/restore/<project key>/<point id>/ with a
-// manifest (path, size, time and sha1 of every file). Nothing here follows a link or a junction, reads outside the
+// manifest (path, size, time and digest (SHA-256; SHA-1 in older points) of every file). Nothing here follows a link or a junction, reads outside the
 // project folder or writes outside it and the hub; folders that tools regenerate (node_modules, .git, build output)
 // are left out, and a project over the limits gets no point (the reason says why).
 //
 // The rule going back never breaks: a file of the project is removed or overwritten only when a point of the present,
-// taken for this restore, holds the very same bytes (sha1). Anything else is left as it is and reported.
+// taken for this restore, holds the very same bytes (by digest). Anything else is left as it is and reported.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { redact } from './util.mjs';
+import { validJobId } from './job-id.mjs';
 
 export const RESTORE_DIR = 'restore';
 export const RESTORE_LIMITS = Object.freeze({ files: 3000, bytes: 50 * 1024 * 1024, fileBytes: 16 * 1024 * 1024, depth: 16 });
@@ -50,7 +51,15 @@ const lstat = (p) => {
     return null;
   }
 };
-const sha1 = (buf) => crypto.createHash('sha1').update(buf).digest('hex');
+// A file's digest: SHA-256 for every point taken from 2026-10-06 on. It tells changed bytes and a damaged copy apart
+// on this computer; it is not a security boundary. Points taken before name their files by SHA-1 and are still read
+// and checked (legacyDigest), so no point a person has becomes unusable.
+const digestOf = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+const legacyDigest = (buf) => crypto.createHash('sha1').update(buf).digest('hex');
+const DIGEST_RE = /^[0-9a-f]{64}$/;
+const LEGACY_DIGEST_RE = /^[0-9a-f]{40}$/;
+const hasDigest = (f) => (typeof f.sha256 === 'string' ? DIGEST_RE.test(f.sha256) : LEGACY_DIGEST_RE.test(f.sha1));
+const sameBytes = (buf, f) => (typeof f.sha256 === 'string' ? digestOf(buf) === f.sha256 : legacyDigest(buf) === f.sha1);
 const fail = (problem) => ({ ok: false, problem });
 const codeOf = (e, fallback) => (typeof e?.code === 'string' && /^[A-Za-z-]{1,40}$/.test(e.code) ? e.code : fallback);
 const coded = (code) => Object.assign(new Error(code), { code });
@@ -140,7 +149,7 @@ function readManifest(pointDir) {
     const m = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (m?.version !== 1 || !POINT_ID_RE.test(m.id) || !Array.isArray(m.files)) return null;
     if (m.scope !== undefined && !RESTORE_SCOPES.includes(m.scope)) return null;
-    if (!m.files.every((f) => f && safeRel(f.rel) && !skippedRel(f.rel) && Number.isInteger(f.size) && f.size >= 0 && /^[0-9a-f]{40}$/.test(f.sha1))) return null;
+    if (!m.files.every((f) => f && safeRel(f.rel) && !skippedRel(f.rel) && Number.isInteger(f.size) && f.size >= 0 && hasDigest(f))) return null;
     return m;
   } catch {
     return null;
@@ -169,6 +178,58 @@ export function listPoints({ hubDir, projectId }) {
   return out;
 }
 
+// What the start of each app job kept (docs/restore.md §8): the job's id, then the point (a new one, the newest one
+// again, full or lean) or why none was kept. Kept in the hub next to the points (never in the project, where an AI
+// writes), the newest JOB_POINTS_KEEP, so the job box still says it after a reload or in another window.
+export const JOB_POINTS_FILE = 'start-points.json';
+export const JOB_POINTS_KEEP = 20;
+const JOB_POINTS_MAX = 64 * 1024;
+const PROBLEM_RE = /^[a-z][a-z0-9-]{0,40}$/;
+
+// One record, only known fields of known shapes (the file is read back into the page)
+function jobPointRecord(r) {
+  if (!r || typeof r !== 'object' || !validJobId(r.jobId) || !Number.isFinite(r.at)) return null;
+  if (typeof r.problem === 'string') return PROBLEM_RE.test(r.problem) ? { jobId: r.jobId, at: r.at, problem: r.problem } : null;
+  if (!POINT_ID_RE.test(r.id)) return null;
+  const n = (x) => (Number.isInteger(x) && x >= 0 ? x : 0);
+  return { jobId: r.jobId, at: r.at, id: r.id, reused: r.reused === true, scope: r.scope === 'lean' ? 'lean' : 'full', leftOut: n(r.leftOut), files: n(r.files), bytes: n(r.bytes) };
+}
+
+export function listJobPoints({ hubDir, projectId }) {
+  if (!hubDir) return [];
+  const file = path.join(pointsDir(hubDir, projectId), JOB_POINTS_FILE);
+  const st = lstat(file);
+  if (!st || !st.isFile() || st.size > JOB_POINTS_MAX) return [];
+  try {
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return (Array.isArray(data?.jobs) ? data.jobs : []).map(jobPointRecord).filter(Boolean).slice(0, JOB_POINTS_KEEP);
+  } catch {
+    return [];
+  }
+}
+
+// point: takeStartPoint's answer ({ id, reused, scope, leftOut, files, bytes } or { problem }). Newest first, one record
+// per job id (every app start gets a new one). Written whole, then renamed. Never throws:
+// the start goes on without it.
+export function recordJobPoint({ hubDir, projectId, jobId, point, now = Date.now }) {
+  const rec = jobPointRecord({ ...(point || {}), jobId, at: now() });
+  if (!hubDir || !rec) return false;
+  const base = pointsDir(hubDir, projectId);
+  const jobs = [rec, ...listJobPoints({ hubDir, projectId }).filter((r) => r.jobId !== jobId)].slice(0, JOB_POINTS_KEEP);
+  const tmp = path.join(base, `.${JOB_POINTS_FILE}.${crypto.randomBytes(4).toString('hex')}.tmp`);
+  try {
+    fs.mkdirSync(base, { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify({ version: 1, jobs }), { encoding: 'utf8', flag: 'wx' });
+    fs.renameSync(tmp, path.join(base, JOB_POINTS_FILE));
+    return true;
+  } catch (e) {
+    // A file held just now (an antivirus, a read at the same moment): said in the log, the start goes on
+    console.error('start record not written:', e?.code || 'error');
+    fs.rmSync(tmp, { force: true });
+    return false;
+  }
+}
+
 const sameFiles = (a, b) => a.length === b.length && a.every((f, i) => f.rel === b[i].rel && f.size === b[i].size && f.mtimeMs === b[i].mtimeMs);
 
 const stampOf = (at) => {
@@ -191,6 +252,8 @@ function prune(base, protect = []) {
     if (!POINT_ID_RE.test(n)) {
       // An interrupted copy (<id>.tmp-...) is left over from a crash: removed
       if (/^R\d{14}[0-9a-f]{4}\.tmp-[0-9a-f]{8}$/.test(n)) fs.rmSync(p, { recursive: true, force: true });
+      // The same for a start record that was being written (recordJobPoint)
+      if (/^\.start-points\.json\.[0-9a-f]{8}\.tmp$/.test(n)) fs.rmSync(p, { force: true });
       continue;
     }
     if (kept < RESTORE_KEEP || protect.includes(n)) {
@@ -228,7 +291,7 @@ function preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope }) {
 const pointLabel = (label) => (typeof label === 'string' ? Array.from(redact(label).replace(/\s+/g, ' ').trim()).slice(0, LABEL_MAX).join('') : '');
 const manifestOf = ({ scan, id, at }, projectId, reason, files, label) => ({ version: 1, id, projectId, at, reason: POINT_REASONS.includes(reason) ? reason : 'manual', files, ...(pointLabel(label) ? { label: pointLabel(label) } : {}), ...(scan.scope === 'lean' ? { scope: 'lean', leftOut: scan.leftOut } : {}) });
 // Read once: the copy and its digest are the same bytes, even if the file changes meanwhile
-const copied = (f, buf) => ({ rel: f.rel, size: buf.length, mtimeMs: f.size === buf.length ? f.mtimeMs : 0, sha1: sha1(buf) });
+const copied = (f, buf) => ({ rel: f.rel, size: buf.length, mtimeMs: f.size === buf.length ? f.mtimeMs : 0, sha256: digestOf(buf) });
 const pointAnswer = ({ scan, id }, files) => ({ ok: true, id, reused: false, files: files.length, bytes: files.reduce((n, x) => n + x.size, 0), scope: scan.scope, leftOut: scan.leftOut });
 
 // Take a point of the project's files. When nothing changed since the newest point (same paths, sizes and times),
@@ -300,10 +363,10 @@ const readRel = (dir, rel) => fs.readFileSync(path.join(dir, ...rel.split('/')))
 // The digest of a plan: the preview hands it to the page, the apply refuses a plan that differs (plan-changed), so
 // going back never does more than the person was shown
 export function planDigest(plan) {
-  return sha1(JSON.stringify([plan.point?.id, plan.changed, plan.missing, plan.added])).slice(0, 16);
+  return digestOf(JSON.stringify([plan.point?.id, plan.changed, plan.missing, plan.added])).slice(0, 16);
 }
 
-// What going back to a point would do (reads only). changed: files that differ now and are put back (the sha1
+// What going back to a point would do (reads only). changed: files that differ now and are put back (the digest
 // decides, a new time alone is no change); missing: files deleted since and brought back; added: files that came
 // later and are removed. Returns { ok: true, point: { id, at, reason }, changed, missing, added, planId } or
 // { ok: false, problem }.
@@ -327,7 +390,7 @@ export function planRestore({ hubDir, projectId, dir, id, limits = RESTORE_LIMIT
     }
     let same = false;
     try {
-      same = cur.rel === f.rel && cur.size === f.size && sha1(readRel(dir, cur.rel)) === f.sha1;
+      same = cur.rel === f.rel && cur.size === f.size && sameBytes(readRel(dir, cur.rel), f);
     } catch {
       same = false;
     }
@@ -361,13 +424,13 @@ function backedUp(dir, rel, kept) {
   const want = kept.get(key(rel));
   if (!want) return false;
   try {
-    return want.rel === rel && sha1(fs.readFileSync(file)) === want.sha1;
+    return want.rel === rel && sameBytes(fs.readFileSync(file), want);
   } catch {
     return false;
   }
 }
 
-// Go back to a point. In order: every copy the restore writes is read and checked against its sha1 first (a damaged
+// Go back to a point. In order: every copy the restore writes is read and checked against its digest first (a damaged
 // point changes nothing: point-damaged); a point of the present is taken, always new (if it cannot be, nothing
 // changes: backup-failed); files that came later are removed, then changed and missing files are written (removing
 // first lets a file take the place of a folder and the other way round). A file is removed or overwritten only when
@@ -390,7 +453,7 @@ export function applyRestore({ hubDir, projectId, dir, id, planId = null, now = 
     } catch {
       return fail('point-damaged');
     }
-    if (sha1(buf) !== byRel.get(rel).sha1) return fail('point-damaged');
+    if (!sameBytes(buf, byRel.get(rel))) return fail('point-damaged');
     writes.push({ rel, buf });
   }
   const before = createPoint({ hubDir, projectId, dir, reason: 'before-restore', now, limits, protect: [id], reuse: false, scope: pt.manifest.scope === 'lean' ? 'lean' : 'full' });
@@ -447,12 +510,14 @@ export function applyRestore({ hubDir, projectId, dir, id, planId = null, now = 
   return { ok: true, before: before.id, restored, removed, failed };
 }
 
-// GET /api/projects/<id>/restore (read-only, no action mode needed): the project's points, newest first. Only the
+// GET /api/projects/<id>/restore (read-only, no action mode needed): the project's points, newest first, and what the
+// recent jobs' starts kept. Only the
 // hub is read; a project that is not listed answers 404.
 export function projectRestore({ catalog, projectId }) {
   const p = catalog?.getProject?.(projectId) || null;
   if (!p) return { status: 404, body: { error: 'not-a-project' } };
   const hubDir = catalog.hubDir || null;
   const points = hubDir ? listPoints({ hubDir, projectId }) : [];
-  return { status: 200, body: { project: projectId, points, keep: RESTORE_KEEP } };
+  // jobs: what each recent app job's start kept (recordJobPoint), so the job box says it after a reload too
+  return { status: 200, body: { project: projectId, points, keep: RESTORE_KEEP, jobs: listJobPoints({ hubDir, projectId }) } };
 }

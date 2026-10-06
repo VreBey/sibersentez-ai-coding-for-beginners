@@ -85,22 +85,32 @@ export function roomKindFor(actor, mainKind) {
   return mainKind;
 }
 
-// Other tools (Codex, Gemini CLI, Copilot, Cursor, Antigravity): SiberSentez reads no session of theirs, only when each
-// last left a trace in the project's folder (the catalog's toolSeen, from the tools' file times). A trace in the last
-// three minutes reads as at work, in the last 45 as having left a while ago; older traces get no actor.
+// Other tools (Codex, Gemini CLI, Copilot, Cursor, Antigravity, Qwen Code, OpenCode): SiberSentez reads no session of
+// theirs, so it never claims one works. What is known: the tool runs in SiberSentez's own terminal for this project
+// ('running': open there, what it does is not known), or it left a trace in the project's folder (the catalog's
+// toolSeen, from the tools' file times): in the last three minutes 'seen' (active recently, state not known), in the
+// last 45 'left'; older traces get no actor. dock: the terminal tabs that still run [{ projectId, tool }] (tool: the
+// tools list's id, terminalDock.running).
 export const TOOL_BUSY_MS = 3 * 60000;
 export const TOOL_LEFT_MS = 45 * 60000;
 const OWN_TOOLS = new Set(['claude-code', 'sibersentez']); // Claude Code's sessions are actors of their own
-export const TOOL_NAMES = Object.freeze({ codex: 'Codex', 'gemini-cli': 'Gemini', copilot: 'Copilot', cursor: 'Cursor', antigravity: 'Antigravity' });
-export function toolActors(p, now = Date.now()) {
-  const out = [];
+export const TOOL_NAMES = Object.freeze({ codex: 'Codex', 'gemini-cli': 'Gemini', copilot: 'Copilot', cursor: 'Cursor', antigravity: 'Antigravity', qwen: 'Qwen Code', opencode: 'OpenCode' });
+// The tools list's ids (server/tools.mjs) where the trace readers use another name
+const DOCK_TO_SEEN = Object.freeze({ gemini: 'gemini-cli', claude: 'claude-code' });
+export function toolActors(p, now = Date.now(), dock = []) {
+  const out = new Map();
   for (const [tool, t] of Object.entries(p?.toolSeen || {})) {
     if (OWN_TOOLS.has(tool) || !Number.isFinite(t) || t <= 0) continue;
     const age = now - t;
-    const state = age < TOOL_BUSY_MS ? 'busy' : age < TOOL_LEFT_MS ? 'left' : null;
-    if (state) out.push({ kind: 'tool', id: `tool:${tool}:${p.id}`, tool, state, t });
+    const state = age < TOOL_BUSY_MS ? 'seen' : age < TOOL_LEFT_MS ? 'left' : null;
+    if (state) out.set(tool, { kind: 'tool', id: `tool:${tool}:${p.id}`, tool, state, t });
   }
-  return out.sort((a, b) => b.t - a.t);
+  for (const d of Array.isArray(dock) ? dock : []) {
+    const tool = DOCK_TO_SEEN[d?.tool] || d?.tool;
+    if (d?.projectId !== p?.id || typeof tool !== 'string' || OWN_TOOLS.has(tool)) continue;
+    out.set(tool, { kind: 'tool', id: `tool:${tool}:${p.id}`, tool, state: 'running', t: now });
+  }
+  return [...out.values()].sort((a, b) => b.t - a.t);
 }
 
 // The tool-call categories (server/ingest.mjs toolCategory) and a tool name's category, for the card's bars
@@ -531,7 +541,8 @@ export function sceneFrom(snapshot, events = [], ticks = [], now = snapshot.now,
     job: snap.job || null,
     planPending: out.find((a) => a.kind === 'session' && a.goneAt == null && a.data.planPending)?.id || null,
     resultReady: snap.job?.step === 'finish' ? out.find((a) => a.kind === 'session' && a.goneAt == null && a.state === 'waiting' && !a.data.planPending)?.id || null : null,
-    closed: snap.project.state === 'closed',
+    // A tool open in SiberSentez's terminal keeps the building open (no Claude session does not mean nobody is in)
+    closed: snap.project.state === 'closed' && !(snap.tools || []).some((t) => t.state === 'running'),
     moving: out.some((a) => a.pose.moving || a.data?.planPending) || icons.length > 0 || cards.length > 0 || snap.job?.step === 'finish',
     events: allEvents.filter((e) => e.t >= now - HISTORY_MS),
     snapshot: snap,
@@ -650,8 +661,9 @@ export function createDemo(word) {
   at(35000, spawn('review', 'review', 'reviewTask', 'Sonnet', 1, 's:chief', true));
   at(42000, () => {
     base.tools = [
-      { id: 'codex', name: 'Codex', state: 'busy' },
-      { id: 'gemini', name: 'Gemini', state: 'busy' },
+      // Another tool is never shown at work: one open in SiberSentez's terminal, one that left a trace a moment ago
+      { id: 'codex', name: 'Codex', state: 'running' },
+      { id: 'gemini', name: 'Gemini', state: 'seen' },
     ];
     base.quota = { fiveHourPct: 64, weeklyPct: 43 };
   });

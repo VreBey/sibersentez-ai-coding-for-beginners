@@ -99,7 +99,8 @@ export function liveSnapshot(store, p, { now = Date.now(), mainRoomKind = 'dev',
   const workflows = [...store.workflows.values()]
     .filter((w) => w.projectId === p.id && (w.status === 'running' || now - (w.endedAt || w.startedAt || 0) < HISTORY_MS))
     .map((w) => ({ id: w.id, sessionId: w.sessionId, name: w.name || '', status: w.status === 'running' ? 'running' : 'done', agentCount: w.agentCount || 0, phases: Array.isArray(w.phases) ? w.phases.map(String) : [] }));
-  const tools = toolActors(p, now).map((x) => ({ id: x.tool, name: TOOL_NAMES[x.tool] || x.tool, state: x.state }));
+  // store.dockRunning: the terminal tabs that still run (main.js, terminalDock.running)
+  const tools = toolActors(p, now, store.dockRunning?.() || []).map((x) => ({ id: x.tool, name: TOOL_NAMES[x.tool] || x.tool, state: x.state }));
   return { now, project: { id: p.id, name: p.name, state: projectState(p, byProject, now), mainRoomKind }, sessions, agents, workflows, tools, quota: null, job: jobOf(job) };
 }
 
@@ -108,7 +109,7 @@ export function liveSnapshot(store, p, { now = Date.now(), mainRoomKind = 'dev',
 const STEPS = ['plan', 'build', 'check', 'finish', 'done'];
 export function jobOf(d) {
   if (!d || !STEPS.includes(d.step)) return null;
-  return { step: d.step, tasks: d.tasks || null, review: d.review || null, ...(d.reviewIssue === 'job-identity' ? { reviewIssue: d.reviewIssue } : {}), current: d.current || null, title: d.plan?.title || null, updatedAt: d.updatedAt || null };
+  return { step: d.step, tasks: d.tasks || null, review: d.review || null, ...(d.reviewIssue === 'job-identity' ? { reviewIssue: d.reviewIssue } : {}), current: d.current || null, title: d.plan?.title || null, jobId: d.plan?.jobId || null, updatedAt: d.updatedAt || null };
 }
 
 // The project's feed and tool calls within the rewind's reach (the scene reads nothing older)

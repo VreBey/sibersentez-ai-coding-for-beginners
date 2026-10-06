@@ -1320,6 +1320,19 @@ export const QA_SERVED_MODE_SCRIPT =
   "fetch('/api/actions', { cache: 'no-store' }).then(async (r) => JSON.stringify({ status: r.status, mode: r.ok ? (await r.json()).mode : 'off' }), () => 'error')";
 // The page the panel probe loads: the panel's own QA hook (public/js/main.js, ?qa=1&actpanel=choose)
 export const QA_PANEL_PATH = '/?qa=1&actpanel=choose';
+// The next step on a laptop screen (docs/development-review-2026-10-06.md §3): the window is set to 1366 x 768 and the
+// building page loaded. The strip is shown, in the first screen, as wide as it can be without a sideways scroll, says
+// something, and comes first for the keyboard: its button (when it has one) before every other control of the
+// building, and it takes the focus; no control of the building jumps the order with a positive tabindex. '{"shown":true,...}' or 'missing' (no strip yet).
+export const QA_LAPTOP_SIZE = Object.freeze({ width: 1366, height: 768 });
+export const QA_LAPTOP_PATH = '/?qa=1';
+// The page's own size: the window is corrected by the difference (an off-screen window's size can differ a few
+// pixels from the page's after the screen scale is applied)
+export const QA_VIEWPORT_SCRIPT = 'JSON.stringify([innerWidth, innerHeight])';
+// The building's example (its play button): a step with a button, so the keyboard check has one to find first
+export const QA_LAPTOP_DEMO_SCRIPT = "(() => { const b = document.querySelector('[data-ws=\"play\"]'); if (!b) return 'missing'; b.click(); return 'started'; })()";
+export const QA_LAPTOP_PROBE_SCRIPT =
+  "(() => { const s = document.querySelector('[data-ws=\"next\"]'); if (!s) return 'missing'; const r = s.getBoundingClientRect(); const text = (s.querySelector('[data-ws=\"next-text\"]')?.textContent || '').trim(); const go = s.querySelector('[data-ws=\"next-go\"]'); const root = s.parentElement; const focusables = [...root.querySelectorAll('button, input, select, textarea, a[href], [tabindex]')].filter((e) => !e.hidden && !e.disabled && e.tabIndex >= 0 && e.getClientRects().length); const first = focusables[0] || null; let focused = null; if (go && !go.hidden) { go.focus(); focused = document.activeElement === go; go.blur(); } return JSON.stringify({ shown: r.width > 0 && r.height > 0, firstScreen: r.top >= 0 && r.bottom <= innerHeight, inWidth: r.left >= 0 && r.right <= innerWidth + 0.5, noSideScroll: document.documentElement.scrollWidth <= innerWidth, text: text.length > 0, oneLineFits: s.scrollWidth <= s.clientWidth + 1, keyboardFirst: !focusables.some((e) => e.tabIndex > 0) && (go && !go.hidden ? first === go && focused === true : !first || !s.contains(first) || first === go), step: s.dataset.step || '', width: innerWidth, height: innerHeight }); })()";
 
 // ---------------------------------------------------------------- language
 

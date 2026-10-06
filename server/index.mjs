@@ -71,6 +71,9 @@ const ROSTER_EVERY = 5;
 let lastRoster = '';
 function reloadCatalog({ roster = true } = {}) {
   catalog.load({ roster });
+  publishCatalog();
+}
+function publishCatalog() {
   const data = JSON.stringify({ hub: hubView(catalog), tools: toolsView(catalog), roster: rosterView(ingest, catalog), projects: catalog.allProjects().map((p) => projectView(ingest, p, catalog)) });
   if (data === lastRoster) return;
   lastRoster = data;
@@ -145,6 +148,8 @@ const projectChannel = createProjectChannel({
   },
   // Where an embedded terminal opens (docs/embedded-terminal.md): the terminal action's checks, live mode only
   terminalTarget: (req) => actions.terminalTarget(req),
+  // What runs in the embedded terminals (an AI tool of any kind keeps a restore from running under it)
+  terminalState: (msg) => actions.terminalState(msg),
 });
 function answerShell(msg, send) {
   const reply = projectChannel.handle(msg);
@@ -230,11 +235,19 @@ server.listen(PORT, HOST, async () => {
     500,
   ).unref();
 
-  // The registry and the projects may have changed: every minute. The roster scan blocks the loop for about half a
-  // second on a machine with many skills (docs/backlog.md "Long-running load"), so it runs every fifth time; an action
-  // that installs, imports or removes reloads it at once (onChange above)
+  // The registry and the projects may have changed: every minute (about 0.1 s with the views, measured 2026-10-06).
+  // The skills and agents every fifth time, in steps that give the loop back between them (catalog.loadRosterInSteps:
+  // about 0.45 s of work, never more than one step at once); an action that installs, imports or removes reloads them
+  // at once, in one piece, so its answer already counts the change (onChange above)
   let catalogTicks = 0;
-  setInterval(guarded('catalog reload', () => reloadCatalog({ roster: ++catalogTicks % ROSTER_EVERY === 0 })), 60000).unref();
+  setInterval(
+    guarded('catalog reload', () => {
+      const roster = ++catalogTicks % ROSTER_EVERY === 0;
+      reloadCatalog({ roster: false });
+      if (roster) catalog.loadRosterInSteps().then((changed) => changed && publishCatalog()).catch((e) => console.error('roster scan failed:', e?.stack || e?.message || e));
+    }),
+    60000,
+  ).unref();
 
   // Keep the connection alive
   setInterval(() => {

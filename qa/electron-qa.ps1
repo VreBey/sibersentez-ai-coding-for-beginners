@@ -290,7 +290,7 @@ try {
   Start-Sleep -Seconds 2
   $lines = Log-Lines | Select-Object -Skip $from
   $P6 = [ordered]@{}
-  foreach ($n in @('hidden', 'bridge', 'kit', 'about', 'kit folder', 'actions live via bridge', 'actions live via tray', 'actions dry', 'actions off', 'folder rule inside the hub', 'folder rule holding the hub', 'folder rule system folder', 'project-add', 'project-idea', 'actions panel', 'terminal', 'hidden at the end')) { $P6[$n] = Probe $lines $n }
+  foreach ($n in @('hidden', 'bridge', 'kit', 'about', 'kit folder', 'actions live via bridge', 'actions live via tray', 'actions dry', 'actions off', 'folder rule inside the hub', 'folder rule holding the hub', 'folder rule system folder', 'project-add', 'project-idea', 'laptop next step', 'laptop next step demo', 'actions panel', 'terminal', 'hidden at the end')) { $P6[$n] = Probe $lines $n }
   $R.run6_probes = $P6
   $R.run6_panel_shot_log = First-Log $lines 'QA: screenshot'
   $R.run6_live_saved_logged = [bool]($lines -match '-> live: saved')
@@ -316,6 +316,10 @@ try {
   Check 'QA never reached live (settings.json off at the end, no live save logged)' ($R.run6_settings_actions_after -eq 'off' -and -not $R.run6_live_saved_logged)
   Check 'probe: node-pty loads from outside the archive and runs a command (embedded terminal)' ($P6['terminal'].unpacked -and $P6['terminal'].loaded -and $P6['terminal'].exitCode -eq 0 -and $P6['terminal'].echoed)
   Check 'probe: the actions panel opens (?qa=1&actpanel=choose)' ($P6['actions panel'] -eq 'open')
+  $L = $P6['laptop next step']
+  Check 'probe: at 1366 x 768 the next step is in the first screen, fits, no sideways scroll, comes first for the keyboard' ($L.shown -and $L.firstScreen -and $L.inWidth -and $L.noSideScroll -and $L.text -and $L.oneLineFits -and $L.keyboardFirst -and $L.width -eq 1366 -and $L.height -eq 768)
+  $LD = $P6['laptop next step demo']
+  Check 'probe: the same in the example, whose button is the first thing the keyboard reaches' ($LD.step -eq 'demo' -and $LD.shown -and $LD.firstScreen -and $LD.noSideScroll -and $LD.oneLineFits -and $LD.keyboardFirst -and $LD.width -eq 1366)
   Check 'probe: screenshot of the panel saved' ((Test-Path $PanelShot) -and ((Get-Item $PanelShot).Length -gt 10000))
   if ($Hidden) {
     Check 'probe: folder rules (inside the hub / holding the hub -> hub, system folder -> broad)' ($P6['folder rule inside the hub'] -eq 'hub' -and $P6['folder rule holding the hub'] -eq 'hub' -and $P6['folder rule system folder'] -eq 'broad')

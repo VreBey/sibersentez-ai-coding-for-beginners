@@ -32,6 +32,7 @@ import {
 import { createActions } from '../server/actions.mjs';
 import { JOB_ID_RE, jobMessageName, readCurrentJob } from '../server/job-id.mjs';
 import { projectTeam } from '../server/team.mjs';
+import { listJobPoints, projectRestore } from '../server/restore.mjs';
 import { createHandler } from '../server/app.mjs';
 import { PUBLIC_DIR } from '../server/config.mjs';
 import { actionBody } from '../public/js/actions.js';
@@ -660,6 +661,8 @@ describe('start-ai action', () => {
       assert.deepEqual([t1.program.file, ...t1.program.args], r.json.argv, 'the Command Prompt running the launcher');
       assert.deepEqual(t1.program.args.slice(0, 3), ['/d', '/v:off', '/k']);
       assert.equal(t1.projectId, 'idea');
+      assert.equal(t1.tool, 'claude', 'the terminal keeps which tool runs in it');
+      assert.equal(t1.jobId, undefined, 'an idea start is not an app job');
       assert.deepEqual(env.actions.terminalTarget({ launchId: r.json.launchId }), { ok: false, reason: 'refused', status: 404 }, 'once');
       // Unredeemed: gone after two minutes, with its launcher file
       env.tick(4000); // past the repeat guard
@@ -1227,7 +1230,9 @@ describe('page: drawer section, tools panel, start card', () => {
       assert.equal((cards.match(/data-ai-copy/g) || []).length, 7, 'a copy button per install command');
       assert.ok(h.includes(S.aiNeedsNode.replace('{state}', S.aiNodeHave.replace('{version}', 'Node.js 24.18.0'))));
       assert.ok(h.includes(S.aiFirstRun));
-      assert.ok(h.includes('https://code.claude.com/docs/en/setup') === false, 'Claude Code is installed: no install guide link');
+      // The links on the card, compared whole (a substring check of a URL is not how a link is told apart)
+      const links = [...h.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
+      assert.ok(!links.includes('https://code.claude.com/docs/en/setup'), 'Claude Code is installed: no install guide link');
       assert.ok(h.includes('rel="noopener noreferrer"'));
     });
     assert.ok(toolsPanelHtml({ status: 'loading', tools: [] }).includes(STRINGS.en.aiLoading));
@@ -1291,6 +1296,31 @@ test('a job starts Claude Code in plan mode (it asks the person to approve its p
   assert.match(lt.text, /claude\.exe" --permission-mode "plan" "Read the job file"/);
   const actions = fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8');
   assert.ok(actions.includes("args: ctx.resume ? ['--resume', ctx.sessionId] : [...(ctx.job ? jobArgs(tool) : []), ...toolArgs(tool, file ? launchPrompt(file) : null)]"), 'only a job, never a resume');
+});
+
+test('a job start records what its copy kept, in the hub, for that job; an idea start records nothing', async () => {
+  const hub = mkdir('hub-job-points');
+  const env = await startServer({ mode: 'live', hubDir: hub });
+  try {
+    const idea = await env.post({ action: 'start-ai', projectId: 'idea', tool: 'claude', withIdea: true });
+    assert.equal(idea.status, 200, JSON.stringify(idea.json));
+    assert.deepEqual(listJobPoints({ hubDir: hub, projectId: 'idea' }), [], 'no app job, no record');
+    env.tick(5000);
+    const r = await env.post({ action: 'start-ai', projectId: 'idea', tool: 'claude', job: 'Add a page' });
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    const [rec, ...rest] = listJobPoints({ hubDir: hub, projectId: 'idea' });
+    assert.equal(rest.length, 0);
+    assert.equal(rec.jobId, r.json.jobId);
+    assert.deepEqual({ id: rec.id, reused: rec.reused, scope: rec.scope, leftOut: rec.leftOut, files: rec.files, bytes: rec.bytes }, r.json.restorePoint, 'the same as the start answered');
+    assert.ok(listTree(hub).some((x) => x.endsWith('/start-points.json')), 'next to the points');
+    assert.ok(!listTree(DIR_IDEA).some((x) => x.includes('start-points')), 'never in the project');
+    // The page reads it back with the points
+    const got = projectRestore({ catalog: { hubDir: hub, getProject: (id) => (id === 'idea' ? { id } : null) }, projectId: 'idea' });
+    assert.equal(got.body.jobs[0].jobId, r.json.jobId);
+  } finally {
+    await env.close();
+    fs.rmSync(path.join(DIR_IDEA, '.sibersentez'), { recursive: true, force: true });
+  }
 });
 
 test('live jobs get unique persistent ids; more than nine jobs work; preview and resume preserve identity', async () => {

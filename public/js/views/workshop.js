@@ -13,6 +13,8 @@ import { jobNowText, stepsHtml, stoppedSession } from './job.js';
 import { sessionState } from '../attention.js';
 import { apiErrorHtml, projectApiError, apiErrorWords } from '../apiError.js';
 import { permModeChip } from '../permMode.js';
+import { nextStep } from '../nextStep.js';
+import { askJobPoint, startPointOf, startPointsVersion, startPointText } from '../restore.js';
 
 const GUIDE_KEY = 'sibersentez.hq.guide';
 const ROOM_KEYS = ['dev', 'library', 'server', 'design', 'meeting', 'lounge'];
@@ -30,8 +32,11 @@ export function formatTime(ms) {
 const titleOf = (a) => a?.data?.fullTitle || a?.title || word('unknown');
 // The job box's examples, each a sentence for a kit skill (debug-helper, next-step, ui-polish)
 export const GIVE_EXAMPLES = Object.freeze(['fix', 'next', 'polish']);
+// The sign's words for the next steps that have one (nextStep.js); the others fall back to the scene
+const SIGN_OF_STEP = Object.freeze({ error: 'signError', plan: 'signPlan', result: 'signResult', waiting: 'waiting', stopped: 'signStopped', working: 'working', running: 'signRunning' });
 
 const TEMPLATE = () => `
+<div class="ws-next" data-ws="next" data-step=""><p data-ws="next-text" aria-live="polite"></p><button type="button" data-ws="next-go" hidden></button></div>
 <div class="ws-head">
   <form class="ws-give" data-ws="give"><label class="sr-only" for="wsGiveText">${esc(word('giveLabel'))}</label><input id="wsGiveText" data-ws="give-text" type="text" maxlength="300" autocomplete="off" placeholder="${esc(word('givePlaceholder'))}"><button type="submit" data-ws="give-go">${esc(word('giveGo'))}</button><div class="ws-give-ex" data-ws="give-ex" role="group" aria-label="${esc(word('exTitle'))}"></div></form>
   <div class="ws-head-side">
@@ -624,7 +629,7 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     $('range-start').textContent = formatTime(Math.max(mode === 'demo' ? 0 : liveNow - HISTORY_MS, liveNow - HISTORY_MS));
     $('range-end').textContent = formatTime(liveNow);
     const shownEvents = scene.events.filter((e) => eventLabel(e));
-    const sig = JSON.stringify([scene.allActors.map((a) => [a.id, a.state, a.model, a.goneAt, a.data.lastAction?.text]), scene.workflows, scene.quota, shownEvents.slice(-4).map((e) => e.id ?? e.t), view.floor, view.room, mode, scene.job, scene.project.id && stoppedLead(scene.project.id)?.id, errKey()]);
+    const sig = JSON.stringify([scene.allActors.map((a) => [a.id, a.state, a.model, a.goneAt, a.data.lastAction?.text]), scene.workflows, scene.quota, shownEvents.slice(-4).map((e) => e.id ?? e.t), view.floor, view.room, mode, scene.job, scene.project.id && stoppedLead(scene.project.id)?.id, errKey(), startPointsVersion()]);
     // The inbox is over every project, so it is asked on every draw (its own signature keeps it cheap); before, a
     // session of another project waiting showed only once something changed in the shown one (2026-10-02). At most
     // once a second while the scene moves (12 frames a second over many projects), at once when the mode changes
@@ -741,6 +746,16 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     const body = $('jobbox-body');
     body.innerHTML = `${apiErrorHtml(err)}${job?.title ? `<p class="ws-job-title">${esc(job.title)}</p>` : ''}${job ? stepsHtml(job) : ''}`;
     if (!job) return;
+    // What the restore point of this job's start holds (a full copy, a lean one, none): from this page's start, else
+    // the server's record of it (asked once; the box draws again when it arrives)
+    if (mode === 'live' && job.jobId && !startPointOf(scene.project.id, job.jobId)) askJobPoint(scene.project.id, job.jobId);
+    const pointNote = mode === 'live' ? startPointText(startPointOf(scene.project.id, job.jobId)) : '';
+    if (pointNote) {
+      const p = document.createElement('p');
+      p.className = 'ws-note ws-point';
+      p.textContent = pointNote;
+      body.append(p, button('pointOpen', () => dispatch('open-restore')));
+    }
     // A finished job: the result is one click away (the drawer's "How to run it")
     if (job.step === 'done') body.append(button('resultRun', () => dispatch('open-run')));
     // The job is not finished and no AI of the project runs any more (its terminal was closed, seen 2026-10-01): the
@@ -754,6 +769,65 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     note.textContent = job.tasks?.total ? `${word('jobStopped')} ${word('jobStoppedAt', { done: job.tasks.done || 0, total: job.tasks.total })}` : word('jobStopped');
     body.append(note, button('jobResume', (el) => dispatch('resume-session', { sessionId: last.id }, el)));
   }
+
+  // The next step above the building (nextStep.js): redrawn only when it changes, so a screen reader hears it once
+  let nextSig = '';
+  function nextFacts() {
+    const live = mode === 'live';
+    const job = scene.job;
+    return {
+      demo: mode === 'demo',
+      // A past moment on screen (the rewind): every other fact is that moment's, so none of them is a next step
+      past: live && !liveMode,
+      hasProject: !live || !store.loaded || !!scene.project.id,
+      error: live && !!errKey(),
+      planPending: !!scene.planPending,
+      resultReady: !!scene.resultReady,
+      waiting: scene.waiting.length,
+      stopped: live && !!job && job.step !== 'done' && !!stoppedLead(scene.project.id),
+      busy: scene.actors.some((a) => a.state === 'busy'),
+      running: scene.actors.some((a) => a.state === 'running'),
+    };
+  }
+  // shownNext: the step on screen, worked out again on every frame; its button does what the strip says. A rewound
+  // past moment says so ("back to now"), so a step of the past or of another project is never offered.
+  let shownNext = { key: 'give', act: 'give' };
+  function renderNext() {
+    const next = nextStep(nextFacts());
+    shownNext = next;
+    const sig = `${next.key}|${language()}`;
+    if (sig !== nextSig) {
+      nextSig = sig;
+      $('next').dataset.step = next.key;
+      $('next-text').textContent = word(`next_${next.key}`);
+      const go = $('next-go');
+      go.hidden = !next.act;
+      if (next.act) go.textContent = word(`nextGo_${next.key}`);
+    }
+    return next;
+  }
+  $('next-go').addEventListener('click', (e) => {
+    const { act } = shownNext;
+    if (act === 'back-live') return backToLive();
+    if (act === 'back-now') {
+      // Back to now; the keyboard stays on the strip's button, or on the live button when now has no button
+      $('live').click();
+      return requestAnimationFrame(() => ($('next-go').hidden ? $('live') : $('next-go')).focus());
+    }
+    if (act === 'open-lead') return selectActor(scene.planPending || scene.resultReady);
+    if (act === 'open-session') return dispatch('open-session', scene.waiting[0], e.currentTarget);
+    if (act === 'resume') {
+      const last = stoppedLead(scene.project.id);
+      return last ? dispatch('resume-session', { sessionId: last.id }, e.currentTarget) : null;
+    }
+    if (act === 'give') return $('give-text').focus();
+    if (act === 'jobbox') {
+      $('jobbox').scrollIntoView({ block: 'nearest' });
+      return $('jobbox').querySelector('button, a')?.focus();
+    }
+    // new-project, show-terminal: main.js answers (the new project flow, the terminal dock)
+    dispatch(act, null, e.currentTarget);
+  });
 
   // The project's last session when none of its sessions runs (job.js, shared with the drawer)
   const stoppedLead = (projectId) => stoppedSession(store.sessions.values(), projectId, Date.now(), scene?.job?.updatedAt);
@@ -845,8 +919,12 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     $('clock').textContent = `${formatTime(current)} · ${word(liveMode ? 'live' : 'past')}`;
     $('live').setAttribute('aria-pressed', String(liveMode));
     $('live').textContent = word(mode === 'demo' && !playing && liveMode ? 'back' : 'live');
+    const next = renderNext();
     const sign = $('sign');
-    sign.textContent = word(scene.planPending ? 'signPlan' : scene.resultReady ? 'signResult' : scene.waiting.length ? 'waiting' : scene.closed ? 'closed' : scene.actors.some((a) => a.state === 'busy') ? 'working' : 'resting');
+    // Live and now, the sign says what the next step says (nextStep.js), so the two never disagree; the demo and a
+    // rewound moment show that scene's own state. Without a step of its own: working, open, closed or resting.
+    const sceneSign = scene.planPending ? 'signPlan' : scene.resultReady ? 'signResult' : scene.waiting.length ? 'waiting' : scene.actors.some((a) => a.state === 'busy') ? 'working' : scene.actors.some((a) => a.state === 'running') ? 'signRunning' : scene.closed ? 'closed' : 'resting';
+    sign.textContent = word(mode === 'live' && liveMode ? SIGN_OF_STEP[next.key] || sceneSign : sceneSign);
     sign.classList.toggle('waiting', scene.waiting.length > 0 && !scene.resultReady);
     sign.title = scene.job ? `${word('lamps')}: ${jobNowText(scene.job)}` : '';
     const empty = $('empty');

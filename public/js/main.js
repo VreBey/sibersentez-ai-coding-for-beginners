@@ -17,7 +17,8 @@ import { createPalette } from './palette.js';
 import { esc, num, tok, modelName, projectColor, CAT, STATUS, agoTag, fillAgo, actionLine, replaceHtml, waitWhat } from './format.js';
 import { icon } from './icons.js';
 import { initActions, actionsReady, actionsState, onActionsChange, runAction } from './actions.js';
-import { createContextMenu, focusKeyOf, suggestable, setDockOpener, runMenuItem } from './contextmenu.js';
+import { createContextMenu, focusKeyOf, suggestable, setDockOpener, runMenuItem, AI_STARTED_EVENT } from './contextmenu.js';
+import { rememberStartPoint } from './restore.js';
 import { onHiddenChange } from './hiddenProjects.js';
 import { createTerminalDock, qaTerminalBridge } from './terminalDock.js';
 import { actionToast } from './toasts.js';
@@ -200,6 +201,10 @@ const recentSession = (projectId) => {
 const termDock = createTerminalDock({ toast: actionToastHere, onSetupDone: () => loadTools({ refresh: true }), resumeFor: recentSession, onResume: (s) => resumeSession(s.id) });
 if (qaDock) setTimeout(() => termDock.open({ projectId: store.sortedProjects()[0]?.id || 'demo' }), 800);
 if (termDock.available) setDockOpener((target) => termDock.open(target), () => termDock.count() >= 8);
+// What the last start's restore point holds, per project: the job box says it next to the job (restore.js)
+window.addEventListener(AI_STARTED_EVENT, (e) => rememberStartPoint(e.detail?.projectId, e.detail?.restorePoint, e.detail?.jobId));
+// The building shows a tool that runs in SiberSentez's terminal as open there (hq-live.js liveSnapshot)
+if (termDock.available) store.dockRunning = () => termDock.running();
 // "How to run it" (runHint.js): a command goes into the project's terminal, never with Enter
 if (termDock.available) setRunTyper((projectId, cmd) => termDock.typeInto(projectId, cmd));
 // "Open in the browser" of a plain web page (docs/run-hint.md): the explorer action with the project's own index.html,
@@ -477,6 +482,11 @@ window.addEventListener('hq-action', (e) => {
   } else if (d.action === 'resume-session' && d.sessionId) resumeSession(d.sessionId); else if (d.action === 'open-changes' && d.projectId) open({ type: 'project', id: d.projectId, section: 'changes' });
   else if (d.action === 'open-restore' && d.projectId) open({ type: 'project', id: d.projectId, section: 'restore' });
   else if (d.action === 'open-run' && d.projectId) open({ type: 'project', id: d.projectId, section: 'run' });
+  // The next step's buttons (nextStep.js): a new project for an idea; the tool's tab in SiberSentez's terminal
+  else if (d.action === 'new-project') newProject.start();
+  else if (d.action === 'show-terminal' && d.projectId) {
+    if (!termDock.showProject(d.projectId)) actionToastHere({ tone: 'warn', title: t('wsNoToolTabTitle'), body: t('wsNoToolTab') });
+  }
   else if (d.action === 'open-terminal' && d.sessionId) {
     // The session's menu (continue, fork, terminal), as the actions mode allows: nothing runs by itself
     const r = $('#workshopBody').getBoundingClientRect();

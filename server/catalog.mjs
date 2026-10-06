@@ -10,6 +10,7 @@
 // reported it in `tools` (adapter order).
 // The hub may be null: registry and library are then empty and discovery still works.
 import crypto from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import { HUB_DIR, CLAUDE_DIR, HOME_DIR, KIT_DIR } from './config.mjs';
@@ -27,6 +28,8 @@ import { ProjectMemory, SIBERSENTEZ_VIA } from './memory.mjs';
 export { BUILTIN_AGENTS, readHeadCwd, resolveSlug } from './adapters/claude-code.mjs';
 
 const DESC_MAX = 400;
+// The stepped rescan gives the loop back inside one tool's read once this much time went by (a frame or so)
+export const STEP_MS = 16;
 const ID_TAIL = 48;
 // Claude Code scratchpad and task folders are never projects of their own
 const SCRATCH_MARKER = '/appdata/local/temp/claude/';
@@ -157,6 +160,25 @@ export class Catalog {
         console.error(`adapter ${key} failed: ${e?.message}`);
       }
       return method === 'detect' ? false : [];
+    }
+  }
+
+  // A tool's global items in parts (adapters/index.mjs globalItemSteps), or in one part (findGlobalItems). A part
+  // that throws ends that tool's read, logged once like callAdapter; the parts before it stay.
+  *globalItemParts(adapter) {
+    if (typeof adapter.globalItemSteps !== 'function') {
+      const all = this.callAdapter(adapter, 'findGlobalItems');
+      if (Array.isArray(all)) yield all;
+      return;
+    }
+    try {
+      for (const part of adapter.globalItemSteps(this.adapterCtx(adapter))) if (Array.isArray(part)) yield part;
+    } catch (e) {
+      const key = `${adapter.id}.globalItemSteps`;
+      if (!this.adapterErrors.has(key)) {
+        this.adapterErrors.add(key);
+        console.error(`adapter ${key} failed: ${e?.message}`);
+      }
     }
   }
 
@@ -469,7 +491,8 @@ export class Catalog {
       _paths: [p.path, ...p.extraPaths, p.build].filter(Boolean),
       _slugs: [...p.memorySlugs],
     }));
-    // A reload must not lose the git state (written by GitWatcher)
+    // A reload must not lose the git state (written by GitWatcher) nor the skill and agent counts (written by the
+    // roster scan, which runs every fifth reload: without them the card lost its "N skills · M agents" line)
     const prev = new Map(this.projects.map((p) => [p.id, p]));
     for (const p of list) {
       p.exists = exists(p.path);
@@ -480,6 +503,7 @@ export class Catalog {
       p._slugs = [...new Set([...p._slugs, ...p._paths.map((x) => slugify(x).toLowerCase())])];
       const old = prev.get(p.id);
       if (old?.git) p.git = old.git;
+      if (old?.installed && old.path === p.path) p.installed = old.installed;
       // "What it will do": the project's own status file (CCGS production/), refreshed every 60 s
       p.plan = p.exists ? readPlan(p.path) : null;
     }
@@ -768,7 +792,44 @@ export class Catalog {
     }
   }
 
+  // The same scan in steps (the library and the kit, each tool's global items, each project folder), giving the event
+  // loop back between them, so the five-minute rescan never holds the live view and the requests for half a second
+  // (measured 2026-10-06: 0.45 s in one piece on a machine with 2,378 items, the largest step about 60 ms: a long tool read gives the loop back between its parts). Nothing is
+  // seen half done: the roster, the project counts, the hub and the kit change together at the end. A full scan that
+  // runs meanwhile (after an action) wins: this one then ends without changing anything. One at a time.
+  // pause(): what gives the loop back (setImmediate; a test passes its own). Returns true when it changed the roster.
+  async loadRosterInSteps({ pause = () => new Promise((r) => setImmediate(r)) } = {}) {
+    if (this.rosterStepping) return false;
+    this.rosterStepping = true;
+    const ls = new DirLister();
+    const steps = this.rosterSteps();
+    try {
+      for (;;) {
+        const prev = this.lister;
+        this.lister = ls;
+        let step;
+        try {
+          step = steps.next();
+        } finally {
+          this.lister = prev;
+        }
+        if (step.done) return step.value === true;
+        await pause();
+      }
+    } finally {
+      this.rosterStepping = false;
+    }
+  }
+
   buildRoster() {
+    const steps = this.rosterSteps();
+    while (!steps.next().done);
+  }
+
+  *rosterSteps() {
+    const pass = (this.rosterPass = (this.rosterPass || 0) + 1);
+    // The tools of this pass, one list for the global items and the project folders alike
+    const active = [...this.active];
     this.fmGen++;
     const roster = new Map();
     // Where each skill or agent the tools see lives on this disk (kind:name -> [{ source, file }]): for "Add to the
@@ -837,7 +898,7 @@ export class Catalog {
       const origin = row && (!row.category || row.category === o.category) ? originOf(row) : null;
       add({ kind: o.kind, name: o.name, source: 'library', category: o.category, description: truncate(o.description, DESC_MAX), global: false, ...(origin ? { origin } : {}) });
     }
-    this.hub = this.hubDir ? { path: this.hubDir, projects: this.projects.length, library: library.length } : null;
+    const libraryCount = library.length;
 
     // The SiberSentez kit (read-only, shipped with the app): after the library, so an item of the user's own library
     // with the same name stays a library item (its category and description first). kitCategory: the kit folder
@@ -846,11 +907,28 @@ export class Catalog {
     for (const o of kit.items) {
       add({ kind: o.kind, name: o.name, source: KIT_SOURCE, category: o.category, kitCategory: o.category, kitVersion: o.version, stage: o.stage, description: truncate(o.description, DESC_MAX), global: false });
     }
-    this.kit = kit.items.length ? { version: kit.version, ...kitCounts(kit) } : null;
+    const kitInfo = kit.items.length ? { version: kit.version, ...kitCounts(kit) } : null;
+    yield;
+    // A full scan ran meanwhile (an action): its answer is newer, the rest of this one is not needed
+    if (pass !== this.rosterPass) return false;
 
     // Items active outside a single project (personal, claude.ai, plugins, built-in), per tool
-    for (const adapter of this.active) {
-      for (const it of this.callAdapter(adapter, 'findGlobalItems')) if (valid(it)) add(fromAdapter(it, adapter.id));
+    // A tool that reads in parts (its plugins) gives the loop back inside its read too, once a step took STEP_MS
+    for (const adapter of active) {
+      let since = performance.now();
+      let fresh = false; // the loop was just given back: the tool's end needs no second pause
+      for (const part of this.globalItemParts(adapter)) {
+        for (const it of part) if (valid(it)) add(fromAdapter(it, adapter.id));
+        fresh = false;
+        if (performance.now() - since < STEP_MS) continue;
+        yield;
+        if (pass !== this.rosterPass) return false;
+        since = performance.now();
+        fresh = true;
+      }
+      if (fresh) continue;
+      yield;
+      if (pass !== this.rosterPass) return false;
     }
 
     // Items installed in or owned by a project: every registered project, every project found in the logs or
@@ -859,38 +937,53 @@ export class Catalog {
     // per project (by its normalized path; an item without a path by kind:name).
     const scanned = new Set();
     const counted = new Map(); // project id -> Set of counted item keys
+    const installed = new Map(); // project id -> { skills, agents }, put on the projects at the end
     const scanInto = (p, folder) => {
-      if (!p || !folder || scanned.has(normPath(folder))) return;
+      if (!p || !folder || scanned.has(normPath(folder))) return false;
       scanned.add(normPath(folder));
       let seen = counted.get(p.id);
       if (!seen) counted.set(p.id, (seen = new Set()));
-      for (const adapter of this.active) {
+      let n = installed.get(p.id);
+      if (!n) installed.set(p.id, (n = { skills: 0, agents: 0 }));
+      for (const adapter of active) {
         for (const it of this.callAdapter(adapter, 'findItems', folder)) {
           if (!valid(it) || (it.kind !== 'skill' && it.kind !== 'agent')) continue;
           add(fromAdapter({ ...it, source: 'project', category: 'project', global: false }, adapter.id, { installedIn: [p.id] }));
           const key = typeof it.path === 'string' && it.path ? `file:${normPath(it.path)}` : `item:${it.kind}:${it.name}`.toLowerCase();
           if (seen.has(key)) continue;
           seen.add(key);
-          if (it.kind === 'skill') p.installed.skills++;
-          else p.installed.agents++;
+          if (it.kind === 'skill') n.skills++;
+          else n.agents++;
         }
       }
+      return true;
     };
-    for (const p of this.allProjects()) p.installed = { skills: 0, agents: 0 };
-    for (const p of this.allProjects()) scanInto(p, this.projectFolder(p));
-    for (const root of this.discovered.values()) {
+    for (const p of this.allProjects()) {
+      if (!scanInto(p, this.projectFolder(p))) continue;
+      yield;
+      if (pass !== this.rosterPass) return false;
+    }
+    for (const root of [...this.discovered.values()]) {
       const p = this.getProject(root.projectId);
-      if (p && !p.broad) scanInto(p, this.scanFolderOf(root.path));
+      if (!p || p.broad || !scanInto(p, this.scanFolderOf(root.path))) continue;
+      yield;
+      if (pass !== this.rosterPass) return false;
     }
 
+    // A full scan ran meanwhile (an action): its answer is newer, this one changes nothing
+    if (pass !== this.rosterPass) return false;
     for (const it of roster.values()) {
       it.sources.sort((a, b) => rank(a) - rank(b));
       it.tools = this.sortTools(it.tools);
       if (it.personalDirs) it.personalDirs.sort();
     }
+    this.hub = this.hubDir ? { path: this.hubDir, projects: this.projects.length, library: libraryCount } : null;
+    this.kit = kitInfo;
+    for (const p of this.allProjects()) p.installed = installed.get(p.id) || { skills: 0, agents: 0 };
     this.itemFiles = files;
     this.roster = roster;
     // Drop cache entries for files not seen in this pass (deleted or moved)
     for (const [file, e] of this.fmCache) if (e.gen !== this.fmGen) this.fmCache.delete(file);
+    return true;
   }
 }

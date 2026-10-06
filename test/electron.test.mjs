@@ -1909,6 +1909,11 @@ import {
   QA_ABOUT_PROBE_SCRIPT,
   QA_PANEL_PATH,
   QA_PANEL_PROBE_SCRIPT,
+  QA_LAPTOP_PATH,
+  QA_LAPTOP_PROBE_SCRIPT,
+  QA_LAPTOP_SIZE,
+  QA_VIEWPORT_SCRIPT,
+  QA_LAPTOP_DEMO_SCRIPT,
   createsTray,
   guardDialogs,
   readQaShellOptions,
@@ -2013,7 +2018,7 @@ describe('the hidden QA run', () => {
   });
 
   test('the probes run fixed scripts only; live is never among them as a switch that could succeed in QA', () => {
-    for (const s of [QA_BRIDGE_PROBE_SCRIPT, QA_KIT_PROBE_SCRIPT, QA_ABOUT_PROBE_SCRIPT, QA_PANEL_PROBE_SCRIPT, QA_SERVED_MODE_SCRIPT, ...Object.values(QA_ACTIONS_SCRIPTS)]) {
+    for (const s of [QA_BRIDGE_PROBE_SCRIPT, QA_KIT_PROBE_SCRIPT, QA_ABOUT_PROBE_SCRIPT, QA_PANEL_PROBE_SCRIPT, QA_LAPTOP_PROBE_SCRIPT, QA_VIEWPORT_SCRIPT, QA_LAPTOP_DEMO_SCRIPT, QA_SERVED_MODE_SCRIPT, ...Object.values(QA_ACTIONS_SCRIPTS)]) {
       assert.equal(typeof s, 'string');
       assert.doesNotMatch(s, /\$\{/, 'no template');
     }
@@ -2021,6 +2026,11 @@ describe('the hidden QA run', () => {
     assert.deepEqual(Object.keys(QA_ACTIONS_SCRIPTS), ['off', 'dry', 'live']);
     for (const [mode, s] of Object.entries(QA_ACTIONS_SCRIPTS)) assert.ok(s.startsWith(`window.sibersentezShell.setActionsMode('${mode}')`), mode);
     assert.equal(QA_PANEL_PATH, '/?qa=1&actpanel=choose');
+    // The laptop probe only reads the page it loaded (no fetch, no bridge) at a fixed laptop size
+    assert.equal(QA_LAPTOP_PATH, '/?qa=1');
+    assert.deepEqual(QA_LAPTOP_SIZE, { width: 1366, height: 768 });
+    assert.ok(Object.isFrozen(QA_LAPTOP_SIZE));
+    assert.doesNotMatch(QA_LAPTOP_PROBE_SCRIPT, /fetch|sibersentezShell|localStorage|location/);
     assert.match(QA_KIT_PROBE_SCRIPT, /^fetch\('\/api\/snapshot'\)/, 'the kit probe reads only its own server');
     assert.match(QA_ABOUT_PROBE_SCRIPT, /^fetch\('\/api\/about'\)/, 'the about probe reads only its own server');
     assert.match(QA_SERVED_MODE_SCRIPT, /^fetch\('\/api\/actions'/, 'the mode probe reads only its own server');
@@ -2054,7 +2064,7 @@ describe('the hidden QA run', () => {
     // the probes: fixed scripts through one function; the project probe only in a hidden run with its folder
     assert.equal((src.match(/executeJavaScript\(/g) || []).length, 3, 'the hand-over, the tray\'s new project and qaRun');
     const runArgs = [...src.matchAll(/qaRun\(([^)]*)\)/g)].map((m) => m[1]).filter((a) => a !== 'script');
-    assert.deepEqual([...new Set(runArgs)].sort(), ['QA_ABOUT_PROBE_SCRIPT', 'QA_ACTIONS_SCRIPTS.live', 'QA_ACTIONS_SCRIPTS[mode]', 'QA_SERVED_MODE_SCRIPT', 'QA_BRIDGE_PROBE_SCRIPT', 'QA_KIT_PROBE_SCRIPT', 'QA_PANEL_PROBE_SCRIPT', 'QA_PERMISSION_PROBE'].sort());
+    assert.deepEqual([...new Set(runArgs)].sort(), ['QA_ABOUT_PROBE_SCRIPT', 'QA_ACTIONS_SCRIPTS.live', 'QA_ACTIONS_SCRIPTS[mode]', 'QA_SERVED_MODE_SCRIPT', 'QA_BRIDGE_PROBE_SCRIPT', 'QA_KIT_PROBE_SCRIPT', 'QA_PANEL_PROBE_SCRIPT', 'QA_LAPTOP_PROBE_SCRIPT', 'QA_VIEWPORT_SCRIPT', 'QA_LAPTOP_DEMO_SCRIPT', 'QA_PERMISSION_PROBE'].sort());
     assert.ok(bodyOf(src, 'runQaProbes').includes('if (QA_SHELL.hidden && QA_SHELL.projectDir) await qaProjectProbe();'));
     assert.ok(bodyOf(src, 'qaProjectProbe').includes('showOpenDialog: async () => ({ canceled: false, filePaths: [QA_SHELL.projectDir] }),'), 'no picker');
     assert.ok(bodyOf(src, 'qaProjectProbe').includes("add: (folder) => serverCalls.call(state.server, 'project-add', { path: folder }),"), 'the picker\'s own server call');

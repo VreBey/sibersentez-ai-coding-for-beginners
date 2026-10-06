@@ -6,6 +6,54 @@ import { esc, locale } from './format.js';
 import { icon } from './icons.js';
 import { t } from './i18n.js';
 
+// What the restore point of the last AI start holds, per project (the start-ai answer's restorePoint): the job box says
+// it next to the job, so nobody counts on an undo that does not cover something. It belongs to the job that start
+// began (its Job-ID): another job of the project never shows it.
+// After a reload, or for a job started in another window, the server's record of the job's start (the /restore
+// answer's jobs) is asked once per job; startPointsVersion() changes when one arrives, so the job box draws again.
+const startPoints = new Map();
+let pointsVersion = 0;
+export const startPointsVersion = () => pointsVersion;
+export function rememberStartPoint(projectId, point, jobId = null) {
+  if (typeof projectId === 'string' && projectId && point && typeof point === 'object') {
+    startPoints.set(projectId, { point, jobId: typeof jobId === 'string' && jobId ? jobId : null });
+    pointsVersion++;
+  }
+}
+export function startPointOf(projectId, jobId = null) {
+  const x = startPoints.get(projectId);
+  return x && x.jobId && x.jobId === jobId ? x.point : null;
+}
+const asked = new Map(); // project|job -> { at, n }: asked again after a while, a few times (a job started outside
+// the app, or before 0.16, has no record and never gets one)
+const ASK_AGAIN_MS = 30000;
+const ASK_MAX = 4;
+export function askJobPoint(projectId, jobId, { fetchFn = fetchPoints, now = Date.now } = {}) {
+  if (typeof projectId !== 'string' || !projectId || typeof jobId !== 'string' || !jobId || startPointOf(projectId, jobId)) return null;
+  const key = `${projectId}|${jobId}`;
+  const was = asked.get(key);
+  if (was && (was.n >= ASK_MAX || now() - was.at < ASK_AGAIN_MS)) return null;
+  asked.set(key, { at: now(), n: (was?.n || 0) + 1 });
+  return fetchFn(projectId)
+    .then((data) => {
+      const rec = (Array.isArray(data?.jobs) ? data.jobs : []).find((r) => r && r.jobId === jobId);
+      if (!rec) return false;
+      // The start of this very page (rememberStartPoint) answered meanwhile: it stays
+      if (!startPointOf(projectId, jobId)) rememberStartPoint(projectId, rec, jobId);
+      // A job with no record yet (its start is still copying) is asked again later; a found one never
+      return true;
+    })
+    .catch(() => false);
+}
+// One sentence (pure): a full copy, a lean one (how many big files and logs it left out), or none and why
+export function startPointText(point) {
+  if (!point || typeof point !== 'object') return '';
+  if (typeof point.problem === 'string') return t('rstStartNone');
+  if (typeof point.id !== 'string') return '';
+  const left = Number.isInteger(point.leftOut) ? point.leftOut : 0;
+  return point.scope === 'lean' && left > 0 ? t('rstStartLean', { count: left }) : t('rstStartFull');
+}
+
 const REASONS = new Set(['ai-start', 'before-restore', 'manual']);
 const STEPS = new Set(['', 'loading', 'confirm', 'busy', 'done', 'failed']);
 const NAMES_SHOWN = 8;
@@ -40,8 +88,8 @@ export function restoreSectionHtml(p, data, { mode = 'off', ui = {} } = {}) {
   const wrap = (inner) => `<section class="dr-sec rst" data-sec="restore" aria-labelledby="rstH">${head}${inner}</section>`;
   if (!data) return wrap(`<p class="muted small">${esc(t('rstLoading'))}</p>`);
   const points = (Array.isArray(data.points) ? data.points : []).filter((x) => x && typeof x.id === 'string');
-  // Short, with the details on hover (the long text was four lines on every opening)
-  const intro = `<p class="muted small" title="${esc(t('rstIntroMore'))}">${esc(t('rstIntro'))}</p>`;
+  // Short, and what a copy never holds said in plain sight (it was on hover only, docs/development-review-2026-10-06.md §4)
+  const intro = `<p class="muted small">${esc(t('rstIntro'))}</p><p class="muted small rst-never">${esc(t('rstIntroMore'))}</p>`;
   if (!points.length) return wrap(`${intro}<p class="small">${esc(t('rstNone'))}</p>`);
   const on = mode === 'dry' || mode === 'live';
   const dis = on ? '' : ' aria-disabled="true"';

@@ -108,7 +108,7 @@ test('wiring: the drawer (project and session), the Building\'s job box, the not
   const drawer = read('public/js/views/drawer.js');
   assert.ok(drawer.includes('${apiErrorHtml(projectApiError(store.sessions.values(), p.id)?.e)}') && drawer.includes('${apiErrorHtml(liveApiError(store.sessions.get(d.id)))}'));
   const ws = read('public/js/views/workshop.js');
-  assert.ok(ws.includes('box.hidden = !job && !err;') && ws.includes('errKey()]);'), 'shown without a job, redrawn when it changes');
+  assert.ok(ws.includes('box.hidden = !job && !err;') && ws.includes('errKey(), startPointsVersion()]);'), 'shown without a job, redrawn when it (or its copy note) changes');
   const notify = read('public/js/notify.js');
   assert.ok(notify.includes("e.kind === 'ai_error'"));
   assert.ok(read('server/views.mjs').includes('apiError: s.apiError || null,'));

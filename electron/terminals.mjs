@@ -23,6 +23,9 @@ export const ROWS = Object.freeze([2, 200]);
 const PROJECT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TERM_ID = /^t[1-9][0-9]{0,6}$/;
+// A tool id of the tools list (server/tools.mjs) and an app job id (server/job-id.mjs); anything else is dropped
+const TOOL_ID = /^[a-z][a-z0-9-]{1,30}$/;
+const JOB_ID = /^J[0-9a-f]{32}$/;
 const LAUNCH_ID = /^L[0-9a-f]{24}$/;
 
 // The shell every terminal starts: Windows PowerShell by its full path (the install commands the AI tools document are
@@ -216,12 +219,22 @@ const intIn = (v, [lo, hi]) => Number.isInteger(v) && v >= lo && v <= hi;
 // spawn(file, args, { cwd, cols, rows, env }) -> { onData(cb), onExit(cb), write(s), resize(c, r), kill(), pid }
 // clock/setTimer/clearTimer: the output batching's time (fakes in tests)
 // send(channel, ...args): to the window (the caller sends only while the window shows the app)
-export function createTerminals({ spawn, send = () => {}, log = () => {}, env = {}, program = terminalProgram(), now = Date.now, clock = Date.now, max = MAX_TERMINALS, setTimer = setTimeout, clearTimer = clearTimeout, batchMs = BATCH_MS, highWater = HIGH_WATER } = {}) {
-  const terms = new Map(); // id -> { pty, title, projectId, startedAt, buffer, ai }
+// onChange(ended): after a terminal opened or ended (ended: { id, projectId, tool, jobId, exitCode } of the one that
+// ended, else null); the shell tells the server what runs (sessions()) so a restore sees AI tools of every kind
+export function createTerminals({ spawn, send = () => {}, onChange = () => {}, log = () => {}, env = {}, program = terminalProgram(), now = Date.now, clock = Date.now, max = MAX_TERMINALS, setTimer = setTimeout, clearTimer = clearTimeout, batchMs = BATCH_MS, highWater = HIGH_WATER } = {}) {
+  const terms = new Map(); // id -> { pty, title, projectId, startedAt, buffer, ai, tool, jobId }
+  const changed = (ended = null) => {
+    try {
+      onChange(ended);
+    } catch {
+      // the server learns it on the next change
+    }
+  };
   let seq = 0;
 
   // launch: the server's program for a start-ai in the dock (its launcher in a Command Prompt); else the fixed shell
-  function open({ dir, title, projectId = null, cols = 100, rows = 30, launch = null }) {
+  // tool, jobId: the AI tool and the app job of a start-ai (the server's launch record); a plain shell has neither
+  function open({ dir, title, projectId = null, cols = 100, rows = 30, launch = null, tool = null, jobId = null }) {
     if (terms.size >= max) return { ok: false, reason: 'too-many' };
     if (typeof dir !== 'string' || !dir) return { ok: false, reason: 'no-folder' };
     const prog = launch && typeof launch.file === 'string' && Array.isArray(launch.args) && launch.args.every((a) => typeof a === 'string') ? launch : program;
@@ -234,7 +247,8 @@ export function createTerminals({ spawn, send = () => {}, log = () => {}, env = 
       return { ok: false, reason: 'spawn-failed' };
     }
     // ai: an AI tool runs in it (the page tells a plain shell apart, docs/embedded-terminal.md)
-    const t = { pty, title: String(title || '').slice(0, 60), projectId, startedAt: now(), buffer: createChunkBuffer(MAX_BUFFER), ai: prog !== program };
+    const ai = prog !== program;
+    const t = { pty, title: String(title || '').slice(0, 60), projectId, startedAt: now(), buffer: createChunkBuffer(MAX_BUFFER), ai, tool: ai && TOOL_ID.test(tool || '') ? tool : null, jobId: ai && JOB_ID.test(jobId || '') ? jobId : null };
     // a pty without pause/resume (or one that throws) just goes unthrottled
     const safe = (name) => () => {
       try {
@@ -255,10 +269,13 @@ export function createTerminals({ spawn, send = () => {}, log = () => {}, env = 
       if (!terms.has(id)) return;
       t.out.flush();
       terms.delete(id);
-      send(TERMINAL_IPC.exit, id, Number.isInteger(exitCode) ? exitCode : null);
+      const code = Number.isInteger(exitCode) ? exitCode : null;
+      send(TERMINAL_IPC.exit, id, code);
+      changed({ id, projectId: t.projectId, tool: t.tool, jobId: t.jobId, ai: t.ai, exitCode: code });
     });
     log(`terminal ${id} opened (${terms.size} running)`);
-    return { ok: true, id, title: t.title, projectId, ai: t.ai };
+    changed();
+    return { ok: true, id, title: t.title, projectId, ai: t.ai, tool: t.tool };
   }
 
   const get = (id) => (typeof id === 'string' && TERM_ID.test(id) ? terms.get(id) : undefined);
@@ -293,6 +310,7 @@ export function createTerminals({ spawn, send = () => {}, log = () => {}, env = 
     }
     send(TERMINAL_IPC.exit, id, null);
     log(`terminal ${id} closed (${terms.size} running)`);
+    changed({ id, projectId: t.projectId, tool: t.tool, jobId: t.jobId, ai: t.ai, exitCode: null });
     return true;
   }
 
@@ -301,9 +319,11 @@ export function createTerminals({ spawn, send = () => {}, log = () => {}, env = 
   }
 
   // A (re)loaded page asks what runs, with what each one showed so far
-  const list = () => [...terms].map(([id, t]) => ({ id, title: t.title, projectId: t.projectId, startedAt: t.startedAt, buffer: t.buffer.toString(), ai: t.ai }));
+  const list = () => [...terms].map(([id, t]) => ({ id, title: t.title, projectId: t.projectId, startedAt: t.startedAt, buffer: t.buffer.toString(), ai: t.ai, tool: t.tool }));
+  // What runs, for the server (no buffer, no title): the terminals of AI starts and plain shells, with their project
+  const sessions = () => [...terms].map(([id, t]) => ({ id, projectId: t.projectId, ai: t.ai, tool: t.tool, jobId: t.jobId, startedAt: t.startedAt }));
 
-  return { open, write, resize, close, closeAll, list, count: () => terms.size };
+  return { open, write, resize, close, closeAll, list, sessions, count: () => terms.size };
 }
 
 // Quitting while terminals run asks first (the owner's decision, docs/embedded-terminal.md §5): true when the program

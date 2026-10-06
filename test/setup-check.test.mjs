@@ -178,7 +178,7 @@ describe('setup check: HTML', () => {
       assert.ok(h.includes(S.scFound.replace('{count}', '2')), lang);
       assert.ok(h.includes('data-sc="notOnPath"') && h.includes('data-sc="apiKey"'));
       assert.equal((h.match(/data-ai-copy/g) || []).length, 2);
-      assert.ok(h.includes(S.scNeverRuns.replace(/“/g, '“')));
+      assert.ok(h.includes(S.scNeverRuns));
       assert.ok(setupCheckHtml(ready()).includes(S.scAllGood));
       assert.equal(setupCheckHtml({ status: 'loading', tools: [] }), '');
     });

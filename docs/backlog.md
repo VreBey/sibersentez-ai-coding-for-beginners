@@ -36,12 +36,13 @@ minute, at once after an action (index.mjs `ROSTER_EVERY`); "What changed" keeps
 layout.js `reconnectDelay`); the scene caps its effects while hidden (stage.js `capEffects`); store.js no longer
 spreads a patch into a call. Still open:
 
+- **(Mostly done 2026-10-06)** The five-minute rescan now runs in steps (`catalog.loadRosterInSteps`, longest pause
+  515 ms -> about 60 ms, a tool's plugins read in parts, docs/development-review-2026-10-06.md §5); an action still
+  rescans in one piece. Before:
 - **The roster scan is still synchronous** (catalog.mjs `loadRoster`): now once in five minutes instead of every
   minute. A worker thread or an async scan would take it off the loop for good. Measured 2026-10-01 on the owner's machine (2,447 items):
   the projects reload 0.4 s a minute, the roster scan 0.5 s (1.1 s cold) every five minutes; left as it is for now,
   since a worker would split the catalog's state in two for a half-second pause.
-- **The terminal has no write acknowledgement from xterm**: the pty is paused at the source when output piles up,
-  not by xterm's write callback (preload and terminalDock.js would carry the acknowledgement).
 - **Smaller**: ended terminal tabs stay until closed, 5000 lines each; ad-hoc folder projects are never forgotten
   (catalog.mjs `adhoc`).
 

@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Catalog, SOURCE_ORDER, resolveSlug, readHeadCwd, personalDir } from '../server/catalog.mjs';
+import { Catalog, SOURCE_ORDER, STEP_MS, resolveSlug, readHeadCwd, personalDir } from '../server/catalog.mjs';
 import { ProjectMemory } from '../server/memory.mjs';
 import { initHub } from '../server/hub.mjs';
 import { slugify, normPath } from '../server/util.mjs';
@@ -1221,5 +1221,117 @@ test('reload without the roster: the projects are read again, the skill and agen
   c.load();
   assert.equal(scans, 2);
   const index = fs.readFileSync(new URL('../server/index.mjs', import.meta.url), 'utf8');
-  assert.ok(index.includes('reloadCatalog({ roster: ++catalogTicks % ROSTER_EVERY === 0 })') && index.includes('const ROSTER_EVERY = 5;'));
+  assert.ok(index.includes('reloadCatalog({ roster: false });') && index.includes('if (roster) catalog.loadRosterInSteps().then((changed) => changed && publishCatalog())') && index.includes('const ROSTER_EVERY = 5;'));
+});
+
+test('a reload of the projects keeps their skill and agent counts (the roster scan writes them only every fifth time)', () => {
+  const c = new Catalog({ env: FAKE_ENV, hubDir: HUB, claudeDir: CLAUDE, homeDir: HOME });
+  c.load();
+  const before = new Map(c.projects.map((p) => [p.id, p.installed]));
+  assert.ok([...before.values()].every(Boolean), 'counted by the scan');
+  c.load({ roster: false });
+  for (const p of c.projects) assert.deepEqual(p.installed, before.get(p.id), p.id);
+});
+
+test('Claude Code reads its global items in parts: its own and claude.ai skills, one part per plugin, the built-in agents', () => {
+  const c = new Catalog({ env: FAKE_ENV, hubDir: HUB, claudeDir: CLAUDE, homeDir: HOME });
+  const cc = c.adapters.find((a) => a.id === 'claude-code');
+  const parts = [...cc.globalItemSteps(c.adapterCtx(cc))];
+  assert.deepEqual(parts.flat(), cc.findGlobalItems(c.adapterCtx(cc)));
+  // cloud and cloud-off synced; sample-plugin and disabled installed (the others have no folder)
+  assert.equal(parts.length, 6);
+  assert.ok(parts[0].some((i) => i.source === 'personal') && parts[0].some((i) => i.source === 'claudeai') && parts[0].every((i) => i.kind !== 'plugin'));
+  assert.deepEqual(parts.slice(1, 5).map((p) => p[0].kind === 'plugin' && p.filter((i) => i.kind === 'plugin').length === 1), [true, true, true, true], 'one plugin, then its items');
+  assert.deepEqual(parts.slice(1, 3).map((p) => p[0].name).sort(), ['cloud', 'cloud-off'], 'the synced ones (in folder order)');
+  assert.deepEqual(parts.slice(3, 5).map((p) => p[0].name), ['sample-plugin', 'disabled'], 'then the installed ones');
+  assert.ok(parts[5].length && parts[5].every((i) => i.source === 'builtin'));
+});
+
+test('a tool that reads in parts: the loop comes back inside a long read, the same items, a failing part keeps the ones before', async () => {
+  const busy = (ms) => { const end = Date.now() + ms; while (Date.now() < end); };
+  const item = (name) => ({ kind: 'skill', name, path: null, source: 'plugin', category: 'plugin', global: true });
+  let broken = false;
+  const parted = {
+    id: 'parted',
+    name: 'Parted',
+    detect: () => true,
+    findProjects: () => [],
+    findGlobalItems: (ctx) => [...parted.globalItemSteps(ctx)].flat(),
+    *globalItemSteps() {
+      for (const n of ['p1', 'p2', 'p3']) {
+        busy(STEP_MS + 4);
+        if (broken && n === 'p3') throw new Error('unreadable plugin');
+        yield [item(n)];
+      }
+    },
+  };
+  const c = new Catalog({ env: FAKE_ENV, hubDir: HUB, claudeDir: CLAUDE, homeDir: HOME, adapters: [parted] });
+  c.load();
+  const whole = JSON.stringify([...c.roster.entries()]);
+  let pauses = 0;
+  await c.loadRosterInSteps({ pause: async () => void pauses++ });
+  assert.ok(pauses >= 4, `inside the read too (${pauses} pauses)`);
+  assert.equal(JSON.stringify([...c.roster.entries()]), whole, 'the same items as in one piece');
+  broken = true;
+  const errors = [];
+  const orig = console.error;
+  console.error = (m) => errors.push(String(m));
+  try {
+    c.loadRoster();
+    c.loadRoster();
+  } finally {
+    console.error = orig;
+  }
+  assert.deepEqual(['p1', 'p2', 'p3'].map((n) => c.roster.has(`skill:${n}`)), [true, true, false], 'the parts before the failing one stay');
+  assert.equal(errors.filter((m) => m.includes('parted.globalItemSteps failed')).length, 1, 'said once');
+});
+
+test('the roster in steps: the same answer as one piece, nothing seen half done, a full scan meanwhile wins, one at a time', async () => {
+  const c = new Catalog({ env: FAKE_ENV, hubDir: HUB, claudeDir: CLAUDE, homeDir: HOME });
+  c.load();
+  const whole = JSON.stringify([...c.roster.entries()]);
+  const counts = JSON.stringify(c.allProjects().map((p) => [p.id, p.installed]));
+  // In steps, with a look at the catalog between every two: always the old roster or the new one, never a mix
+  const before = c.roster;
+  let pauses = 0;
+  const changed = await c.loadRosterInSteps({
+    pause: async () => {
+      pauses++;
+      assert.equal(c.roster, before, 'the old roster until the end');
+      assert.equal(c.lister, null, 'no lister of the pass left on the catalog between steps');
+    },
+  });
+  assert.equal(changed, true);
+  assert.ok(pauses >= 2, `it gave the loop back (${pauses} times)`);
+  assert.notEqual(c.roster, before);
+  assert.equal(JSON.stringify([...c.roster.entries()]), whole, 'the same items as the scan in one piece');
+  assert.equal(JSON.stringify(c.allProjects().map((p) => [p.id, p.installed])), counts, 'the same counts');
+  // A full scan (an action) between two steps: it wins, the stepping one ends without changing anything
+  let ran = false;
+  let kept = null;
+  const stepping = c.loadRosterInSteps({
+    pause: async () => {
+      if (ran) return;
+      ran = true;
+      c.loadRoster();
+      kept = c.roster;
+    },
+  });
+  // One at a time: a second stepping scan while one runs does nothing
+  assert.equal(await c.loadRosterInSteps(), false);
+  assert.equal(await stepping, false);
+  assert.equal(c.roster, kept, 'the full scan\'s roster stays');
+  // Once the full scan won, the stepping one stops at its next step (it does not read the rest for nothing)
+  let after = 0;
+  let won = false;
+  await c.loadRosterInSteps({
+    pause: async () => {
+      if (won) after++;
+      if (!won) {
+        won = true;
+        c.loadRoster();
+      }
+    },
+  });
+  assert.equal(after, 0, 'no step after the full scan won');
 });

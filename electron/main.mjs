@@ -67,6 +67,11 @@ import {
   QA_ABOUT_PROBE_SCRIPT,
   QA_PANEL_PATH,
   QA_PANEL_PROBE_SCRIPT,
+  QA_LAPTOP_PATH,
+  QA_LAPTOP_PROBE_SCRIPT,
+  QA_LAPTOP_SIZE,
+  QA_VIEWPORT_SCRIPT,
+  QA_LAPTOP_DEMO_SCRIPT,
   SHELL_STATE_FILE,
   actionsMenuItems,
   actionsSubmenuTemplate,
@@ -452,6 +457,8 @@ function onServerReady(port) {
   state.reloadOnReady = false;
   if (!win) createWindow();
   else if (changed || reload) win.loadURL(pageUrl());
+  // A new server process knows nothing of the terminals that already run
+  if (terminals.count()) tellServerTerminals();
   qaSignal('server-ready');
   checkActionsMode();
 }
@@ -1281,6 +1288,37 @@ async function qaPanelProbe() {
   if (QA.shot) await qaCapture(QA.shot);
 }
 
+// The next step on a laptop screen (helpers QA_LAPTOP_PROBE_SCRIPT): the page is shown as a 1366 x 768 screen
+// (device emulation: a hidden window keeps its own size), then back to the window's own
+async function qaLaptopProbe() {
+  const wc = win.webContents;
+  const { width, height } = QA_LAPTOP_SIZE;
+  try {
+    const loaded = qaNext('page-loaded', 30000);
+    win.loadURL(`${state.origin}${QA_LAPTOP_PATH}`);
+    if (!(await loaded)) return qaProbe('laptop next step', 'page not loaded');
+    wc.enableDeviceEmulation({ screenPosition: 'desktop', screenSize: { width, height }, viewPosition: { x: 0, y: 0 }, viewSize: { width, height }, deviceScaleFactor: 0, scale: 1 });
+    let got = 'missing';
+    for (let i = 0; i < 40; i++) {
+      await qaSleep(250);
+      got = await qaRun(QA_LAPTOP_PROBE_SCRIPT);
+      const size = qaJson(await qaRun(QA_VIEWPORT_SCRIPT)) || [];
+      if (got !== 'missing' && size[0] === width && size[1] === height) break;
+    }
+    qaProbe('laptop next step', got);
+    // The same in the example, whose step has a button
+    let demo = await qaRun(QA_LAPTOP_DEMO_SCRIPT);
+    for (let i = 0; i < 20 && demo !== 'missing'; i++) {
+      await qaSleep(250);
+      demo = await qaRun(QA_LAPTOP_PROBE_SCRIPT);
+      if (qaJson(demo)?.step === 'demo') break;
+    }
+    qaProbe('laptop next step demo', demo);
+  } finally {
+    wc.disableDeviceEmulation();
+  }
+}
+
 async function runQaProbes() {
   qaProbe('hidden', { hidden: QA_SHELL.hidden, visible: Boolean(win?.isVisible()), tray: Boolean(tray) });
   qaProbe('bridge', await qaRun(QA_BRIDGE_PROBE_SCRIPT));
@@ -1295,6 +1333,7 @@ async function runQaProbes() {
   await qaSwitchThroughBridge('off');
   if (QA_SHELL.hidden && QA_SHELL.projectDir) await qaProjectProbe();
   else qaProbe('project-add', 'skipped (needs SIBERSENTEZ_QA_HIDDEN=1 and SIBERSENTEZ_QA_PROJECT_DIR)');
+  await qaLaptopProbe();
   await qaPanelProbe();
   await qaTerminalProbe();
   qaProbe('hidden at the end', { visible: Boolean(win?.isVisible()), tray: Boolean(tray) });
@@ -1353,9 +1392,15 @@ const terminals = createTerminals({
   send: (channel, ...args) => {
     if (win && !win.isDestroyed() && panelWindowReady()) win.webContents.send(channel, ...args);
   },
+  // What runs goes to the server after every change (a restore checks it, the page shows it); a restarted server
+  // gets the whole list again when it is ready (tellServerTerminals in onServerReady)
+  onChange: (ended) => tellServerTerminals(ended),
   log,
   env: process.env,
 });
+function tellServerTerminals(ended = null) {
+  serverCalls.call(state.server, 'terminal-state', { sessions: terminals.sessions(), ended }).catch(() => {});
+}
 
 // Every terminal call passes the bridge's sender rule first (main window, top frame, the app's origin)
 const termSenderOk = (event) => bridgeSender(senderFacts(event)).ok;
@@ -1371,7 +1416,7 @@ async function onTermOpen(event, req, cols, rows) {
   const target = await serverCalls.call(state.server, 'terminal-target', r.target);
   if (target?.ok !== true || typeof target.dir !== 'string') return { ok: false, reason: typeof target?.reason === 'string' ? target.reason : 'refused' };
   try {
-    return terminals.open({ dir: target.dir, title: target.title, projectId: target.projectId || null, cols, rows, launch: target.program || null });
+    return terminals.open({ dir: target.dir, title: target.title, projectId: target.projectId || null, cols, rows, launch: target.program || null, tool: target.tool || null, jobId: target.jobId || null });
   } catch (e) {
     log(`terminal could not start: ${e?.message}`);
     return { ok: false, reason: 'no-pty' };

@@ -585,7 +585,8 @@ export async function runMenuItem(it, { openDrawer, openSkills, toast } = {}) {
     toast?.(resultToast(it.label, r, it));
     // A tool started in a project: the drawer asks again for its restore points and changes
     if (it.action === 'start-ai' && r?.ok && it.payload?.projectId) {
-      globalThis.dispatchEvent?.(new CustomEvent(AI_STARTED_EVENT, { detail: { projectId: it.payload.projectId } }));
+      // with what the start's restore point holds (the job box says it next to the job, restore.js startPointText)
+      globalThis.dispatchEvent?.(new CustomEvent(AI_STARTED_EVENT, { detail: { projectId: it.payload.projectId, restorePoint: r.restorePoint || null, jobId: r.jobId || null } }));
     }
     return r;
   }

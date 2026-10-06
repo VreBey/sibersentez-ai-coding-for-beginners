@@ -388,6 +388,10 @@ test('codex items: .agents/skills and .codex/agents/*.toml of a project; ~/.agen
   write(path.join(cache, 'plug', '1.10.0', '.codex-plugin', 'plugin.json'), JSON.stringify({ name: 'plug', description: 'A Codex plugin' }));
   skill(path.join(cache, 'solo', 'latest', 'skills'), 'solo-skill');
   const g = codex.findGlobalItems(w.ctx(codex));
+  // In parts (the stepped rescan): the same items, one part for the personal ones and one per cached plugin
+  const parts = [...codex.globalItemSteps(w.ctx(codex))];
+  assert.deepEqual(parts.flat(), g);
+  assert.equal(parts.length, 3, 'personal and built-in, plug, solo');
   const by = new Map(g.map((i) => [`${i.kind}:${i.name}`, i]));
   assert.equal(by.get('skill:shared-skill').source, 'personal');
   assert.equal(by.get('skill:mine').source, 'personal');

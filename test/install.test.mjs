@@ -1432,6 +1432,27 @@ test('restore points: preview and a dry apply write nothing; live goes back afte
   } finally {
     await busy.close();
   }
+  // Any AI tool running in the project's embedded terminal counts too (Codex here, it has no session logs); a plain
+  // shell does not, a tool in another project does not, and once it ended the way back is open again
+  const docked = await startServer(w);
+  try {
+    const job = 'J' + 'd'.repeat(32);
+    assert.deepEqual(docked.actions.terminalState({ sessions: [{ id: 't1', projectId: 'cc', ai: true, tool: 'codex', jobId: job, startedAt: 1 }] }), { ok: true, reason: 'saved' });
+    let r = await docked.post({ action: 'restore-apply', projectId: 'cc', pointId: point.id });
+    assert.equal(r.json.error, 'ai-working');
+    assert.deepEqual(snapshotTree(p), before);
+    docked.actions.terminalState({ sessions: [{ id: 't2', projectId: 'cc', ai: false, tool: null }, { id: 't3', projectId: 'other', ai: true, tool: 'gemini' }], ended: { id: 't1', projectId: 'cc', ai: true, tool: 'codex', jobId: job, exitCode: 0 } });
+    assert.deepEqual(docked.actions.dockSessions().map((x) => x.id), ['t2', 't3'], 'the last report wins: Codex ended');
+    r = await docked.post({ action: 'restore-preview', projectId: 'cc', pointId: point.id });
+    assert.equal(r.json.error, undefined, "a plain shell and another project's tool do not lock this project");
+    // Malformed reports are refused or cleaned field by field; they never mark a project busy
+    assert.deepEqual(docked.actions.terminalState({ sessions: 'x' }), { ok: false, reason: 'invalid' });
+    docked.actions.terminalState({ sessions: [{ id: '../x', projectId: 'cc', ai: true }, { id: 't9', projectId: 'cc', ai: true, tool: 'Bad Tool', jobId: 'nope' }] });
+    assert.deepEqual(docked.actions.dockSessions(), [{ id: 't9', projectId: 'cc', ai: true, tool: null, jobId: null, startedAt: null }]);
+    docked.actions.terminalState({ sessions: [] });
+  } finally {
+    await docked.close();
+  }
   const live = await startServer(w);
   try {
     // The plan the person saw: a stale digest is refused, the preview's is taken

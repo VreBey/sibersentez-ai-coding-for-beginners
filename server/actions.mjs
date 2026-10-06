@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn as nodeSpawn } from 'node:child_process';
 import { isLegacyHub, listLibrary, findLibraryItem, scanSource, publicScanItems, planImport, executeImport, writeCatalog, publicPlan, validName, normRel, lstat, treeHash, sameHash, CATEGORY_RE, MAX_REL_PATH } from './library.mjs';
 import { TARGETS, defaultTargets, resolveProject, readInstalls, planInstall, executeInstall, planRemove, executeRemove, planTrial, makeTrial } from './install.mjs';
-import { createPointAsync, planRestore, applyRestore, POINT_ID_RE } from './restore.mjs';
+import { createPointAsync, planRestore, applyRestore, recordJobPoint, POINT_ID_RE } from './restore.mjs';
 import { createFit, planApplyImports, KEY_RE, normalizeIdea } from './fit.mjs';
 // "Start with AI" (docs/ai-start.md)
 import { sharedToolDetector, toolById, TOOL_IDS, envValue } from './tools.mjs';
@@ -843,7 +843,7 @@ export function createActions({
   function runRestore(action, ctx, execute, base) {
     const args = { hubDir, projectId: ctx.project.id, dir: ctx.dir, id: ctx.pointId, now };
     // An AI session still working in the project would write while the files are put back
-    if (action === 'restore-apply' && execute && [...(ingest?.sessions?.values?.() || [])].some((s) => s?.live && s.projectId === ctx.project.id)) return failed(409, 'ai-working', 'restore');
+    if (action === 'restore-apply' && execute && aiActiveIn(ctx.project.id)) return failed(409, 'ai-working', 'restore');
     const plan = planRestore(args);
     if (!plan.ok) return failed(plan.problem === 'point-missing' ? 404 : 409, plan.problem, 'restore');
     const cut = (list) => list.slice(0, RESTORE_LIST_MAX);
@@ -855,18 +855,27 @@ export function createActions({
   }
 
   // A restore point before an AI tool starts in a live mode (docs/restore.md): the project of the start (a session's
-  // project for a session). It never stops the start: a problem is only reported ({ problem }).
-  async function takeStartPoint(projectId, label = '') {
-    if (!projectId || !hubDir || !isDir(hubDir) || isLegacyHub(hubDir)) return null;
+  // project for a session). It never stops the start: a problem is only reported ({ problem }). The answer says what
+  // the point holds, so the page can tell a full copy from a lean one (big files and logs left out, docs/restore.md §7).
+  async function takeStartPoint(projectId, label = '', jobId = null) {
+    if (!projectId) return null;
+    // No hub, or a hub of the old layout (copies are kept only in the new one): said, not silent
+    if (!hubDir || !isDir(hubDir)) return { problem: 'no-hub' };
+    if (isLegacyHub(hubDir)) return { problem: 'legacy-hub' };
+    let r = null;
+    let point;
     try {
-      const r = resolveProject({ catalog, projectId, hubDir, homeDir, claudeDir });
+      r = resolveProject({ catalog, projectId, hubDir, homeDir, claudeDir });
       if (!r.ok) return { problem: r.error };
       const p = await createPointAsync({ hubDir, projectId: r.project.id, dir: r.dir, reason: 'ai-start', now, label });
-      return p.ok ? { id: p.id, reused: p.reused } : { problem: p.problem };
+      point = p.ok ? { id: p.id, reused: p.reused, scope: p.scope === 'lean' ? 'lean' : 'full', leftOut: Number.isInteger(p.leftOut) ? p.leftOut : 0, files: p.files, bytes: p.bytes } : { problem: p.problem };
     } catch (e) {
       console.error('restore point failed:', logCode(e));
-      return { problem: 'copy-failed' };
+      point = { problem: 'copy-failed' };
     }
+    // Kept for the job too (an app job only): the job box says it after a reload or in another window
+    if (jobId && r?.ok) recordJobPoint({ hubDir, projectId: r.project.id, jobId, point, now });
+    return point;
   }
 
   async function runGitHub(action, ctx, execute, base) {
@@ -1185,7 +1194,7 @@ export function createActions({
     }
 
     // 4. Live: a restore point of the project, the first message, the launcher, then the terminal
-    const restorePoint = await takeStartPoint(ctx.pointProjectId, ctx.job || '');
+    const restorePoint = await takeStartPoint(ctx.pointProjectId, ctx.job || '', jobId);
     const written = [];
     if (text) {
       const w = writeFirstMessage(ctx.dir, text, fs, jobId);
@@ -1219,7 +1228,7 @@ export function createActions({
     // fallback would (fallbackArgv without its "start")
     if (ctx.inDock) {
       const program = direct ? { file: cmdExe, args: ['/d', '/v:off', '/k', launcherFile] } : { file: fallbackArgv[5], args: fallbackArgv.slice(6) };
-      const launchId = rememberDockLaunch({ dir: direct ? ctx.dir : fallbackCwd, title: ctx.title, projectId: ctx.projectId || null, program, launcherFile });
+      const launchId = rememberDockLaunch({ dir: direct ? ctx.dir : fallbackCwd, title: ctx.title, projectId: ctx.pointProjectId || ctx.projectId || null, program, launcherFile, tool: tool.id, jobId });
       return { status: 200, body: { ...body, argv: [program.file, ...program.args], terminal: 'dock', launchId }, note: 'live' };
     }
     let why;
@@ -1394,6 +1403,28 @@ export function createActions({
     return id;
   }
 
+  // What runs in the embedded terminals (the desktop shell tells it after every change, electron/terminals.mjs): AI
+  // starts of any tool and plain shells, by project. Only the shell's own channel reaches this; every field is checked.
+  // Each report carries the whole list, so the last one wins; the one that ended is the page's to show (its tab).
+  // Counted: the app's own AI starts. A tool typed into a plain shell or started in Windows Terminal is not seen.
+  let dockRunning = [];
+  const DOCK_ID = /^t[1-9][0-9]{0,6}$/;
+  const DOCK_TOOL = /^[a-z][a-z0-9-]{1,30}$/;
+  const DOCK_JOB = /^J[0-9a-f]{32}$/;
+  const dockItem = (x) => {
+    if (!x || typeof x !== 'object' || !DOCK_ID.test(x.id || '')) return null;
+    const projectId = typeof x.projectId === 'string' && x.projectId.length <= 200 ? x.projectId : null;
+    return { id: x.id, projectId, ai: x.ai === true, tool: DOCK_TOOL.test(x.tool || '') ? x.tool : null, jobId: DOCK_JOB.test(x.jobId || '') ? x.jobId : null, startedAt: Number.isFinite(x.startedAt) ? x.startedAt : null };
+  };
+  function terminalState({ sessions } = {}) {
+    if (!Array.isArray(sessions) || sessions.length > 100) return { ok: false, reason: 'invalid' };
+    dockRunning = sessions.map(dockItem).filter(Boolean);
+    return { ok: true, reason: 'saved' };
+  }
+  const dockSessions = () => dockRunning.map((x) => ({ ...x }));
+  // An AI tool works in the project: a live Claude session (its logs) or an AI start still running in the dock
+  const aiActiveIn = (projectId) => [...(ingest?.sessions?.values?.() || [])].some((s) => s?.live && s.projectId === projectId) || dockRunning.some((x) => x.ai && x.projectId === projectId);
+
   function terminalTarget(req) {
     if (mode !== 'live') return { ok: false, reason: mode === 'dry' ? 'preview' : 'off' };
     if (req?.launchId !== undefined) {
@@ -1401,7 +1432,7 @@ export function createActions({
       const x = typeof req.launchId === 'string' ? dockLaunches.get(req.launchId) : undefined;
       if (!x) return { ok: false, reason: 'refused', status: 404 };
       dockLaunches.delete(req.launchId);
-      return { ok: true, dir: x.dir, title: x.title, projectId: x.projectId, program: x.program };
+      return { ok: true, dir: x.dir, title: x.title, projectId: x.projectId, program: x.program, tool: x.tool || undefined, jobId: x.jobId || undefined };
     }
     // The setup terminal (installing an AI tool from the tools panel): a plain shell in the user's home folder, no
     // program, no project. Only this exact request; the home folder must be a real local folder.
@@ -1428,6 +1459,8 @@ export function createActions({
       return mode;
     },
     terminalTarget,
+    terminalState,
+    dockSessions,
     get token() {
       return token;
     },

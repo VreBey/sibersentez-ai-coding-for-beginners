@@ -140,13 +140,29 @@ test('moving about: a session that waits walks to the meeting room by the lift; 
   assert.deepEqual(routePosition([{ x: 0, y: 0 }, { x: 100, y: 0 }], 0.5), { x: 50, y: 0, direction: 1 });
 });
 
-test('other tools: a trace in the last 3 minutes works in the main room, in the last 45 rests in the lounge; Claude Code is not doubled', () => {
+test('other tools: a trace in the last 3 minutes is "seen" (never "working"), in the last 45 rests in the lounge; Claude Code is not doubled', () => {
   const now = 10_000_000;
   const p = { id: 'x', toolSeen: { codex: now - 60_000, 'gemini-cli': now - 20 * 60_000, copilot: now - 2 * 3600_000, 'claude-code': now, sibersentez: now } };
-  assert.deepEqual(toolActors(p, now).map((a) => [a.tool, a.state]), [['codex', 'busy'], ['gemini-cli', 'left']]);
+  assert.deepEqual(toolActors(p, now).map((a) => [a.tool, a.state]), [['codex', 'seen'], ['gemini-cli', 'left']]);
   assert.ok(TOOL_BUSY_MS < TOOL_LEFT_MS);
   const s = sceneFrom(snap(now, { sessions: [], tools: [{ id: 'codex', name: 'Codex', state: 'busy' }, { id: 'gemini-cli', name: 'Gemini', state: 'left' }] }), [], [], now);
   assert.deepEqual(s.actors.map((a) => [a.title, a.room.id]), [['Codex', 'dev'], ['Gemini', 'lounge']]);
+});
+
+test('other tools: a tool that runs in SiberSentez\'s terminal for this project is "open in the terminal"; another project\'s tab, Claude Code and the sign do not count it as working', () => {
+  const now = 10_000_000;
+  const p = { id: 'x', toolSeen: { codex: now - 60_000 } };
+  const dock = [{ projectId: 'x', tool: 'codex' }, { projectId: 'x', tool: 'gemini' }, { projectId: 'y', tool: 'qwen' }, { projectId: 'x', tool: 'claude' }, { projectId: 'x', tool: null }];
+  assert.deepEqual(toolActors(p, now, dock).map((a) => [a.tool, a.state]).sort(), [['codex', 'running'], ['gemini-cli', 'running']]);
+  assert.deepEqual(toolActors(p, now, 'nonsense').map((a) => a.state), ['seen']);
+  for (const lang of ['en', 'tr']) for (const k of ['wsSeen', 'wsRunning']) assert.ok(STRINGS[lang][k], `${lang} ${k}`);
+  // The sign says working only for a state that is known: busy
+  const ws = fs.readFileSync(new URL('../public/js/views/workshop.js', import.meta.url), 'utf8');
+  assert.ok(ws.includes("scene.actors.some((a) => a.state === 'busy'"));
+  const dockSrc = fs.readFileSync(new URL('../public/js/terminalDock.js', import.meta.url), 'utf8');
+  assert.ok(dockSrc.includes('const running = () => [...tabs.values()].filter((x) => x.ai && !x.ended)'));
+  const live = fs.readFileSync(new URL('../public/js/hq-live.js', import.meta.url), 'utf8');
+  assert.ok(live.includes('toolActors(p, now, store.dockRunning?.() || [])'));
 });
 
 test('poses: sit down on arrival, a hand up while waiting, rest while idle, stand up and walk off; still holds one pose', () => {
@@ -288,8 +304,9 @@ test('the job in the building: four lamps, the lead whose plan waits, the result
   assert.deepEqual(jobLamps({ step: 'build' }), ['done', 'now', 'off', 'off']);
   assert.deepEqual(jobLamps({ step: 'done' }), ['done', 'done', 'done', 'done']);
   assert.equal(jobOf({ step: 'none' }), null);
-  assert.deepEqual(jobOf({ step: 'check', tasks: { done: 2, total: 3 }, review: null, current: null, extra: 1 }), { step: 'check', tasks: { done: 2, total: 3 }, review: null, current: null, title: null, updatedAt: null });
+  assert.deepEqual(jobOf({ step: 'check', tasks: { done: 2, total: 3 }, review: null, current: null, extra: 1 }), { step: 'check', tasks: { done: 2, total: 3 }, review: null, current: null, title: null, jobId: null, updatedAt: null });
   assert.equal(jobOf({ step: 'build', plan: { title: 'Açılışı netleştir' } }).title, 'Açılışı netleştir', 'the plan title travels with the job');
+  assert.equal(jobOf({ step: 'build', plan: { jobId: 'J' + 'a'.repeat(32) } }).jobId, 'J' + 'a'.repeat(32), 'and its job id (what the start\'s restore point is matched by)');
   const lead = (over) => ({ ...S('lead', 'waiting', 1000), ...over });
   let s = sceneFrom(snap(5000, { sessions: [lead({ plan: { t: 900, text: '1. x' }, planPending: true })], job: { step: 'plan' } }), [], [], 5000);
   assert.equal(s.planPending, 's:lead');
@@ -438,7 +455,7 @@ test('the rewind before the app started is rebuilt from the logs: a session work
 
 test('an AI tab that ended by itself offers to go on where it stopped, only for a Claude Code session of its project that just acted', () => {
   const dock = fs.readFileSync(new URL('../public/js/terminalDock.js', import.meta.url), 'utf8');
-  assert.ok(dock.includes("const s = x.ai ? resumeFor(x.projectId) : null;\n    if (s) showResume(x, s);"), 'only an AI tab, only with a session');
+  assert.ok(dock.includes("const s = x.ai && x.tool === 'claude' ? resumeFor(x.projectId) : null;\n    if (s) showResume(x, s);"), 'only a Claude Code tab, only with a session: a Codex tab never offers a Claude session');
   assert.ok(dock.includes('onResume(s);'));
   const main = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
   assert.ok(main.includes("s.projectId === projectId && Date.now() - (s.lastAt || 0) < 2 * 60000"), 'a session of that project that acted in the last two minutes');

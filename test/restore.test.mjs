@@ -59,6 +59,38 @@ test('scan: files in byte order; regenerated and tool folders and links left out
   assert.ok(!scanProject(w.dir, RESTORE_LIMITS, [inner]).files.some((f) => f.rel.startsWith('hubhere')));
 });
 
+test('a point taken before SHA-256 (its files named by SHA-1) is still planned, checked and put back; a damaged old copy is still caught', async () => {
+  const crypto = await import('node:crypto');
+  const legacy = (buf) => crypto.createHash('sha1').update(buf).digest('hex');
+  const w = world();
+  w.write('a.txt', 'one');
+  const p = createPoint({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, reason: 'ai-start', now: tick });
+  const pd = path.join(pointsDir(w.hub, w.projectId), p.id);
+  const mf = path.join(pd, 'manifest.json');
+  // Rewrite the manifest as an older version wrote it: sha1 per file, no sha256
+  const m = JSON.parse(fs.readFileSync(mf, 'utf8'));
+  m.files = m.files.map(({ sha256, ...f }) => ({ ...f, sha1: legacy(fs.readFileSync(path.join(pd, 'files', f.rel))) }));
+  fs.writeFileSync(mf, JSON.stringify(m));
+  assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).length, 1, 'still listed');
+  w.write('a.txt', 'two');
+  const plan = planRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id });
+  assert.equal(plan.ok, true);
+  assert.deepEqual(plan.changed, ['a.txt']);
+  const r = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(fs.readFileSync(path.join(w.dir, 'a.txt'), 'utf8'), 'one');
+  // A damaged old copy: caught by its SHA-1, nothing changes
+  fs.writeFileSync(path.join(pd, 'files', 'a.txt'), 'xxx');
+  w.write('a.txt', 'three');
+  const plan2 = planRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id });
+  assert.equal(applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan2.planId, now: tick }).problem, 'point-damaged');
+  assert.equal(fs.readFileSync(path.join(w.dir, 'a.txt'), 'utf8'), 'three');
+  // A file entry with neither digest makes the manifest unreadable (the point is not listed)
+  m.files = m.files.map(({ sha1, ...f }) => f);
+  fs.writeFileSync(mf, JSON.stringify(m));
+  assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).some((x) => x.id === p.id), false);
+});
+
 test('a point: a copy with a manifest in the hub; nothing changed answers the same point; the newest five are kept', () => {
   const w = world();
   w.write('index.html', 'v1');
@@ -73,7 +105,8 @@ test('a point: a copy with a manifest in the hub; nothing changed answers the sa
   const m = JSON.parse(fs.readFileSync(path.join(pd, 'manifest.json'), 'utf8'));
   assert.equal(m.projectId, w.projectId);
   assert.equal(m.reason, 'ai-start');
-  assert.match(m.files[0].sha1, /^[0-9a-f]{40}$/);
+  assert.match(m.files[0].sha256, /^[0-9a-f]{64}$/, 'a new point names its files by SHA-256');
+  assert.equal(m.files[0].sha1, undefined);
   assert.ok(pd.startsWith(w.hub), 'the copy lives in the hub, never in the project');
   // Nothing changed: the same point, no second copy
   const again = createPoint({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, now: tick });
@@ -382,5 +415,5 @@ test('a point keeps the job it was taken for: one line, at most LABEL_MAX charac
   const h = restoreSectionHtml({ id: 'p', path: w.dir }, { points: [first, none] }, { mode: 'live' });
   setLanguage('en');
   assert.ok(h.includes('“Menü sayfası ekle” işinden önce') && h.includes(STRINGS.tr.rstReason_ai_start ?? STRINGS.tr['rstReason_ai-start']));
-  assert.ok(fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8').includes("await takeStartPoint(ctx.pointProjectId, ctx.job || '')"), 'start-ai names the job');
+  assert.ok(fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8').includes("await takeStartPoint(ctx.pointProjectId, ctx.job || '', jobId)"), 'start-ai names the job');
 });

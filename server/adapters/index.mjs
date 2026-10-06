@@ -14,6 +14,9 @@
 //   findGlobalItems(ctx) -> [{ kind: 'skill'|'agent'|'plugin', name, path, source, category?, description?,
 //                               global?, enabled?, plugin?, pluginId? }]
 //                               optional: items active outside a single project (personal, plugins, built-in)
+//   *globalItemSteps(ctx) -> yields arrays of the same items, in parts (for example one part per plugin)
+//                               optional, with findGlobalItems returning them all; the five-minute rescan gives the
+//                               loop back between parts when one tool's read is long (catalog.mjs rosterSteps)
 // The catalog tags every item with the id of the adapter that reported it (roster "tools").
 //
 // ctx: { homeDir, claudeDir, projectsDir, env, appDataDir, cache, ls, frontmatter(file), fileMeta(file, kind, read) }

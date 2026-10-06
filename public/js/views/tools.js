@@ -235,6 +235,9 @@ export function aiStartToast(res, item, fallbackText = () => '') {
       const why = hasText(`aiNoPoint_${problem}`) ? t(`aiNoPoint_${problem}`) : t('aiNoPoint_other');
       parts.unshift(t('aiToastNoPoint', { why }));
     }
+    // A lean point (a big project, docs/restore.md §7): what it left out is said too
+    const left = r.restorePoint?.scope === 'lean' && Number.isInteger(r.restorePoint.leftOut) ? r.restorePoint.leftOut : 0;
+    if (!problem && left > 0) parts.push(t('aiToastLeanPoint', { count: left }));
     return { tone: problem ? 'warn' : 'ok', title: name ? t('aiToastOpened', { tool, name }) : t('aiToastOpenedPlain', { tool }), body: parts.join(' ') };
   }
   const code = String(r.error || '');

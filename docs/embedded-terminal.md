@@ -81,6 +81,16 @@ a project, start the AI tool, watch it work, all in one place.
   (no launcher waits for a terminal that cannot open); the QA dock opens by itself only with its stand-in. Left: a
   terminal that fails to spawn after a start-ai leaves its launcher unrun until the launcher cleanup removes it.
 
+## What runs where (lifecycle, 2026-10-06)
+
+A terminal opened by a start-ai keeps the tool (the tools list's id) and the app job (`Job-ID`) the server gave its
+launch record (`terminal-target`); a plain shell keeps neither. After every open, exit and close the shell sends the
+whole list to the server (`terminal-state` over its own channel; again to a restarted server), so a restore is refused
+while any AI start of the app runs in the project's terminal, whatever the tool (`actions.aiActiveIn`). The page knows
+its own tabs: the building shows such a tool as "open in the terminal", never as working (what it does is not known);
+a tab that ends offers to resume only a Claude Code session. Not seen: a tool typed into a plain shell, or started in
+Windows Terminal.
+
 ## What the AI asks (`public/js/promptHelp.js`)
 
 When an AI tool in an embedded terminal asks the person for something, a note appears over the terminal's top right

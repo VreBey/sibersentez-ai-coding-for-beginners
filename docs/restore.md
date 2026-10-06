@@ -7,7 +7,7 @@ word first.
 ## 1. What a point is
 
 - A plain copy of the project's files in the hub: `<hub>/restore/<project key>/<point id>/files/...` and
-  `manifest.json` (`version`, `id`, `projectId`, `at`, `reason`, and per file `rel`, `size`, `mtimeMs`, `sha1`). The
+  `manifest.json` (`version`, `id`, `projectId`, `at`, `reason`, and per file `rel`, `size`, `mtimeMs`, `sha256`; points taken before 2026-10-06 carry `sha1` instead and are still read). The
   project key is a digest of the project id (an id may end in dots, which Windows strips from a folder name).
 - Point id: `R` + UTC `YYYYMMDDHHmmss` + four hex digits (`POINT_ID_RE`); ids sort by time.
 - Reasons: `ai-start` (taken by start-ai), `before-restore` (the present, taken before going back), `manual`.
@@ -34,16 +34,17 @@ or `{ problem }` (null when there is no project or no hub).
 ## 3. Going back
 
 - `restore-preview { projectId, pointId }` (any mode, writes nothing): `changed` (differ now; a new time with the
-  same content is no change, the sha1 decides), `missing` (deleted since), `added` (came later), each list cut at 50
+  same content is no change, the digest decides), `missing` (deleted since), `added` (came later), each list cut at 50
   names, `counts` whole, `planId` (the digest the apply checks).
 - `restore-apply { projectId, pointId, planId? }` (a writing action: live only, one at a time; dry answers the plan
   with `result.executed: false`). **The rule that never breaks: a file is removed or overwritten only when a point of
-  the present, taken for this restore, holds its current bytes (sha1); anything else is left as it is and reported
+  the present, taken for this restore, holds its current bytes (by digest); anything else is left as it is and reported
   (`not-backed-up`).** In order:
   1. `planId` (the preview's digest) differs from the plan now: `plan-changed`, nothing touched (the page always
-     sends it, so going back never does more than the person was shown). An AI session still working in the project:
-     `ai-working`.
-  2. Every copy to be written is read and checked against its sha1: one damaged copy and nothing changes
+     sends it, so going back never does more than the person was shown). An AI tool still at work in the project:
+     `ai-working` (a live Claude Code session, or any AI start of the app still running in its embedded terminal,
+     whatever the tool; a tool typed into a plain shell or started in Windows Terminal is not seen).
+  2. Every copy to be written is read and checked against its digest: one damaged copy and nothing changes
      (`point-damaged`).
   3. A `before-restore` point of the present, always a new copy (never a reused one); if it cannot be taken, nothing
      changes (`backup-failed`).
@@ -110,3 +111,15 @@ Replit and Lovable tie each version to the request that made it. A point taken b
 words (`label` in the manifest, one line, at most `LABEL_MAX` = 80 characters; start-ai passes `ctx.job`), and the list
 says "Before “Add a menu page”" instead of "Before the AI started". A point taken without a job, a reused point (nothing
 changed since the last one: it keeps its first label) and the points of older versions show as before.
+
+## 8. What a job's start kept (2026-10-06)
+
+The start notice says whether the start's copy is full, lean or missing, but a notice is gone after a reload. Each app
+job's start now also records what it kept, in the hub next to the points: `restore/<project key>/start-points.json`,
+`{ version: 1, jobs: [{ jobId, at, id, reused, scope, leftOut, files, bytes }` or `{ jobId, at, problem }] }`, newest
+first, one record per job id (every app start gets a new id), at most `JOB_POINTS_KEEP` = 20, written whole
+and renamed (`recordJobPoint`). Never in the project folder, where an AI writes. `GET /api/projects/<id>/restore`
+answers it as `jobs` (only known fields of known shapes are read back). The job box takes its own start's answer, else
+asks the server once for the shown job (`askJobPoint`: again after 30 s, at most four times, since a job started
+outside the app or before this version has no record) and says it next to the job. A start without an app job (an
+idea, a session resumed) records nothing. Tests: `test/restore-coverage.test.mjs`.

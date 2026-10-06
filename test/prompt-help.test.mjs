@@ -98,7 +98,7 @@ test('the note: both languages, what it is, the safe answer, the warnings; what 
       const S = STRINGS[lang];
       const h = promptHelpHtml(detectPrompt('Bash command\n  rm -rf <b>x</b>\nDo you want to proceed?\n2. Yes, and don\'t ask again'));
       assert.ok(h.includes(S.phTitle_command) && h.includes(S.phPick_command) && h.includes(S.phFoot), lang);
-      assert.ok(h.includes(S.phRisky.replace(/’/g, '’')) && h.includes('ph-warn'));
+      assert.ok(h.includes(S.phRisky) && h.includes('ph-warn'));
       assert.ok(!h.includes('<b>x</b>') && h.includes('&lt;b&gt;x&lt;/b&gt;'), 'escaped');
       for (const id of ['trust', 'login', 'edit', 'fetch', 'command', 'plan', 'confirm']) for (const k of ['phTitle_', 'phWhat_', 'phPick_']) assert.ok(S[k + id], `${lang} ${k}${id}`);
     }

@@ -76,7 +76,9 @@ describe('page security headers (the in-app actions confirmation relies on them)
     assert.match(r.headers['content-type'], /^text\/html/);
     assertGuarded(r, '/');
     // The policy only holds because the page has no inline script: every <script> loads one of our files
-    const scripts = [...r.body.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+    // An end tag may carry spaces or attributes the browser ignores (</script >): matched too
+    const scripts = [...r.body.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)];
+    assert.equal(scripts.length, (r.body.match(/<script\b/gi) || []).length, 'every script tag is seen, with its end tag');
     assert.ok(scripts.length > 0, 'the page loads its scripts');
     for (const [, attrs, inner] of scripts) {
       assert.match(attrs, /\ssrc="\/?[\w./-]+\.m?js"/, `a script from a file: <script${attrs}>`);

@@ -63,7 +63,8 @@ async function loadXterm() {
 // toast({ tone, title, body }) for what did not work; root: where the dock goes (document.body)
 // onSetupDone(): a command the person ran in the setup terminal finished (its shell is back at an empty prompt): the
 // tools are checked again (main.js), so a tool just installed shows up by itself
-// resumeFor(projectId): the Claude Code session an AI tab of that project just ran (null: none, or another tool);
+// resumeFor(projectId): the Claude Code session a Claude Code tab of that project just ran (null: none; asked only for
+// a tab whose tool is Claude Code, so another tool's tab never offers a Claude session);
 // onResume(session): it goes on where it stopped (the session menu's own resume)
 export function createTerminalDock({ toast = () => {}, root = document.body, onSetupDone = () => {}, resumeFor = () => null, onResume = () => {} } = {}) {
   const api = globalThis.sibersentezTerminal;
@@ -202,7 +203,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     tabEl.style.setProperty('--c', info.projectId ? projectColor(info.projectId) : '#8a93a6');
     tabEl.innerHTML = `<i class="td-dot"></i><span class="td-name">${esc(info.title || t('dockTerminal'))}</span><span class="td-x" data-td="close" role="button" aria-label="${esc(t('dockClose'))}" title="${esc(t('dockClose'))}">${icon('close')}</span>`;
     tabsEl.append(tabEl);
-    const x = { term, fit, el, tabEl, title: info.title, projectId: info.projectId, ai: info.ai === true, ended: false, unread: false, helpEl, previewEl, preview: null, plain: stripAnsi(buffer).slice(-4000), help: null, answered: '', helpTimer: 0 };
+    const x = { term, fit, el, tabEl, title: info.title, projectId: info.projectId, ai: info.ai === true, tool: info.ai === true && typeof info.tool === 'string' ? info.tool : null, ended: false, unread: false, helpEl, previewEl, preview: null, plain: stripAnsi(buffer).slice(-4000), help: null, answered: '', helpTimer: 0 };
     tabs.set(info.id, x);
     // A list() snapshot already holds what was said before it; for a new terminal the early output goes in now
     if (early.has(info.id)) {
@@ -262,7 +263,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     checkHelp(x);
     x.term.write(`\r\n\x1b[90m${t('dockEnded', { code: code == null ? '—' : code })}\x1b[0m\r\n`);
     // An AI that ended by itself (/exit, a crash): its session can go on where it stopped, at a click
-    const s = x.ai ? resumeFor(x.projectId) : null;
+    const s = x.ai && x.tool === 'claude' ? resumeFor(x.projectId) : null;
     if (s) showResume(x, s);
   }
   function showResume(x, s) {
@@ -495,5 +496,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     return true;
   }
 
-  return { available: true, open, typeInto, typeSetup, showProject, count: () => tabs.size, isOpen: () => !dock.hidden };
+  // The AI tabs that still run, by project and tool (the building shows such a tool as open in the terminal)
+  const running = () => [...tabs.values()].filter((x) => x.ai && !x.ended).map((x) => ({ projectId: x.projectId, tool: x.tool }));
+  return { available: true, open, typeInto, typeSetup, showProject, running, count: () => tabs.size, isOpen: () => !dock.hidden };
 }

@@ -222,10 +222,13 @@ export class ProjectMemory {
 // forked process in development). Nothing else can send on that channel; a request is still checked in full.
 //   { sibersentez: 'shell-call', id, type: 'project-add', path }                 catalog.addProjectFolder(path)
 //   { sibersentez: 'shell-call', id, type: 'project-idea', projectId, idea }     catalog.setProjectIdea(projectId, idea)
+//   { sibersentez: 'shell-call', id, type: 'terminal-target', launchId | projectId | sessionId }   actions.terminalTarget
+//   { sibersentez: 'shell-call', id, type: 'terminal-state', sessions, ended }   actions.terminalState (what runs in the
+//                                                                                embedded terminals, after every change)
 // handle(msg) returns the reply { sibersentez: 'shell-reply', id, ok, reason, projectId?, existed?, saved? }, or null for a
 // message that is not a request (it gets no answer). onChange(type, projectId) runs after a change (see
 // shellChangeHandler for what the server does then). The reply never carries a path or the idea.
-export function createProjectChannel({ catalog, appDir = null, onChange = () => {}, reloadActions = null, terminalTarget = null } = {}) {
+export function createProjectChannel({ catalog, appDir = null, onChange = () => {}, reloadActions = null, terminalTarget = null, terminalState = null } = {}) {
   const changed = (type, projectId) => {
     try {
       onChange(type, projectId);
@@ -245,6 +248,9 @@ export function createProjectChannel({ catalog, appDir = null, onChange = () => 
       if (typeof r?.dir === 'string') out.dir = r.dir;
       if (typeof r?.title === 'string') out.title = r.title;
       if (r?.program && typeof r.program.file === 'string' && Array.isArray(r.program.args)) out.program = { file: r.program.file, args: r.program.args.map(String) };
+      // The tool and the app job of a start-ai in the dock: the shell keeps them with the terminal (lifecycle)
+      if (typeof r?.tool === 'string') out.tool = r.tool;
+      if (typeof r?.jobId === 'string') out.jobId = r.jobId;
       return out;
     };
     try {
@@ -265,6 +271,9 @@ export function createProjectChannel({ catalog, appDir = null, onChange = () => 
         const req = msg.launchId !== undefined ? { launchId: msg.launchId } : { projectId: msg.projectId, sessionId: msg.sessionId };
         return reply(terminalTarget(req));
       }
+      // terminal-state: what runs in the embedded terminals and the one that just ended (the shell sends it after every
+      // change and to a new server process); the server checks every field (actions.terminalState)
+      if (msg.type === 'terminal-state' && terminalState) return reply(terminalState({ sessions: msg.sessions, ended: msg.ended }));
       return reply({ ok: false, reason: 'unknown-request' });
     } catch {
       return reply({ ok: false, reason: 'error' });

@@ -211,6 +211,11 @@ export const claudeCode = {
 
   // Items active outside any single project: personal, claude.ai synced, plugins, built-in agent types
   findGlobalItems(ctx) {
+    return [...claudeCode.globalItemSteps(ctx)].flat();
+  },
+
+  // The same items in parts (adapters/index.mjs): the personal and claude.ai skills, then one part per plugin
+  *globalItemSteps(ctx) {
     const out = [];
     const ls = ctx.ls || PLAIN_LISTER;
     const skillsDir = path.join(ctx.claudeDir, 'skills');
@@ -233,6 +238,7 @@ export const claudeCode = {
       const fm = ctx.frontmatter(file) || {};
       out.push({ kind: 'skill', name: fm.name || path.basename(dir), path: file, source: 'claudeai', category: 'claudeai', description: fm.description || '', global: true });
     }
+    yield out.splice(0);
     // Plugins synced from claude.ai: ~/.claude/plugins/synced/<account>/<folder> (name from .claude-plugin/plugin.json)
     const syncedPlugins = path.join(ctx.claudeDir, 'plugins', 'synced');
     for (const bucket of safeDirs(syncedPlugins, ls)) {
@@ -250,6 +256,7 @@ export const claudeCode = {
         const pluginId = market ? `${name}@${market}` : name;
         out.push({ kind: 'plugin', name, path: dir, source: 'claudeai', category: 'claudeai', description: manifest.description || `Plugin synced from claude.ai${market ? ` · ${market}` : ''}`, global: enabled, enabled, pluginId });
         pluginItems(dir, name, { source: 'claudeai', category: 'claudeai', plugin: pluginId, global: enabled, enabled }, ctx, out);
+        yield out.splice(0);
       }
     }
 
@@ -280,12 +287,13 @@ export const claudeCode = {
         pluginId: id,
       });
       for (const dir of dirs) pluginItems(dir, name, { source: 'plugin', category: name, plugin: id, global: enabled, enabled }, ctx, out);
+      yield out.splice(0);
     }
 
     // Built-in agent types
     for (const [name, description] of Object.entries(BUILTIN_AGENTS)) {
       out.push({ kind: 'agent', name, path: null, source: 'builtin', category: 'builtin', description, global: true });
     }
-    return out;
+    yield out;
   },
 };

@@ -40,7 +40,7 @@ describe('manager', () => {
     const sent = [];
     const m = createTerminals({ spawn: f.spawn, send: (...a) => sent.push(a), env: { PATH: 'p', ELECTRON_RUN_AS_NODE: '1', SIBERSENTEZ_PORT: '1', NODE_OPTIONS: '--x', Other: 'o' }, now: () => 5 });
     const r = m.open({ dir: 'C:\\p', title: 'Project', projectId: 'p1', cols: 120, rows: 40 });
-    assert.deepEqual(r, { ok: true, id: 't1', title: 'Project', projectId: 'p1', ai: false });
+    assert.deepEqual(r, { ok: true, id: 't1', title: 'Project', projectId: 'p1', ai: false, tool: null });
     const call = f.calls[0];
     assert.equal(call.file, terminalProgram().file);
     assert.match(call.file, /WindowsPowerShell\\v1\.0\\powershell\.exe$/);
@@ -50,9 +50,33 @@ describe('manager', () => {
     assert.deepEqual(Object.keys(call.opts.env).sort(), ['COLORTERM', 'Other', 'PATH'], 'no ELECTRON_*, SIBERSENTEZ_* or NODE_OPTIONS');
     f.ptys[0].data('hello');
     assert.deepEqual(sent.at(-1), [TERMINAL_IPC.data, 't1', 'hello']);
-    assert.deepEqual(m.list(), [{ id: 't1', title: 'Project', projectId: 'p1', startedAt: 5, buffer: 'hello', ai: false }]);
+    assert.deepEqual(m.list(), [{ id: 't1', title: 'Project', projectId: 'p1', startedAt: 5, buffer: 'hello', ai: false, tool: null }]);
     f.ptys[0].data('x'.repeat(MAX_BUFFER));
     assert.equal(m.list()[0].buffer.length, MAX_BUFFER, 'the buffer keeps the newest part');
+  });
+
+  test('lifecycle: an AI start keeps its tool and job; opening, exiting and closing tell the server; a plain shell carries neither', () => {
+    const f = fakePty();
+    const changes = [];
+    const m = createTerminals({ spawn: f.spawn, onChange: (ended) => changes.push({ ended, running: m.sessions().map((x) => x.id) }), now: () => 7 });
+    const job = 'J' + 'c'.repeat(32);
+    const launch = { file: String.raw`C:\Windows\System32\cmd.exe`, args: ['/d', '/c', 'x.cmd'] };
+    const a = m.open({ dir: String.raw`C:\p`, title: 'Codex', projectId: 'p1', launch, tool: 'codex', jobId: job });
+    assert.equal(a.tool, 'codex');
+    assert.deepEqual(m.sessions(), [{ id: 't1', projectId: 'p1', ai: true, tool: 'codex', jobId: job, startedAt: 7 }]);
+    assert.deepEqual(changes.at(-1), { ended: null, running: ['t1'] });
+    // A plain shell never carries a tool or a job, whatever is passed; an unknown id shape is dropped
+    const b = m.open({ dir: String.raw`C:\p`, title: 'Shell', projectId: 'p1', tool: 'codex', jobId: job });
+    assert.deepEqual([b.ai, b.tool, m.sessions()[1].jobId], [false, null, null]);
+    const c = m.open({ dir: String.raw`C:\p`, title: 'Odd', projectId: 'p1', launch, tool: '../x', jobId: 'bad' });
+    assert.deepEqual([c.tool, m.sessions()[2].jobId], [null, null]);
+    f.ptys[0].exit({ exitCode: 3 });
+    assert.deepEqual(changes.at(-1), { ended: { id: 't1', projectId: 'p1', tool: 'codex', jobId: job, ai: true, exitCode: 3 }, running: ['t2', 't3'] });
+    m.close('t2');
+    assert.deepEqual(changes.at(-1).ended, { id: 't2', projectId: 'p1', tool: null, jobId: null, ai: false, exitCode: null });
+    // A failing listener never breaks a terminal
+    const n = createTerminals({ spawn: fakePty().spawn, onChange: () => { throw new Error('x'); } });
+    assert.equal(n.open({ dir: String.raw`C:\p`, title: 'T' }).ok, true);
   });
 
   test('write, resize, close only for a known id and within limits; exit tells the window once', () => {

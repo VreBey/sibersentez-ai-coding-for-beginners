@@ -245,9 +245,15 @@ export const codex = {
   },
 
   findGlobalItems(ctx) {
+    return [...codex.globalItemSteps(ctx)].flat();
+  },
+
+  // The same items in parts (adapters/index.mjs): the personal and built-in ones, then one part per cached plugin
+  // (on a real machine 165 plugins were nearly all of the 0.13 s this read takes)
+  *globalItemSteps(ctx) {
     const root = codexHome(ctx);
     const ls = listerOf(ctx);
-    const out = [
+    yield [
       ...skillItems(path.join(ctx.homeDir, '.agents', 'skills'), ctx, PERSONAL),
       ...skillItems(path.join(root, 'skills'), ctx, PERSONAL, { skip: ['.system'] }),
       ...skillItems(path.join(root, 'skills', '.system'), ctx, BUILTIN),
@@ -259,9 +265,8 @@ export const codex = {
         const dir = pluginVersion(path.join(cache, market, plugin), ls);
         if (!dir) continue;
         const description = manifestText(path.join(dir, '.codex-plugin', 'plugin.json'), 'description');
-        out.push(...toolPluginItems(dir, plugin, 'codex', ctx, { description }));
+        yield toolPluginItems(dir, plugin, 'codex', ctx, { description });
       }
     }
-    return out;
   },
 };
