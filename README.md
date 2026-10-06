@@ -442,7 +442,9 @@ start.cmd            developer launcher (browser)
 - A workflow record is written when the run ends; while it runs, the workflow is followed through its worker agents.
 - The window slides: even if the program runs for days, sessions, agents and counters older than 14 days are pruned. Token usage is the exception: the usage ledger keeps it (see [Usage and cost](#usage-and-cost)).
 - Usage is counted for Claude Code only, by whole hours ("24 hours" is the current hour and the 23 before it). A project whose folder was moved keeps its older usage under the old folder, so its history is split between two projects.
-- The installer is not code-signed yet (SmartScreen warning, see Installation).
+- The installer is not code-signed yet (SmartScreen warning, see Installation). Signing through SignPath Foundation is
+  on its way: the installer is built on GitHub Actions from this repository ([docs/code-signing.md](docs/code-signing.md),
+  [code signing policy](https://sibersentez.com/en/code-signing-policy/)).
 
 ## Contributing and review
 
