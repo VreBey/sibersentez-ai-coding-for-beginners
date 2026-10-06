@@ -12,7 +12,7 @@ body:
     attributes:
       label: Version / Sürüm
       description: The first line of Settings → Help → Diagnostic info, or the installer's name (SiberSentez-Setup-x.y.z.exe) / Ayarlar → Yardım → Tanılama bilgisi ilk satırı ya da kurulum dosyasının adı
-      placeholder: 0.14.0
+      placeholder: 0.13.1
     validations:
       required: true
   - type: dropdown

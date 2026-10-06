@@ -1,0 +1,74 @@
+/* Styles of the in-app actions switch (docs/actions-toggle.md §3b): the panel under the header indicator.
+   Loaded after app.css. The panel sits above the drawer and its scrim (z-index 20/21) and the toasts (40), below the
+   command palette (50) and the context menu (55). */
+
+.act-wrap { position: relative; display: inline-flex; }
+/* No empty flex item (and no extra gap) until the indicator knows the mode */
+.act-wrap:has(> .act-mode[hidden]) { display: none; }
+.act-mode[aria-expanded="true"] { border-color: rgba(var(--accent-rgb), 0.55); color: var(--text); }
+.act-mode[aria-expanded="true"]::after { transform: rotate(180deg); opacity: 1; }
+
+.act-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 45;
+  width: 456px; max-width: calc(100vw - 24px);
+  display: flex; flex-direction: column; gap: 10px; padding: 14px;
+  border-radius: 14px; border: 1px solid var(--line-2);
+  background: #10131c; box-shadow: var(--shadow), 0 0 0 1px rgba(var(--shade-rgb), 0.35);
+  color: var(--text-2); font-size: 13px; text-align: left;
+  /* Softer text on this panel stays at about 5.9:1 */
+  --muted: #8f98ae;
+  animation: asw-in 0.14s ease-out;
+}
+@keyframes asw-in { from { opacity: 0; transform: translateY(-4px); } }
+
+.asw-head { display: flex; flex-direction: column; gap: 2px; }
+.asw-title { margin: 0; font: 650 14.5px/1.3 var(--display); color: var(--text); }
+.asw-intro { margin: 0; color: var(--muted); font-size: 12.5px; }
+
+.asw-options { display: flex; flex-direction: column; gap: 6px; }
+.asw-opt {
+  display: grid; grid-template-columns: 14px 1fr; gap: 11px; align-items: start; width: 100%;
+  padding: 9px 12px; border-radius: 11px; border: 1px solid var(--line); background: rgba(var(--tint-rgb), 0.025);
+  color: var(--text-2); text-align: left; touch-action: manipulation;
+}
+.asw-opt:hover { background: rgba(var(--tint-rgb), 0.06); border-color: var(--line-2); }
+.asw-opt.is-current { border-color: rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.09); }
+.asw-opt.is-asking { border-color: rgba(var(--stop-rgb), 0.6); background: rgba(var(--stop-rgb), 0.08); }
+.asw-opt[aria-disabled="true"] { cursor: default; opacity: 0.62; }
+.asw-opt[aria-disabled="true"]:hover { background: rgba(var(--tint-rgb), 0.025); border-color: var(--line); }
+.asw-opt.is-current[aria-disabled="true"]:hover { border-color: rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.09); }
+.asw-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 11px; }
+
+/* A radio mark in the mode's colour (the same colours as the indicator's dot) */
+.asw-dot { width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; border: 2px solid currentColor; display: grid; place-items: center; color: var(--muted); }
+.asw-opt.m-dry .asw-dot { color: var(--gold); }
+.asw-opt.m-live .asw-dot { color: var(--stop); }
+.asw-opt.is-current .asw-dot::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.asw-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.asw-name { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 650; }
+.asw-now { padding: 0 7px; border-radius: 999px; background: rgba(var(--accent-rgb), 0.16); color: #c9d5ff; font: 700 10px/1.7 var(--font); letter-spacing: 0.04em; text-transform: uppercase; }
+.asw-desc { color: var(--text-2); font-size: 12.5px; line-height: 1.4; }
+
+.asw-error { margin: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(var(--stop-rgb), 0.45); background: rgba(var(--stop-rgb), 0.1); color: #ffd9d9; font-size: 12.5px; line-height: 1.4; }
+
+.asw-confirm { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; border-radius: 11px; border: 1px solid rgba(var(--stop-rgb), 0.45); background: rgba(var(--stop-rgb), 0.07); }
+.asw-confirm-title { margin: 0; color: #ffd9d9; font-weight: 650; }
+.asw-confirm-body { margin: 0; color: var(--text-2); font-size: 12.5px; line-height: 1.45; }
+.asw-confirm-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px; }
+
+.asw-status { margin: 0; color: var(--text); font-size: 12.5px; }
+.asw-status:focus { outline: none; }
+.asw-status.is-empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.asw-note { margin: 0; padding-top: 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+
+@media (prefers-reduced-motion: reduce) {
+  .act-panel { animation: none; }
+}
+@media (forced-colors: active) {
+  .act-panel, .asw-opt, .asw-confirm, .asw-error { border: 1px solid CanvasText; }
+  .asw-opt.is-current { outline: 2px solid Highlight; outline-offset: -2px; }
+  .asw-dot { forced-color-adjust: none; border-color: CanvasText; }
+  .asw-opt.is-current .asw-dot::after { background: CanvasText; }
+  .asw-opt[aria-disabled="true"] { color: GrayText; }
+}

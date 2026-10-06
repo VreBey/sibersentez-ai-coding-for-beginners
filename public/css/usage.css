@@ -1,0 +1,85 @@
+/* Styles of live usage tracking (docs/usage.md). Loaded after app.css. */
+
+/* ---------- the strip's usage row: period, message count, dollar switch, four cards ---------- */
+.usage-strip { display: flex; flex-direction: column; gap: 10px; margin: -4px 0 14px; padding: 11px 14px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+.usage-strip[hidden] { display: none; }
+.us-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
+.us-title { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+.us-title .ic { width: 14px; height: 14px; }
+.us-seg { flex-wrap: wrap; }
+.us-seg button { padding: 4px 11px; font-size: 12.5px; }
+.us-note { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--muted); }
+.us-cost-toggle { border: 1px solid var(--line-2); background: rgba(var(--tint-rgb), 0.03); color: var(--text-2); border-radius: 999px; padding: 3px 11px; font-size: 12px; }
+.us-cost-toggle:hover { color: var(--text); background: rgba(var(--tint-rgb), 0.06); }
+/* Closed strip: the main numbers in the head line, and the switch that shows the cards */
+.us-sum { display: inline-flex; align-items: baseline; gap: 12px; min-width: 0; font-size: 13.5px; }
+.us-sum b { font-weight: 650; color: var(--text); }
+.us-sum .us-sum-cost { color: var(--gold); }
+.us-sum .us-sum-cost.partial { color: var(--idle); }
+.us-more { border: 1px solid var(--line-2); background: rgba(var(--tint-rgb), 0.03); color: var(--text-2); border-radius: 999px; padding: 3px 11px; font-size: 12px; }
+.us-more:hover { color: var(--text); background: rgba(var(--tint-rgb), 0.06); }
+.us-more::after { content: ' ▾'; }
+.us-more[aria-expanded="true"]::after { content: ' ▴'; }
+.us-cost-toggle[aria-pressed="false"] { color: var(--muted); }
+
+.us-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.us-cards.no-cost { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.us-card { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 9px 12px 10px; border-radius: 12px; background: rgba(var(--tint-rgb), 0.03); border: 1px solid var(--line); }
+.us-l { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.us-card b { font: 650 22px/1.15 var(--display); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.us-card small { font-size: 11.5px; color: var(--muted); line-height: 1.3; }
+.us-card.cost { background: linear-gradient(135deg, rgba(var(--gold-rgb), 0.07), rgba(var(--tint-rgb), 0.02) 70%); border-color: rgba(var(--gold-rgb), 0.2); }
+.us-card.cost b { color: var(--gold); }
+.us-card.partial small { color: var(--idle); }
+
+@media (max-width: 1100px) {
+  .us-cards, .us-cards.no-cost { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .us-cards, .us-cards.no-cost { grid-template-columns: 1fr; }
+  .us-note { flex-basis: 100%; }
+}
+
+/* ---------- project card line and the sort choice ---------- */
+.pusage { display: flex; align-items: center; gap: 6px; margin: -2px 0 0; font-size: 12px; color: var(--text-2); min-width: 0; }
+.pusage .ic { width: 13px; height: 13px; flex: none; color: var(--gold); opacity: 0.85; }
+.pusage span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.psort { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); min-width: 0; }
+.psort select { min-width: 0; max-width: 100%; }
+@media (max-width: 720px) {
+  /* A narrow window: the sort takes its own row, the search keeps its width */
+  .psort { flex: 1 1 100%; }
+  .psort select { flex: 1; }
+}
+
+/* ---------- the drawer's usage section ---------- */
+.usage-sec { margin-bottom: 16px; }
+.usage-sec .us-seg { margin-bottom: 10px; }
+.usage-sec .us-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.usage-sec .us-card b { font-size: 19px; }
+.us-chart { margin: 12px 0 0; }
+.us-chart figcaption { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+.us-bars { display: flex; align-items: flex-end; gap: 3px; height: 96px; padding-bottom: 2px; border-bottom: 1px solid var(--line-2); }
+.us-bar { flex: 1 1 0; min-width: 0; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, #8fb0ff, rgba(var(--accent-rgb), 0.55)); }
+.us-bar.zero { height: 1px !important; background: var(--line-2); }
+.us-bar:hover { background: var(--gold); }
+.us-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.us-sub { margin: 14px 0 6px; font: 600 12px var(--font); color: var(--text-2); }
+.us-models { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.us-models li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: baseline; padding: 6px 10px; border-radius: 9px; background: rgba(var(--tint-rgb), 0.025); font-size: 12.5px; }
+.us-model { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.us-mnums { color: var(--muted); font-size: 11.5px; }
+.us-models b { font-weight: 650; color: var(--gold); }
+.us-models b.unpriced { color: var(--idle); font-weight: 500; }
+.us-foot { margin: 10px 0 0; }
+
+@media (forced-colors: active) {
+  .us-bar { background: CanvasText; }
+  .us-card, .usage-strip { border: 1px solid CanvasText; }
+}
+
+/* "not your bill" next to the dollars, and the warning when an API key may pay (docs/usage.md) */
+.us-sum .us-sum-bill { font-size: 11.5px; font-weight: 400; color: var(--muted); white-space: nowrap; }
+.us-warn { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 8px 0 0; padding: 7px 10px; border-radius: 10px; border: 1px solid rgba(var(--idle-rgb), 0.4); background: rgba(var(--idle-rgb), 0.06); color: var(--idle); font-size: 12.5px; }
+.us-warn .ic { width: 15px; height: 15px; flex: none; }
+.us-warn span { flex: 1 1 260px; }

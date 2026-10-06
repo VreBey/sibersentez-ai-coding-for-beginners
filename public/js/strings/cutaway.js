@@ -1,0 +1,36 @@
+// UI strings of the scene on Today: the building (docs/hq.md) and the orchestra switch. Same keys in en and tr;
+// placeholders use {name}. Merged into STRINGS by ../i18n.js.
+export default {
+  en: {
+    cutSceneLabel: 'Scene',
+    cutSceneBuilding: 'Building',
+    cutSceneOrchestra: 'Orchestra',
+    cutSceneTip: 'Building: one project’s team in its rooms, a person for each open session and a robot for each running agent',
+    cutAgent: 'Agent',
+    cutOpenDetails: 'Click for details',
+    cutLive: 'LIVE',
+    cutSessions: '{count} open',
+    hqControls: 'Building controls',
+    hqAuto: 'Now',
+    hqBuilding: '{name}’s building',
+    hqReduced: 'Reduced motion',
+    hqAnimOn: 'Play animation',
+    hqAnimOff: 'Pause animation',
+  },
+  tr: {
+    cutSceneLabel: 'Sahne',
+    cutSceneBuilding: 'Bina',
+    cutSceneOrchestra: 'Orkestra',
+    cutSceneTip: 'Bina: bir projenin ekibi odalarında; her açık oturum bir kişi, her çalışan ajan bir robot',
+    cutAgent: 'Ajan',
+    cutOpenDetails: 'Ayrıntı için tıkla',
+    cutLive: 'CANLI',
+    cutSessions: '{count} açık',
+    hqControls: 'Bina kontrolleri',
+    hqAuto: 'Şu an',
+    hqBuilding: '{name} binası',
+    hqReduced: 'Hareket azaltıldı',
+    hqAnimOn: 'Animasyonu oynat',
+    hqAnimOff: 'Animasyonu durdur',
+  },
+};

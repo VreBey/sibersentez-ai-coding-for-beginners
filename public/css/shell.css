@@ -1,0 +1,127 @@
+/* The app shell (docs/shell.md): the menu on the left, a slim top bar, one screen at a time. Layout only: the colours
+   come from the tokens in app.css (the look is designed separately). Loaded after app.css. */
+
+.app.shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); max-width: none; padding: 0; min-height: 100vh; }
+
+/* ---------- the menu ---------- */
+.side {
+  position: sticky; top: 0; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px;
+  padding: 16px 12px 14px; border-right: 1px solid var(--line); background: var(--panel); overflow-x: hidden; overflow-y: auto; scrollbar-width: thin;
+}
+.side .brand { padding: 2px 6px 4px; }
+.side-nav, .side-foot { display: flex; flex-direction: column; gap: 2px; }
+.side-foot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); }
+.side-nav button, .side-foot button {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 8px 10px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--text-2); font: 550 14px var(--font); text-align: left; cursor: pointer;
+}
+.side-nav button:hover, .side-foot button:hover { background: rgba(var(--tint-rgb), 0.05); color: var(--text); }
+.side-nav button.on, .side-foot button.on { background: rgba(var(--accent-rgb), 0.16); color: #fff; }
+.side-nav button:focus-visible, .side-foot button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.side .ic { width: 18px; height: 18px; flex: none; }
+.side kbd { margin-left: auto; opacity: 0.45; font-size: 11px; }
+.side-q { width: 18px; flex: none; text-align: center; font-weight: 700; }
+.side .tools-btn .ic { color: var(--gold); }
+.side .conn { padding: 8px 10px 0; font-size: 12px; }
+
+/* ---------- the right column ---------- */
+.main-col { min-width: 0; padding: 10px 24px 32px; }
+.main-col .topbar { position: sticky; top: 0; z-index: 6; margin: 0 -24px 8px; padding: 8px 24px; height: auto; min-height: 52px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.search-btn { min-width: 240px; justify-content: flex-start; gap: 8px; }
+.search-btn kbd { margin-left: auto; }
+.screen-title { margin: 6px 0 14px; font: 650 22px/1.25 var(--display); color: var(--text); }
+.screen-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.screen-head .screen-title { margin-bottom: 14px; }
+.feed-switch { margin-bottom: 14px; }
+.panels { min-height: 0; }
+
+/* ---------- Today: the building folds to a short band ---------- */
+.today .hero { position: relative; transition: height 0.25s ease; }
+.today .hero[data-folded="1"] { height: 300px; }
+.today .hero[data-folded="1"] .stage-caption, .today .hero[data-folded="1"] .legend { display: none; }
+.hero-fold {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px;
+  padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--text-2); font-size: 12.5px; cursor: pointer;
+}
+.hero-fold:hover { border-color: var(--accent); }
+.hero-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hero-fold .ic { width: 14px; height: 14px; }
+
+/* ---------- Settings ---------- */
+.settings { display: flex; flex-direction: column; gap: 14px; max-width: 860px; }
+.set-group { padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--panel); }
+.set-group h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font: 650 15px var(--display); color: var(--text); }
+.set-group h2 .ic { width: 17px; height: 17px; color: var(--muted); }
+.set-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 18px; padding: 10px 0; border-top: 1px solid var(--line); }
+.set-group h2 + .set-row { border-top: 0; }
+.set-text { flex: 1 1 320px; min-width: 0; }
+.set-text b { font-size: 14px; }
+.set-text p { margin: 3px 0 0; max-width: 70ch; }
+.set-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.set-switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+#tab-settings .foot { margin-top: 18px; max-width: 860px; }
+
+/* ---------- narrow windows: the menu becomes a row of icons ---------- */
+@media (max-width: 980px) {
+  .app.shell { grid-template-columns: 60px minmax(0, 1fr); }
+  .side { padding: 12px 8px; align-items: stretch; }
+  .side .brand-text, .side-nav button span, .side-foot button span:not(.side-q), .side kbd, .side .conn span { display: none; }
+  .side-nav button, .side-foot button { justify-content: center; padding: 8px; }
+  .search-btn { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .today .hero { transition: none; }
+}
+
+/* Today's first block: who waits for you (only while someone waits) */
+.today-waiting { margin: 0 0 14px; padding: 12px 14px; border-radius: var(--radius); border: 1px solid rgba(var(--idle-rgb), 0.45); background: rgba(var(--idle-rgb), 0.06); }
+.today-waiting .tw-title { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font: 650 15px var(--display); color: var(--text); }
+.today-waiting .wait-rows { margin-top: 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); max-height: none; }
+
+/* Today's "Pick up where you left off": three project cards */
+.today-recent { margin: 14px 0 0; }
+.tr-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.tr-head h2 { margin: 0; font: 650 15px var(--display); color: var(--text); }
+.tr-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.tr-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px; border-radius: 12px; text-align: left;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; cursor: pointer;
+}
+.tr-card:hover { border-color: var(--line-2); background: var(--panel-2); }
+.tr-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tr-name { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.tr-name i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; }
+.tr-meta { font-size: 12.5px; color: var(--text-2); }
+.tr-card.st-waiting { border-color: rgba(var(--idle-rgb), 0.5); }
+.tr-card.st-busy .tr-meta { color: var(--busy); }
+.tr-empty { margin: 0; }
+.tr-head .linkish { padding: 2px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+
+/* Today's "First 10 minutes" checklist (views/checklist.js) */
+.checklist { margin: 0 0 16px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid rgba(var(--accent-rgb), 0.35); background: var(--panel); }
+.cl-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 8px; }
+.cl-head h2 { margin: 0; font: 650 16px var(--display); color: var(--text); }
+.cl-count { font-size: 12.5px; color: var(--muted); }
+.cl-hide { margin-left: auto; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; text-decoration: underline; cursor: pointer; }
+.cl-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.cl-row { display: grid; grid-template-columns: 26px minmax(0, 1fr); grid-template-rows: auto auto; gap: 4px 10px; align-items: start; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(var(--tint-rgb), 0.02); }
+.cl-row .act-btn { grid-column: 2; justify-self: start; }
+.cl-mark { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--line-2); color: var(--muted); font: 650 12px var(--font); }
+.cl-mark .ic { width: 14px; height: 14px; }
+.cl-text b { font-size: 13.5px; color: var(--text); }
+.cl-text p { margin: 2px 0 0; color: var(--text-2); }
+.cl-row.done { opacity: 0.7; }
+/* The done steps in one line of ticks above the steps left (checklist.js) */
+.cl-done-line { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+.cl-done-item { display: inline-flex; align-items: center; gap: 5px; }
+.cl-done-item .ic { width: 13px; height: 13px; color: var(--busy); }
+.cl-row.done .cl-mark { background: rgba(var(--busy-rgb), 0.15); border-color: var(--busy); color: var(--busy); }
+.cl-row.next { border-color: rgba(var(--accent-rgb), 0.55); }
+.cl-row.next .cl-mark { border-color: var(--accent); color: var(--accent); }
+
+/* The menu's advanced screens under a small label (docs/simplify.md) */
+.side-label { margin: 12px 10px 4px; font: 600 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.side-nav .side-label + button, .side-nav .side-label ~ button { opacity: 0.85; }
+@media (max-width: 980px) { .side-label { display: none; } }
+/* The Building screen: the workshop's own head keeps only its project choice and "What is this?" */
+.ws-home .ws-head { justify-content: flex-end; margin-bottom: 14px; }

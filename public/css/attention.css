@@ -1,0 +1,84 @@
+/* What needs the person (docs/attention.md): the waiting state, the left-open state and the header's waiting counter.
+   The raw live classes (s-busy, s-idle) stay in app.css; s-waiting and s-left are the attention states. */
+:root {
+  --waiting: #ff8f6b;
+  --left: #8a93a6;
+}
+
+
+.sdot.s-waiting { background: var(--waiting); }
+.sdot.s-left { background: var(--left); }
+.pstate.s-waiting { color: var(--waiting); background: rgba(var(--orange-rgb), 0.12); font-weight: 650; }
+.pstate.s-left { color: var(--left); background: rgba(138, 147, 166, 0.1); }
+.pstate.s-left i { background: var(--left); }
+.now-card.st-waiting { border-color: rgba(var(--orange-rgb), 0.4); box-shadow: 0 0 0 1px rgba(var(--orange-rgb), 0.14), 0 8px 30px rgba(var(--orange-rgb), 0.08); }
+.now-card.st-left { opacity: 0.8; }
+.pcard.st-waiting { border-color: rgba(var(--orange-rgb), 0.5); box-shadow: 0 0 0 1px rgba(var(--orange-rgb), 0.2), 0 10px 40px rgba(var(--orange-rgb), 0.1); }
+.pcard.st-left { opacity: 0.92; }
+
+/* Header counter: quiet when nobody waits, a warm pill when someone does */
+.wait-wrap { position: relative; flex: none; }
+.wait-chip { color: var(--muted); }
+.wait-chip .ic { width: 14px; height: 14px; color: var(--busy); }
+.wait-chip.on { color: #fff; background: rgba(var(--orange-rgb), 0.2); border-color: rgba(var(--orange-rgb), 0.55); }
+.wait-chip.on:hover { background: rgba(var(--orange-rgb), 0.28); border-color: var(--waiting); }
+.wait-chip b { font-weight: 650; }
+
+.wait-menu { position: absolute; left: 0; top: 40px; z-index: 30; width: min(360px, calc(100vw - 32px)); padding: 12px; border-radius: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; }
+.wait-menu h3 { margin: 0; font: 650 13px var(--font); color: var(--text); }
+.wait-hint { margin: 0; font-size: 12px; color: var(--muted); }
+.wait-rows { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.wait-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; cursor: pointer; }
+.wait-row:hover, .wait-row:focus-visible { border-color: rgba(var(--orange-rgb), 0.55); outline: none; }
+.wr-proj { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-2); }
+.wr-proj i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.wr-title { grid-column: 1 / -1; grid-row: 2; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wait-row time { grid-column: 2; grid-row: 1; font-size: 11.5px; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sdot.s-waiting::after, .pstate.s-waiting i::after { animation: none; }
+}
+
+/* Folders that are not projects (docs/folders.md): a folded group at the end of the project list */
+.pother > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+.pother > summary::-webkit-details-marker { display: none; }
+.pother > summary::before { content: '▸'; color: var(--muted); transition: transform 0.15s; }
+.pother[open] > summary::before { transform: rotate(90deg); }
+.pother-hint { margin: 4px 0 12px; font-size: 12.5px; color: var(--muted); max-width: 760px; }
+.pother .pcard { opacity: 0.85; }
+
+/* What a waiting session asks (live.waitingFor from Claude Code) */
+.wr-asks, .nc-asks, .tt-asks { grid-column: 1 / -1; font-size: 11.5px; color: var(--waiting); }
+.nc-asks { display: block; margin-top: 2px; }
+
+/* The session drawer's "Waiting for you" box (views/drawer.js waitingNoteHtml): the theme's waiting colour */
+.dr-waiting { margin: 12px 0 4px; padding: 12px 14px; border-radius: 12px; background: var(--idle); color: var(--bg); }
+.dr-waiting b { display: block; font-size: 14px; }
+.dr-waiting p { margin: 4px 0 0; font-size: 13px; line-height: 1.4; }
+/* The project's folder is gone: the first thing in its drawer */
+.dr-missing { margin: 12px 0 4px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(var(--stop-rgb), 0.45); background: rgba(var(--stop-rgb), 0.1); }
+.dr-missing b { display: block; font-size: 14px; color: var(--stop); }
+.dr-missing p { margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: var(--text-2); }
+/* The AI stopped on an error (apiError.js): a dropped connection or a limit that opened again is a warning, not a stop */
+.dr-missing.ai-stop.warn { border-color: rgba(var(--gold-rgb), 0.45); background: rgba(var(--gold-rgb), 0.08); }
+.dr-missing.ai-stop.warn b { color: var(--text); }
+.dr-waiting .small { opacity: 0.85; font-size: 12px; }
+
+/* The AI's permission mode (permMode.js): calm when it asks or only plans, gold when it acts alone for some steps,
+   the stop colour when it asks for nothing */
+.perm-chip { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid var(--line); color: var(--text-2); vertical-align: middle; }
+.perm-chip.warn { border-color: rgba(var(--gold-rgb), 0.5); color: var(--text); background: rgba(var(--gold-rgb), 0.1); }
+.perm-chip.stop { border-color: rgba(var(--stop-rgb), 0.55); color: var(--stop); background: rgba(var(--stop-rgb), 0.1); }
+.perm-line { margin: 4px 0 12px; color: var(--text-2); }
+.perm-line.warn { color: var(--text); }
+.perm-line.stop { color: var(--stop); }
+
+/* A finished job's follow-ups (job.js nextHtml): a row of small buttons under the steps */
+.job-next { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0 10px; }
+
+/* Earlier jobs (job.js historyHtml): folded under the job box */
+.job-history { margin: 10px 0 0; }
+.job-history summary { cursor: pointer; color: var(--text-2); }
+.job-history ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+.job-history li { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); }
+.job-history li b { font-size: 13px; font-weight: 600; }

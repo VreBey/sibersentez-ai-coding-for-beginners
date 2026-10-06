@@ -1,0 +1,354 @@
+// "Start with AI" (docs/ai-start.md): the first-message file, the launcher and the command lines that open an AI tool
+// in Windows Terminal. Pure apart from the small file helpers at the end (injectable fs), so every rule is tested
+// without starting anything.
+//
+// How the tool reaches the terminal. Windows Terminal (wt.exe) reads ';' as a command separator even inside quotes,
+// and how it quotes an argument with spaces again for the program it starts is not documented. So no tool path, no
+// prompt and no user text is ever an argument of wt.exe. SiberSentez writes a one-line launcher (<id>.cmd, ASCII only)
+// into its own folder and wt starts only `cmd.exe /d /v:off /k <launcher>`:
+//   absolute  the launcher's full path has no space and only safe ASCII characters: wt -d <project folder> ...
+//             cmd.exe /d /v:off /k C:\...\launch\<id>.cmd
+//   relative  otherwise (a user name with a space or a Turkish letter): wt -d <launcher folder> ... cmd.exe /d /v:off
+//             /k .\<id>.cmd, and the launcher changes to the project folder (cd /d "..."). The .\ names cmd's working
+//             directory, SiberSentez's own folder (never a project folder), and still works when the parent process set
+//             NoDefaultCurrentDirectoryInExePath (a bare name would then not be found).
+// The launcher's first line (NO_CWD_SEARCH_LINE) stops cmd from looking a bare program name up in the project folder.
+// Paths inside the launcher are written with %USERPROFILE%, %LOCALAPPDATA%, ... where they start with one, so the file
+// stays ASCII and holds no user name; a path that is still not plain ASCII is refused (the plain terminal still works).
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+
+export const FIRST_DIR = '.sibersentez';
+// The folder's name before the product was renamed (2026-09-30)
+export const LEGACY_FIRST_DIR = '.orkestra';
+
+// A project that still has the old folder and not the new one: the old one is renamed (it is SiberSentez's own
+// folder: the first messages and the team's plan, tasks and reviews), so the team goes on where it was. Nothing is
+// done when both exist or the old one is not a real folder. Returns true when it moved.
+export function takeOverLegacyFolder(dir, xfs = fs) {
+  try {
+    const legacy = path.join(dir, LEGACY_FIRST_DIR);
+    const st = xfs.lstatSync(legacy);
+    if (!st.isDirectory() || st.isSymbolicLink()) return false;
+    try {
+      xfs.lstatSync(path.join(dir, FIRST_DIR));
+      return false;
+    } catch (e) {
+      if (e?.code !== 'ENOENT') return false;
+    }
+    xfs.renameSync(legacy, path.join(dir, FIRST_DIR));
+    return true;
+  } catch {
+    return false;
+  }
+}
+export const FIRST_BASE = 'ilk-mesaj';
+// Other names tried when .sibersentez/ilk-mesaj.md already holds something else: ilk-mesaj-2.md ... ilk-mesaj-9.md
+export const FIRST_NAMES = Object.freeze([`${FIRST_BASE}.md`, ...Array.from({ length: 8 }, (_, i) => `${FIRST_BASE}-${i + 2}.md`)]);
+export const GITIGNORE_TEXT = '*\n';
+const MAX_EXISTING = 64 * 1024; // an existing file larger than this is never read (it is not ours)
+
+// The fixed prompt: plain ASCII words, no character any shell or Windows Terminal treats specially
+export const PROMPT_SAFE_RE = /^[A-Za-z0-9 .,'/_-]{1,200}$/;
+export function launchPrompt(fileName) {
+  const p = `Please read ${FIRST_DIR}/${fileName} and follow it. Reply in the user's language.`;
+  if (!FIRST_NAMES.includes(fileName) || !PROMPT_SAFE_RE.test(p)) throw new Error('unsafe prompt');
+  return p;
+}
+
+// Arguments that start a tool interactively with the prompt (null: no prompt). tool.prompt: 'arg' or an option.
+// A job (docs/simplify.md) starts Claude Code in plan mode: it reads and plans first and asks the person to approve
+// the plan in its own prompt (which also offers to accept edits from then on). SiberSentez never answers that question
+// itself. Other tools have no such mode: they start as usual.
+export function jobArgs(tool) {
+  return tool?.id === 'claude' ? ['--permission-mode', 'plan'] : [];
+}
+
+export function toolArgs(tool, prompt) {
+  if (!prompt) return [];
+  return tool.prompt === 'arg' ? [prompt] : [tool.prompt, prompt];
+}
+
+// The first message (UTF-8 Markdown). The idea is the one the person saved with the project (at most 300 characters,
+// cleaned by the server); each of its lines is quoted. The instructions are English so that every tool reads them the
+// same way; the tool is asked to talk in the language of the idea.
+export function firstMessageText(idea) {
+  const quoted = String(idea || '')
+    .split(/\r?\n/)
+    .map((l) => `> ${l}`.trimEnd())
+    .join('\n');
+  return [
+    '# First message from SiberSentez',
+    '',
+    'SiberSentez wrote this file so that you start from my project idea. It is not part of the project: the',
+    '.sibersentez folder has its own .gitignore.',
+    '',
+    '## My idea',
+    '',
+    quoted,
+    '',
+    '## What I want from you',
+    '',
+    '1. Work out a plan for this idea with me, step by step. I may be new to coding: use plain words.',
+    '2. Ask me one question at a time and wait for my answer before the next one.',
+    '3. Where you can, offer 2 to 4 numbered choices and say which one you recommend, so I can answer with a',
+    '   number. Leave room for my own answer. If your question tool numbers its options itself, do not put numbers',
+    '   in the option labels too.',
+    '4. Do not write or change code before I say the plan is right.',
+    '5. When the plan is clear, write it to PLAN.md in the project folder and tell me what the first step is.',
+    '6. If the idea-to-plan skill is installed, use it.',
+    '',
+    'Talk to me in the language my idea is written in.',
+    '',
+  ].join('\n');
+}
+
+// The first message of "Do a job" (docs/kit-in-app.md): the job the person typed (cleaned like an idea, at most 300
+// characters), quoted, and the team flow of the SiberSentez kit (docs/kit-v2.md §3). The tool uses the orchestrate
+// skill when it is installed; otherwise it follows the same steps itself. SiberSentez writes nothing into the project's
+// own files: the tool may offer the starter lines of agent-rules, and adds them only after the person's yes.
+export function jobMessageText(job) {
+  const quoted = String(job || '')
+    .split(/\r?\n/)
+    .map((l) => `> ${l}`.trimEnd())
+    .join('\n');
+  return [
+    '# A job from SiberSentez',
+    '',
+    'SiberSentez wrote this file so that you start from the job below. It is not part of the project: the .sibersentez',
+    'folder has its own .gitignore.',
+    '',
+    '## The job',
+    '',
+    quoted,
+    '',
+    '## How I want it done',
+    '',
+    '1. Use the orchestrate skill for this job if it is installed. It runs Plan, Build, Check and Finish with a small',
+    '   team of roles and keeps its files in the .sibersentez folder.',
+    '2. If it is not installed, follow the same steps yourself: agree a short plan with me, build in small steps, check',
+    '   the result with a fresh look, and tell me plainly what is done.',
+    '3. I decide twice: I approve the plan before any code is written, and I approve the result at the end. Ask me',
+    '   before you delete, move or overwrite files, install anything, push, publish or pay.',
+    '   If you started in plan mode, read what you need, then show me the plan with your plan tool: I approve it there',
+    '   (SiberSentez shows it to me as well). Keep the plan short: the steps, the files, how you will check it.',
+    '4. I may be new to coding: use plain words, one question at a time, with 2 to 4 numbered choices where you can',
+    '   (if your question tool numbers its options itself, leave the numbers out of the labels).',
+    '5. If this project has no AGENTS.md or CLAUDE.md starter lines from SiberSentez and the agent-rules skill is',
+    '   installed, offer once to add them. Add them only after I say yes.',
+    '',
+    'Talk to me in the language the job is written in.',
+    '',
+  ].join('\n');
+}
+
+// ---------------- paths in the launcher ----------------
+
+// Environment variables a path may start with, most specific first. cmd expands them when it runs the launcher.
+const PATH_VARS = ['LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'ProgramFiles(x86)', 'ProgramFiles', 'ProgramData', 'SystemRoot'];
+// What may follow the variable (and a path with no variable) inside double quotes in a batch file: ASCII without
+// % (expanded even in quotes), " (ends the quoting), ! ^ & | < > ; and controls
+const BATCH_REST_RE = /^[A-Za-z0-9 _.\\:()\-+,~'@#$[\]{}=]*$/;
+
+function envGet(env, name) {
+  if (!env) return '';
+  const k = Object.keys(env).find((x) => x.toLowerCase() === name.toLowerCase());
+  return k && typeof env[k] === 'string' ? env[k] : '';
+}
+
+// A path as the launcher writes it (pure): %VAR%\rest when it starts with one of PATH_VARS (the longest match), the
+// path itself otherwise. { ok: true, expr } or { ok: false } when the rest is not plain safe ASCII.
+export function batchPath(p, env) {
+  if (typeof p !== 'string' || !/^[A-Za-z]:\\/.test(p)) return { ok: false };
+  const norm = path.win32.normalize(p);
+  let best = null;
+  for (const name of PATH_VARS) {
+    let v = envGet(env, name);
+    if (!v || !/^[A-Za-z]:\\/.test(v)) continue;
+    v = path.win32.normalize(v).replace(/\\+$/, '');
+    const low = norm.toLowerCase();
+    const vl = v.toLowerCase();
+    if ((low === vl || low.startsWith(vl + '\\')) && (!best || v.length > best.v.length)) best = { name, v };
+  }
+  const rest = best ? norm.slice(best.v.length) : norm;
+  if (!BATCH_REST_RE.test(rest)) return { ok: false };
+  return { ok: true, expr: best ? `%${best.name}%${rest}` : rest };
+}
+
+// A launcher path that may be a bare argument of wt.exe and cmd.exe: drive, then folders of letters, digits, _ . ~ -
+export const SAFE_LAUNCH_RE = /^[A-Za-z]:\\(?:[A-Za-z0-9_.~-]+\\)*[A-Za-z0-9_.~-]+$/;
+export const LAUNCHER_NAME_RE = /^[0-9a-f]{12}\.cmd$/;
+export const newLauncherName = (rand = crypto.randomBytes) => `${rand(6).toString('hex')}.cmd`;
+
+// The first line of every launcher. cmd looks a bare program name up in the working folder before PATH, and the
+// working folder is the project, which may not be trusted: an npm shim (gemini.cmd, ...) calls a bare `node`, so a
+// node.exe, node.bat or node.cmd in the project would run instead of Node.js. With this variable set cmd (and every
+// program started from this shell, through CreateProcess's search) skips the working folder. It stays set in the shell
+// that remains open after the tool: a program in the project folder is started there as .\name.
+export const NO_CWD_SEARCH_LINE = '@set NoDefaultCurrentDirectoryInExePath=1';
+
+// The launcher text (pure). tool: the found install ({ file, ext }); args: toolArgs(); cdDir: the folder to change
+// to first (relative mode) or null. { ok: true, text } or { ok: false, error: 'tool-path-unsafe' | 'folder-path-unsafe' }.
+// Every line starts with @ (no echo; "@echo off" would hide the prompt of the shell that stays open after the tool).
+// The first line is NO_CWD_SEARCH_LINE.
+export function launcherText({ toolName, file, ext, args, cdDir = null, env }) {
+  const exe = batchPath(file, env);
+  if (!exe.ok) return { ok: false, error: 'tool-path-unsafe' };
+  const lines = [NO_CWD_SEARCH_LINE, `@rem SiberSentez: starts ${String(toolName).replace(/[^A-Za-z0-9 .-]/g, '')} in the project folder (docs/ai-start.md). Removed after 24 hours.`];
+  if (cdDir) {
+    const dir = batchPath(cdDir, env);
+    if (!dir.ok) return { ok: false, error: 'folder-path-unsafe' };
+    lines.push(`@cd /d "${dir.expr}" || exit /b 1`);
+  }
+  for (const a of args) if (!PROMPT_SAFE_RE.test(a) && !/^-{1,2}[a-z]+$/.test(a)) return { ok: false, error: 'tool-path-unsafe' };
+  const tail = args.map((a) => (/^-/.test(a) ? a : `"${a}"`)).join(' ');
+  const call = ext === '.exe' ? '' : 'call ';
+  lines.push(`@${call}"${exe.expr}"${tail ? ' ' + tail : ''}`);
+  const text = lines.join('\r\n') + '\r\n';
+  if (!/^[\x20-\x7e\r\n]*$/.test(text)) return { ok: false, error: 'tool-path-unsafe' };
+  return { ok: true, text };
+}
+
+// Where the launcher goes and how wt reaches it (pure). candidates: SiberSentez's launcher folders in order (the hub's
+// launch folder, then %LOCALAPPDATA%\SiberSentez\launch); unsafe(p): the Windows Terminal argument guard.
+// { ok: true, mode: 'absolute' | 'relative', dir } or { ok: false }.
+export function pickLaunchDir(candidates, unsafe) {
+  const list = candidates.filter((d) => typeof d === 'string' && /^[A-Za-z]:\\/.test(d));
+  const abs = list.find((d) => SAFE_LAUNCH_RE.test(d));
+  if (abs) return { ok: true, mode: 'absolute', dir: abs };
+  const rel = list.find((d) => !unsafe(d));
+  return rel ? { ok: true, mode: 'relative', dir: rel } : { ok: false };
+}
+
+// wt.exe argv (pure). absolute: the tab opens in the project folder and cmd runs the launcher by full path; relative:
+// the tab opens in the launcher folder, cmd runs the launcher as .\<name> and the launcher changes to the project folder.
+// The tab keeps the project's name (--suppressApplicationTitle), as the Claude Code session actions do.
+export function buildAiArgv({ mode, dir, launchDir, launcher, title, cmdExe }) {
+  const start = mode === 'absolute' ? dir : launchDir;
+  const target = mode === 'absolute' ? path.win32.join(launchDir, launcher) : '.\\' + launcher;
+  return ['wt.exe', '-w', 'sibersentez', 'new-tab', '-d', start, '--title', title, '--suppressApplicationTitle', cmdExe, '/d', '/v:off', '/k', target];
+}
+
+// Without Windows Terminal: a console window of its own through `start` (as the plain terminal's fallback), started
+// with the same working directory as the tab (the project folder, or the launcher folder in relative mode). Nothing
+// from the request is on this command line.
+export function buildAiFallbackArgv({ mode, launchDir, launcher, cmdExe }) {
+  const target = mode === 'absolute' ? path.win32.join(launchDir, launcher) : '.\\' + launcher;
+  return [cmdExe, '/d', '/c', 'start', '', cmdExe, '/d', '/v:off', '/k', target];
+}
+
+// ---------------- files (fs injectable) ----------------
+
+// The .sibersentez folder may be missing (created) or a real folder; a file, a link or a junction in its place blocks
+// the start (nothing is written through a link).
+function folderState(dir, xfs) {
+  try {
+    const st = xfs.lstatSync(path.join(dir, FIRST_DIR));
+    return st.isDirectory() && !st.isSymbolicLink() ? 'folder' : 'blocked';
+  } catch (e) {
+    return e?.code === 'ENOENT' ? 'missing' : 'blocked';
+  }
+}
+
+// An existing entry: 'same' when it is a plain file with exactly this text, else 'other'
+function entryState(file, text, xfs) {
+  let st;
+  try {
+    st = xfs.lstatSync(file);
+  } catch (e) {
+    return e?.code === 'ENOENT' ? 'missing' : 'other';
+  }
+  if (!st.isFile() || st.isSymbolicLink() || st.size > MAX_EXISTING) return 'other';
+  try {
+    return xfs.readFileSync(file, 'utf8') === text ? 'same' : 'other';
+  } catch {
+    return 'other';
+  }
+}
+
+// What starting would write into the folder (read-only). The first free name holds the message: the same text there
+// already is used as it is (nothing written), another text is never overwritten (the next name is tried).
+// { ok: true, folder: 'create' | 'keep', file, op: 'create' | 'same', gitignore: 'create' | 'keep' } or
+// { ok: false, error: 'first-message-blocked' | 'first-message-busy' }.
+export function planFirstMessage(dir, text, xfs = fs) {
+  const folder = folderState(dir, xfs);
+  if (folder === 'blocked') return { ok: false, error: 'first-message-blocked' };
+  const gitignore = folder === 'missing' || entryState(path.join(dir, FIRST_DIR, '.gitignore'), GITIGNORE_TEXT, xfs) === 'missing' ? 'create' : 'keep';
+  if (folder === 'missing') return { ok: true, folder: 'create', file: FIRST_NAMES[0], op: 'create', gitignore };
+  for (const name of FIRST_NAMES) {
+    const s = entryState(path.join(dir, FIRST_DIR, name), text, xfs);
+    if (s === 'missing') return { ok: true, folder: 'keep', file: name, op: 'create', gitignore };
+    if (s === 'same') return { ok: true, folder: 'keep', file: name, op: 'same', gitignore };
+  }
+  return { ok: false, error: 'first-message-busy' };
+}
+
+// Writes the first message (and .sibersentez/.gitignore when missing). Every file is created exclusively ('wx'): an
+// entry that appears meanwhile is never overwritten, it is read and compared like in planFirstMessage.
+// Returns the plan that was carried out, or { ok: false, error } ('first-message-failed' on a write error).
+export function writeFirstMessage(dir, text, xfs = fs) {
+  takeOverLegacyFolder(dir, xfs);
+  const folderPath = path.join(dir, FIRST_DIR);
+  let folder = folderState(dir, xfs);
+  if (folder === 'blocked') return { ok: false, error: 'first-message-blocked' };
+  try {
+    if (folder === 'missing') {
+      xfs.mkdirSync(folderPath);
+      if (folderState(dir, xfs) !== 'folder') return { ok: false, error: 'first-message-blocked' };
+    }
+  } catch (e) {
+    if (e?.code !== 'EEXIST' || folderState(dir, xfs) !== 'folder') return { ok: false, error: 'first-message-failed' };
+    folder = 'folder';
+  }
+  const create = (file, data) => {
+    try {
+      xfs.writeFileSync(file, data, { encoding: 'utf8', flag: 'wx' });
+      return 'create';
+    } catch (e) {
+      return e?.code === 'EEXIST' ? 'exists' : 'failed';
+    }
+  };
+  let gitignore = 'keep';
+  if (entryState(path.join(folderPath, '.gitignore'), GITIGNORE_TEXT, xfs) === 'missing') {
+    const g = create(path.join(folderPath, '.gitignore'), GITIGNORE_TEXT);
+    if (g === 'failed') return { ok: false, error: 'first-message-failed' };
+    gitignore = g === 'create' ? 'create' : 'keep';
+  }
+  for (const name of FIRST_NAMES) {
+    const file = path.join(folderPath, name);
+    const s = entryState(file, text, xfs);
+    if (s === 'same') return { ok: true, folder: folder === 'missing' ? 'create' : 'keep', file: name, op: 'same', gitignore };
+    if (s !== 'missing') continue;
+    const w = create(file, text);
+    if (w === 'create') return { ok: true, folder: folder === 'missing' ? 'create' : 'keep', file: name, op: 'create', gitignore };
+    if (w === 'failed') return { ok: false, error: 'first-message-failed' };
+    if (entryState(file, text, xfs) === 'same') return { ok: true, folder: 'keep', file: name, op: 'same', gitignore };
+  }
+  return { ok: false, error: 'first-message-busy' };
+}
+
+// Removes launchers older than maxAgeMs from a launcher folder (only names SiberSentez makes). Returns the count.
+export function cleanupLaunchers(dir, { now = Date.now(), maxAgeMs = 24 * 60 * 60 * 1000, xfs = fs } = {}) {
+  let removed = 0;
+  let names = [];
+  try {
+    names = xfs.readdirSync(dir);
+  } catch {
+    return 0;
+  }
+  for (const n of names) {
+    if (!LAUNCHER_NAME_RE.test(n)) continue;
+    const f = path.join(dir, n);
+    try {
+      const st = xfs.lstatSync(f);
+      if (st.isFile() && now - st.mtimeMs >= maxAgeMs) {
+        xfs.unlinkSync(f);
+        removed++;
+      }
+    } catch {
+      // gone or locked: tried again next time
+    }
+  }
+  return removed;
+}

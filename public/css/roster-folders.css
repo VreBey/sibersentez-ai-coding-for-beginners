@@ -1,0 +1,120 @@
+/* Roster: the library count, the folder list and the list beside it (views/roster.js). Loaded after app.css. */
+
+/* ---------- library count ---------- */
+.lib-card {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 16px; border-radius: 14px;
+  background: linear-gradient(100deg, rgba(var(--gold-rgb), 0.07), transparent 55%), var(--panel); border: 1px solid rgba(var(--gold-rgb), 0.2);
+}
+.lib-card.is-empty { border-style: dashed; align-items: start; }
+.lc-ic { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; color: var(--gold); background: rgba(var(--gold-rgb), 0.1); }
+.lc-ic .ic { width: 20px; height: 20px; }
+.lc-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.lc-body h3 { margin: 0; font: 650 11.5px var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lc-nums { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: 14px; color: var(--text-2); }
+.lc-nums b { font: 650 26px/1.1 var(--display); color: var(--text); margin-right: 3px; }
+.lc-dot { color: var(--muted); }
+.lc-note, .lc-how { margin: 0; font-size: 12.5px; color: var(--text-2); max-width: 90ch; text-wrap: pretty; }
+.lc-note { color: var(--muted); }
+.lib-card .hn-path { margin: 4px 0 0; font-size: 12.5px; }
+.lc-show { white-space: nowrap; }
+/* The SiberSentez kit line under the library count (the kit's colour: .s-kit) */
+.s-kit { --sc: #ff9fd0; }
+.lc-kit { margin: 6px 0 0; padding-top: 8px; border-top: 1px dashed rgba(var(--tint-rgb), 0.08); display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13px; color: var(--text-2); }
+.lc-kit .rsrc { font-size: 11px; font-weight: 650; padding: 1px 8px; border-radius: 999px; }
+.lc-kit b { font-weight: 650; color: var(--text); }
+.lc-kit-note { color: var(--muted); }
+.lc-kit-show { border: 0; padding: 0; background: none; font: inherit; font-size: 12.5px; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.lc-kit-show:hover { color: #fff; }
+
+/* ---------- folder list beside the roster list ---------- */
+.rbody { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; align-items: start; }
+.rcol { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.rfolders {
+  position: sticky; top: 56px; max-height: calc(100vh - 72px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  padding: 10px 8px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line);
+}
+.rf-title { margin: 2px 8px 8px; font: 650 11.5px var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.rf-item {
+  width: 100%; display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 4px 8px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-2); font-size: 12.5px; text-align: left; cursor: pointer; touch-action: manipulation;
+  transition: background-color 0.15s, color 0.15s;
+}
+.rf-item:hover { background: rgba(var(--tint-rgb), 0.05); color: var(--text); }
+.rf-item.on { background: color-mix(in srgb, var(--accent) 17%, transparent); color: #fff; box-shadow: inset 2px 0 0 var(--accent); }
+.rf-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-item b { font-weight: 650; font-size: 11.5px; color: var(--muted); }
+.rf-item.on b { color: var(--text-2); }
+.rf-all { font-weight: 600; margin-bottom: 2px; }
+.rf-grp .rf-name { color: var(--muted); }
+.rf-grp.on .rf-name, .rf-grp:hover .rf-name { color: inherit; }
+.rf-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.rf-group > summary {
+  display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; cursor: pointer; list-style: none;
+  font-size: 12.5px; font-weight: 650; color: var(--text);
+}
+.rf-group > summary::-webkit-details-marker { display: none; }
+.rf-group > summary::before {
+  content: ""; flex: none; width: 6px; height: 6px; margin: 0 2px 0 1px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg); transition: transform 0.15s;
+}
+.rf-group[open] > summary::before { transform: rotate(45deg); }
+.rf-group > summary:hover { background: rgba(var(--tint-rgb), 0.04); }
+.rf-gname { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 7px; }
+.rf-gname::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--gc, var(--muted)); }
+.rf-group > summary small { font-weight: 500; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.rf-items { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 2px 10px; }
+.rf-empty { margin: 2px 8px 4px; font-size: 12px; color: var(--muted); }
+/* Group colours follow the source colours of the list badges (app.css .s-*) */
+.g-library { --gc: var(--gold); }
+.g-kit { --gc: #ff9fd0; }
+.g-projects { --gc: #aebfff; }
+.g-personal { --gc: var(--teal); }
+.g-plugins { --gc: #b7c4d8; }
+.g-more { --gc: #8a93a6; }
+
+/* The line above the list: which folder, what is in it */
+.rf-now { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-height: 30px; padding: 0 4px; scroll-margin-top: 64px; }
+.rf-now p { margin: 0; flex: 1; min-width: 0; font-size: 13px; color: var(--text-2); text-wrap: pretty; }
+.rf-now b { color: var(--text); font-weight: 650; overflow-wrap: anywhere; }
+.rf-kindof { color: var(--muted); }
+.rf-kindof code { font-size: 11.5px; white-space: nowrap; }
+.rf-clear {
+  border: 1px solid var(--line-2); background: rgba(var(--tint-rgb), 0.03); color: var(--text-2); border-radius: 999px; padding: 4px 12px;
+  font-size: 12px; cursor: pointer; white-space: nowrap; touch-action: manipulation;
+}
+.rf-clear:hover { color: var(--text); background: rgba(var(--tint-rgb), 0.07); }
+
+/* Narrow window: the folder list becomes a drop-down in the toolbar */
+.rf-select { display: none; max-width: 100%; min-width: 0; }
+@media (max-width: 980px) {
+  .rbody { grid-template-columns: minmax(0, 1fr); }
+  .rfolders { display: none; }
+  .toolbar .rf-select { display: block; flex: 1 1 220px; max-width: 360px; }
+}
+@media (max-width: 760px) {
+  .lib-card { grid-template-columns: auto minmax(0, 1fr); }
+  .lc-show { grid-column: 2; justify-self: start; }
+  .toolbar .rf-select { max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rf-group > summary::before, .rf-item { transition: none; }
+}
+@media (forced-colors: active) {
+  .lib-card, .rfolders { border: 1px solid CanvasText; }
+  .rf-item.on { outline: 2px solid Highlight; outline-offset: -2px; }
+  .rf-gname::before { forced-color-adjust: none; border: 1px solid CanvasText; }
+}
+
+/* The library card's buttons: "Add to the library" first, "Show them in the list" next to it */
+.lc-acts { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.lc-add { white-space: nowrap; }
+.lc-add .ic { width: 15px; height: 15px; }
+@media (max-width: 760px) {
+  .lc-acts { grid-column: 2; flex-direction: row; flex-wrap: wrap; }
+}
+
+/* A small laptop with the folder list beside the table: the fixed columns squeezed the name to a sliver and the
+   header wrapped letter by letter at 1024 px (2026-10-02); "where" and "usage" give way */
+@media (min-width: 981px) and (max-width: 1240px) {
+  .rbody .rhead, .rbody .rrow { grid-template-columns: 30px minmax(0, 1fr) minmax(110px, 170px) 96px; gap: 8px; padding: 10px 10px; }
+}

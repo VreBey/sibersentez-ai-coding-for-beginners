@@ -1,0 +1,11 @@
+qa/*.log
+
+# Skills and agents installed from the user's library for development are not shipped;
+# only the project rules are tracked.
+.claude/*
+!.claude/rules/
+logs/
+sibersentez.json
+node_modules/
+qa/
+dist/

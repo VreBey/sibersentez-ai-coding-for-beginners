@@ -1,6 +1,6 @@
 # Third-party notices
 
-SiberSentez is licensed under the SiberSentez License 1.0 (LICENSE.txt). It ships the
+SiberSentez is licensed under the GNU GPL version 3 or later (LICENSE.txt). It ships the
 components below under their own licences. Electron and Chromium bring their notices next to the program:
 `LICENSE.electron.txt` and `LICENSES.chromium.html`.
 

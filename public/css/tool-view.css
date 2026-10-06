@@ -1,0 +1,8 @@
+/* Tool view (docs/tool-view.md): which AI tools see a project or an item; the tool filter */
+.tool-tags { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.tool-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 9px; font-size: 10.5px; font-weight: 650; letter-spacing: 0.01em; color: var(--c, #9aa4b8); background: color-mix(in srgb, var(--c, #9aa4b8) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c, #9aa4b8) 32%, transparent); white-space: nowrap; }
+.tool-tag.more { color: var(--muted); background: transparent; border-color: var(--line-2); }
+.pfoot .tool-tags { margin-right: 4px; }
+.rname .tool-tags { margin-left: 6px; }
+.tool-sel { max-width: 220px; }
+.ai-seen { margin: 2px 0 0; }

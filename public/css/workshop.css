@@ -1,0 +1,230 @@
+/* The Workshop screen (views/workshop.js, docs/hq.md): the "SiberSentez Bina Onayli" design of 2026-10-01, scoped to
+   .ws. Colours: the theme's tokens (theme.css, the --hq-* group for the building and this screen). */
+.ws { font-size: 13px; line-height: 1.45; color: var(--text); }
+.ws button, .ws select { font: inherit; font-size: 12px; background: var(--hq-surface); color: var(--text); border: 1px solid var(--hq-border); border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.ws button:hover { border-color: var(--accent); background: var(--hq-raised); }
+.ws button:focus-visible, .ws select:focus-visible, .ws input:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 3px; }
+.ws button[aria-pressed="true"] { background: var(--hq-note); border-color: var(--accent); color: var(--accent); }
+.ws select:disabled { cursor: default; opacity: 0.8; }
+
+/* The heading: what this is, the project and the guide */
+.ws-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.ws-eyebrow { color: var(--accent); font: 10px var(--mono); letter-spacing: 2px; text-transform: uppercase; }
+.ws-head h2 { font: 650 27px/1.25 var(--display); letter-spacing: -0.8px; margin: 4px 0; }
+.ws-head p { margin: 0; color: var(--muted); font-size: 12px; }
+.ws-head-side { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ws-project { display: flex; align-items: center; gap: 8px; border: 1px solid var(--hq-border); padding: 4px 4px 4px 12px; border-radius: 10px; color: var(--text-2); }
+.ws-project::before { content: ''; width: 7px; height: 7px; background: var(--busy); border-radius: 50%; }
+.ws-project select { max-width: 260px; border-color: transparent; }
+
+/* The counts */
+.ws-stats[hidden] { display: none; }
+.ws-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+.ws-stat { display: flex; gap: 15px; align-items: center; background: var(--hq-surface); border: 1px solid var(--hq-border); border-radius: 12px; padding: 12px 18px; }
+.ws-stat strong { font: 26px var(--display); color: var(--text); min-width: 30px; }
+.ws-stat span { display: block; font-size: 12px; color: var(--text-2); }
+.ws-stat small { color: var(--muted); font-size: 11px; }
+.ws-stat.wait strong { color: var(--idle); }
+.ws-stat.work strong { color: var(--busy); }
+
+.ws-layout { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 292px; gap: 18px; align-items: start; }
+.ws-scene { min-width: 0; border: 1px solid var(--hq-border); border-radius: 15px; overflow: hidden; background: var(--hq-surface); }
+
+/* The toolbar over the building */
+.ws-toolbar { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--hq-border); background: var(--hq-surface); }
+.ws-toolbar [data-ws="play"] { background: var(--accent); color: var(--hq-shade); border-color: var(--accent); font-weight: 700; min-width: 90px; }
+.ws-toolbar [data-ws="fit"] { margin-left: auto; }
+.ws-toolbar [data-ws="room"] { max-width: 155px; }
+.ws-toolbar small { color: var(--muted); font-size: 10px; max-width: 180px; margin-left: 5px; }
+
+/* The building */
+.ws-stage { position: relative; background: var(--hq-bg); }
+.ws-stage canvas { display: block; width: 100%; height: 520px; max-height: 58vh; image-rendering: pixelated; touch-action: manipulation; }
+.ws-stage.zoomed canvas { height: 250px; }
+.ws-stage.room-zoom canvas { height: 430px; max-height: 58vh; }
+.ws .ws-sign { position: absolute; top: 12px; left: 14px; display: flex; gap: 10px; align-items: center; padding: 6px 11px; background: var(--hq-plate); border: 1px solid var(--busy); border-radius: 30px; color: var(--busy); font-size: 11px; box-shadow: var(--shadow); }
+.ws .ws-sign.waiting { color: var(--idle); border-color: var(--idle); }
+.ws-stage.room-zoom .ws-sign { opacity: 0.95; }
+.ws-hint { background: var(--hq-surface); border-top: 1px solid var(--line); color: var(--muted); padding: 10px 14px; font-size: 10px; line-height: 1.5; }
+.ws-empty { position: absolute; top: 48%; left: 50%; transform: translate(-50%, -50%); max-width: 80%; background: var(--hq-plate); padding: 15px 22px; border: 1px solid var(--hq-line); border-radius: 8px; text-align: center; font-size: 13px; pointer-events: none; }
+/* The keyboard's buttons over the drawing: focusable, not seen (the canvas draws the ring) */
+.ws-nav button { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); padding: 0; border: 0; }
+
+/* The guide */
+.ws-guide { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: var(--hq-scrim); }
+.ws-guide article { max-width: 440px; margin: 20px; padding: 32px; border-radius: 14px; background: var(--hq-card); border: 1px solid var(--accent); box-shadow: var(--shadow); }
+.ws-guide h2 { margin-top: 0; font-size: 22px; }
+.ws-guide p { line-height: 1.7; color: var(--text-2); }
+.ws-guide button { background: var(--accent); color: var(--hq-shade); font-weight: 600; }
+
+/* Giving a job, under the building (docs/simplify.md) */
+/* Examples under the job box's input, inside its card: a line of small buttons on every width */
+.ws-give-ex { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; }
+.ws-give-ex[hidden] { display: none; }
+.ws .ws-give-ex .ws-ex { min-width: 0; font-weight: 500; font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--hq-surface); border: 1px solid var(--hq-border); color: var(--text-2); }
+.ws .ws-give-ex .ws-ex:hover { color: var(--text); border-color: var(--accent); }
+/* The job box: first in the header row, beside the project it goes to; the widest item, wraps under it when narrow */
+.ws-give { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 380px; min-width: 0; padding: 8px; background: var(--hq-surface); border: 1px solid var(--hq-border); border-radius: 12px; }
+.ws-give input { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--text); background: var(--hq-shell); border: 1px solid var(--hq-border); border-radius: 8px; padding: 9px 12px; }
+.ws-give input:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 2px; }
+.ws .ws-give button { background: var(--accent); color: var(--hq-shade); border-color: var(--accent); font-weight: 700; min-width: 90px; }
+.ws .ws-give button:disabled { opacity: 0.6; cursor: default; }
+
+/* The room tabs */
+.ws-rooms { display: grid; grid-template-columns: repeat(6, 1fr); background: var(--hq-surface); border-top: 1px solid var(--hq-border); }
+.ws-rooms button { border: 0; border-radius: 0; border-right: 1px solid var(--line); padding: 12px 5px; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-rooms button span { display: block; margin-top: 3px; font: 11px var(--mono); color: var(--accent); }
+.ws-rooms button[aria-pressed="true"] { box-shadow: inset 0 2px var(--accent); color: var(--text); background: var(--hq-glow); }
+.ws-rooms button:focus-visible { outline-offset: -4px; }
+
+/* The rewind */
+.ws-timeline { border-top: 1px solid var(--hq-border); padding: 12px 16px; background: var(--hq-surface); }
+.ws-timeline-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.ws-timeline-head strong { font-size: 12px; }
+.ws-timeline-head time { font: 11px var(--mono); color: var(--accent); }
+.ws-timeline-head [data-ws="event-text"] { color: var(--muted); font-size: 11px; max-width: 35%; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.ws-timeline-head [data-ws="live"] { margin-left: auto; border-radius: 20px; padding: 5px 12px; font-size: 10px; }
+.ws-track { position: relative; height: 23px; margin: 3px 5px; }
+.ws-track::before { content: ''; position: absolute; top: 12px; left: 0; right: 0; height: 1px; background: var(--hq-border); }
+.ws .ws-event { position: absolute; top: 7px; transform: translateX(-50%); width: 11px; height: 11px; padding: 0; border-radius: 50%; background: var(--gold); border: 2px solid var(--panel); }
+.ws .ws-event.done { background: var(--busy); }
+.ws .ws-event.prompt { background: var(--idle); }
+.ws-timeline input[type="range"] { width: 100%; height: 12px; margin: 0; accent-color: var(--accent); }
+.ws-timeline-labels { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font: 10px var(--mono); margin-top: 7px; }
+
+/* The team, the shared work, the recent activity, the quota */
+.ws-inspector { position: relative; min-width: 0; }
+.ws-overview, .ws-card { border: 1px solid var(--hq-border); background: var(--hq-surface); border-radius: 14px; padding: 18px; max-height: 780px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--hq-border) transparent; }
+.ws-overview h2 { font-size: 15px; margin: 0 0 3px; }
+.ws-subtle { font-size: 11px; color: var(--muted); margin: 0 0 16px; }
+.ws-roster { display: grid; gap: 2px; max-height: 290px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--hq-border) transparent; }
+.ws-roster button { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; padding: 7px 3px; border-color: transparent; background: transparent; }
+.ws-roster button:hover { background: var(--hq-raised); border-color: var(--hq-border); }
+.ws-roster button:focus-visible { outline-offset: -2px; }
+.ws-avatar { display: grid; place-items: center; width: 27px; height: 29px; border: 1px solid var(--hq-border); border-radius: 9px; font: 12px var(--mono); color: var(--accent); background: var(--hq-raised); flex-shrink: 0; }
+.ws-avatar.robot { border-radius: 5px; color: var(--hq-gold); }
+.ws-identity { min-width: 0; flex: 1; }
+.ws-identity b { font-weight: 500; display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-identity small { display: block; color: var(--muted); font-size: 10px; margin-top: 2px; }
+.ws-dot { height: 6px; width: 6px; border-radius: 50%; background: var(--busy); flex-shrink: 0; }
+.ws-dot.waiting { background: var(--idle); }
+.ws-dot.left { background: var(--muted); }
+.ws-side { border-top: 1px solid var(--hq-border); margin-top: 14px; padding-top: 13px; }
+.ws-side h3 { font-size: 11px; letter-spacing: 0.5px; color: var(--muted); margin: 0 0 10px; }
+.ws-wf-name { font-size: 12px; font-weight: 600; color: var(--text); }
+.ws-wf-phases { font-size: 11px; color: var(--muted); margin: 7px 0; }
+.ws-wf-count { font: 11px var(--mono); color: var(--accent); margin-bottom: 8px; }
+.ws-feed { display: grid; gap: 8px; }
+.ws-feed button { text-align: left; border: 0; padding: 0; background: transparent; font-size: 11px; display: grid; grid-template-columns: 58px 1fr; gap: 10px; line-height: 1.5; color: var(--text-2); }
+.ws-feed button:hover { background: transparent; color: var(--text); }
+.ws-feed time { color: var(--muted); font: 10px var(--mono); padding-top: 2px; }
+.ws-feed span { overflow-wrap: anywhere; }
+.ws-quota { display: grid; grid-template-columns: 45px 1fr 35px; gap: 10px; font: 10px var(--mono); align-items: center; margin: 10px 0; }
+.ws-quota progress { width: 100%; height: 5px; accent-color: var(--busy); }
+.ws-quota.warn progress { accent-color: var(--idle); }
+.ws-quota.danger progress { accent-color: var(--stop); }
+.ws-quota-note { font-size: 11px; color: var(--idle); }
+
+/* Waiting for you (docs/simplify.md): above the team, one line per question */
+.ws-jobbox { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--hq-border); }
+.ws-jobbox h2 { font-size: 15px; margin: 0 0 8px; }
+.ws-job-title { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.ws-inbox { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--hq-border); }
+.ws-inbox h2 { font-size: 15px; margin: 0 0 8px; }
+.ws-inbox-list { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
+.ws .ws-inbox-item { display: flex; justify-content: space-between; gap: 8px; text-align: left; padding: 8px 10px; border-left: 3px solid var(--idle); }
+.ws .ws-inbox-item.result { border-left-color: var(--busy); }
+.ws .ws-inbox-item.error { border-left-color: var(--stop); }
+.ws .ws-inbox-item.error span { white-space: normal; text-align: right; }
+.ws-inbox-item span { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+/* The lead's plan and the job's result in its card */
+.ws-plan, .ws-result { clear: both; border: 1px solid var(--idle); border-radius: 10px; padding: 10px 12px; margin: 34px 0 10px; background: var(--hq-glow); }
+.ws-result { border-color: var(--busy); }
+.ws-card .ws-plan h3, .ws-card .ws-result h3 { border-top: 0; padding-top: 0; margin: 0 0 8px; color: var(--text); }
+.ws-plan-text { margin: 0; max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.55 var(--mono); color: var(--text-2); }
+.ws-note { font-size: 11px; color: var(--muted); }
+
+/* The card: over the team while something is chosen */
+.ws-card { position: absolute; inset: 0; z-index: 3; max-height: min(780px, 82vh); box-shadow: var(--shadow); border-color: var(--accent); }
+.ws-card.room-card { bottom: auto; min-height: 320px; }
+.ws-card h2 { padding-top: 8px; font-size: 18px; line-height: 1.4; margin: 8px 0; clear: both; }
+.ws-card h3 { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; margin: 18px 0 8px; }
+.ws-card p { font-size: 12px; line-height: 1.6; color: var(--text-2); overflow-wrap: anywhere; }
+.ws-card .close { float: right; padding: 3px 9px; font-size: 10px; }
+.ws-card > button:not(.close) { margin: 3px; padding: 7px; font-size: 11px; }
+.ws-card .ws-actions { display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: 18px; }
+.ws-card .ws-actions button:first-child { background: var(--accent); color: var(--hq-shade); font-weight: 600; }
+.ws-chip { display: inline-block; border: 1px solid var(--hq-border); padding: 3px 8px; border-radius: 20px; margin: 3px; color: var(--hq-gold); font-size: 10px; }
+.ws-bar { display: grid; grid-template-columns: 60px 1fr 26px; align-items: center; gap: 8px; margin: 7px 0; font: 12px var(--mono); }
+.ws-bar i { height: 5px; background: var(--accent); display: block; }
+.ws-room-text { padding: 12px; background: var(--hq-glow); border: 1px solid var(--hq-border); border-radius: 9px; }
+.ws-card .ws-occupant { display: block; width: 100%; text-align: left; }
+.ws-occupant small { display: block; color: var(--muted); margin-top: 3px; }
+
+.ws-tooltip { position: fixed; z-index: 30; background: var(--hq-note); color: var(--hq-note-text); border: 1px solid var(--hq-line); border-radius: 8px; padding: 10px 13px; pointer-events: none; max-width: 310px; white-space: pre-line; box-shadow: var(--shadow); font-size: 12px; line-height: 1.6; }
+
+@media (min-width: 1600px) {
+  .ws-stage canvas { height: 620px; }
+}
+@media (max-width: 1100px) {
+  /* A small laptop: the toolbar stays on one line ("Overview" wrapped under it at 1024 px, 2026-10-02) */
+  .ws-toolbar { gap: 5px; padding: 10px 12px; }
+  .ws-toolbar [data-ws="play"] { min-width: 0; }
+  .ws-toolbar [data-ws="room"] { max-width: 118px; }
+  .ws-layout { grid-template-columns: minmax(0, 1fr) 260px; gap: 12px; }
+  .ws-toolbar small { display: none; }
+  .ws-rooms { grid-template-columns: repeat(3, 1fr); }
+  .ws-rooms button { padding: 8px; }
+  .ws-overview { padding: 14px; }
+  .ws-stats { gap: 8px; }
+  .ws-stat { padding: 10px 13px; }
+  .ws-head h2 { font-size: 24px; }
+}
+@media (max-width: 900px) {
+  .ws-layout { grid-template-columns: 1fr; }
+  .ws-inspector { position: static; }
+  .ws-overview { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; max-height: none; }
+  .ws-overview > h2, .ws-overview > .ws-subtle { grid-column: 1 / -1; }
+  .ws-overview .ws-side { margin-top: 0; padding-top: 0; border-top: 0; }
+  .ws-overview [data-ws="quota-section"] { margin-top: 15px; }
+  .ws-roster { max-height: 320px; }
+  .ws-card { position: absolute; inset: 60px 12px auto auto; width: min(340px, calc(100% - 24px)); max-height: 570px; }
+  .ws-stage canvas { height: 570px; max-height: 65vh; }
+  .ws-stage.zoomed canvas { height: 240px; }
+  .ws-stage.room-zoom canvas { height: 420px; }
+  .ws-rooms { grid-template-columns: repeat(6, 1fr); }
+  .ws-head, .ws-stats { margin-bottom: 15px; }
+}
+@media (max-width: 560px) {
+  .ws-head h2 { font-size: 23px; }
+  .ws-head p { font-size: 11px; }
+  .ws-stats { gap: 6px; }
+  .ws-stat { padding: 9px; gap: 7px; }
+  .ws-stat strong { font-size: 22px; min-width: 20px; }
+  .ws-stat span { font-size: 10px; }
+  .ws-stat small { display: none; }
+  .ws-toolbar { padding: 10px; gap: 5px; }
+  .ws-toolbar button, .ws-toolbar select { padding: 7px 8px; font-size: 10px; }
+  .ws-toolbar [data-ws="fit"] { margin-left: 0; }
+  .ws-toolbar [data-ws="room"] { max-width: 115px; }
+  .ws-stage canvas { height: 300px; max-height: none; }
+  .ws-stage.zoomed canvas { height: 140px; }
+  .ws-stage.room-zoom canvas { height: 240px; max-height: none; }
+  .ws-rooms { grid-template-columns: repeat(3, 1fr); }
+  .ws-overview { display: block; }
+  .ws-overview .ws-side { border-top: 1px solid var(--hq-border); padding-top: 14px; margin-top: 14px; }
+  .ws-timeline-head { gap: 8px; }
+  .ws-timeline-head [data-ws="event-text"] { max-width: 100%; width: 100%; }
+  .ws-timeline { padding: 12px; }
+  .ws-timeline-labels { font-size: 9px; }
+  .ws-hint { font-size: 9px; }
+  .ws-card { top: 55px; max-height: 520px; }
+  .ws .ws-sign { top: 7px; left: 8px; padding: 4px 8px; font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws * { transition: none !important; scroll-behavior: auto !important; }
+}
+@media (forced-colors: active) {
+  .ws-stat, .ws-scene, .ws-overview, .ws-card, .ws .ws-sign { border: 1px solid CanvasText; }
+}

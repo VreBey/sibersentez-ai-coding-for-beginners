@@ -23,8 +23,8 @@ You will get an answer within a week. When a fix is ready, the release notes nam
 - The local server answering anything other than `127.0.0.1`, or a request from another origin.
 
 Out of scope: the AI tools themselves (Claude Code, Codex CLI, ...), what an AI tool does inside the terminal you
-started, and problems that need someone who already controls your Windows account (the actions confirmation guards
-against accidents, it is not a security boundary).
+started, and problems that need someone who already controls your Windows account (see *Privacy and security* in the
+README: the actions confirmation guards against accidents, it is not a security boundary).
 
-Security research on your own copy is welcome within the law; the licence does not stop you from reporting what you
-find.
+The design and its limits: [README → Privacy and security](README.md#privacy-and-security),
+[docs/actions-toggle.md](docs/actions-toggle.md).

@@ -1,0 +1,75 @@
+/* Motion (docs/motion.md): one set of durations and easings, used by the new motion and meant for the old one as it is
+   touched. Only transform and opacity move. prefers-reduced-motion turns every animation and transition off
+   (app.css), and the scripts check it too (motion.js). */
+:root {
+  --dur-fast: 140ms;   /* small things: a menu, a chip */
+  --dur-med: 240ms;    /* panels, cards finding their place */
+  --dur-slow: 380ms;   /* a whole scene */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);      /* entering: fast, then settles */
+  --ease-in: cubic-bezier(0.3, 0, 1, 1);       /* leaving: gathers speed */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1); /* from one place to another */
+}
+
+/* Popovers under the header (waiting list, notifications, actions): they fade and drop in from 4 px above, and fade
+   out a little faster; `hidden` stays the switch (display animates as a discrete step) */
+.wait-menu,
+.bell-menu,
+.act-panel {
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    translate var(--dur-fast) var(--ease-out),
+    display var(--dur-fast) allow-discrete,
+    overlay var(--dur-fast) allow-discrete;
+}
+.wait-menu[hidden],
+.bell-menu[hidden],
+.act-panel[hidden] {
+  display: none;
+  opacity: 0;
+  translate: 0 -4px;
+  transition-duration: 100ms;
+  transition-timing-function: var(--ease-in);
+}
+@starting-style {
+  .wait-menu:not([hidden]),
+  .bell-menu:not([hidden]),
+  .act-panel:not([hidden]) {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+
+/* Project cards gliding to their new places when the order changes (a view transition, motion.js) */
+::view-transition-group(*) {
+  animation-duration: var(--dur-med);
+  animation-timing-function: var(--ease-in-out);
+}
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: var(--dur-fast);
+}
+/* The scene switch crossfades the canvas only */
+::view-transition-group(scene) {
+  animation-duration: var(--dur-slow);
+}
+
+/* The "waiting for you" counter when a new session starts waiting (motion.js nudge) */
+@keyframes attn-nudge {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(var(--orange-rgb), 0.18); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(var(--orange-rgb), 0); }
+}
+.wait-chip.nudge { animation: attn-nudge 520ms var(--ease-out); }
+
+/* A card whose project just started waiting: one soft glow */
+@keyframes card-call {
+  0% { box-shadow: 0 0 0 0 rgba(var(--orange-rgb), 0.45); }
+  100% { box-shadow: 0 0 0 14px rgba(var(--orange-rgb), 0); }
+}
+.pcard.called { animation: card-call 900ms var(--ease-out); }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}

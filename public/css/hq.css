@@ -1,0 +1,29 @@
+/* Modern HQ building (cutaway-hq.js, docs/hq.md): the stage keeps the drawing's 3:2 shape, the rail sits under it in
+   two columns, the pause button floats over the street. Colours: the
+   --hq-* tokens of theme.css. */
+.hq-stage { background: var(--hq-bg) !important; }
+#hero:has(.hq-stage) { display: flex; flex-direction: column; height: auto; gap: 16px; }
+#hero .hq-stage { width: 100%; height: clamp(530px, calc((100vw - 300px) * 0.6667 + 130px), 1000px); flex: none; }
+#hero[data-folded="1"] .hq-stage { height: 430px; }
+#hero:has(.hq-stage) .rail { display: grid; grid-template-columns: 1fr 1fr; max-height: 270px; overflow: hidden; }
+#hero:has(.hq-stage) .rail-block { max-height: 270px; overflow: auto; }
+@media (max-width: 700px) {
+  #hero:has(.hq-stage) .rail { grid-template-columns: 1fr; max-height: 230px; }
+  #hero:has(.hq-stage) .rail-block { max-height: 230px; }
+  #hero .hq-stage { height: 530px; }
+}
+
+.hq-stage .hq-controls { position: absolute; bottom: 57px; right: 12px; left: 12px; display: flex; justify-content: flex-end; align-items: center; gap: 7px; z-index: 4; pointer-events: none; }
+.hq-stage .hq-controls button,
+.hq-stage .hq-controls span { pointer-events: auto; background: color-mix(in srgb, var(--hq-bg) 94%, transparent); border: 1px solid color-mix(in srgb, var(--hq-line) 60%, transparent); color: var(--hq-gold); border-radius: 7px; padding: 5px 10px; font: 11px/1.5 var(--font); }
+.hq-stage .hq-controls button { cursor: pointer; min-height: 30px; }
+.hq-stage .hq-controls button:disabled { opacity: 0.45; cursor: default; }
+.hq-stage .hq-controls button:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 2px; }
+
+.hq-stage .hq-controls[hidden] { display: none; }
+.hq-stage .floor-bar { max-width: calc(100% - 24px); white-space: nowrap; overflow-x: auto; justify-content: flex-start; }
+.hq-stage .floor-bar button { flex-shrink: 0; }
+@media (max-width: 620px) {
+  .hq-stage .hq-controls { gap: 4px; }
+  .hq-stage .hq-controls button { padding: 5px 7px; }
+}

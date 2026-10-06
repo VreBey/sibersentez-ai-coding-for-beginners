@@ -1,0 +1,1848 @@
+{
+  "name": "sibersentez-kit",
+  "version": "0.5.0",
+  "license": "MIT (see LICENSE.md)",
+  "count": 73,
+  "items": [
+    {
+      "kind": "skill",
+      "name": "llm-app-basics",
+      "category": "ai-apps",
+      "description": "Adds a call to an AI language model to an app: key kept in .env, a first small request, handling of errors and rate limits, a cost ceiling, tested prompts, privacy rules and tests that need no network. Use when an app should summarize, classify, answer or write text with an AI model, or the user asks how to connect to one.",
+      "tags": [
+        "ai",
+        "backend"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "yapay zekâ modeli",
+        "yapay zekâ ekle*",
+        "yapay zekâ özelliği",
+        "yapay zekâ entegre*",
+        "yapay zekâ uygulama*",
+        "yapay zekâ çağır*",
+        "dil modeli",
+        "llm",
+        "prompt*",
+        "chatgpt",
+        "openai",
+        "claude api"
+      ],
+      "offer": [],
+      "path": "ai-apps/skills/llm-app-basics",
+      "notice": "ai-apps/skills/llm-app-basics/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "auth-flow",
+      "category": "backend",
+      "description": "Adds sign-up, sign-in, sessions, password reset and access control to a project: first decides between a ready-made sign-in service and building it, then stores passwords safely, protects every route and record, and proves it with tests. Use when users need accounts, a login, or only some people may see or change something.",
+      "tags": [
+        "backend",
+        "security",
+        "database"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "kayıt ol*",
+        "giriş yap*",
+        "üye ol*",
+        "üyelik*",
+        "oturum aç*",
+        "şifre sıfırla*",
+        "parola sıfırla*",
+        "kullanıcı girişi",
+        "login",
+        "kimlik doğrula*",
+        "yetkilendirme"
+      ],
+      "offer": [],
+      "path": "backend/skills/auth-flow",
+      "notice": "backend/skills/auth-flow/LICENSE.md",
+      "version": "0.1.1"
+    },
+    {
+      "kind": "skill",
+      "name": "database-schema",
+      "category": "backend",
+      "description": "Designs the tables a small project needs: what each table holds, how tables relate, keys, indexes and numbered migration files that can be undone, starting on SQLite with a backup before every change. Use when the project must save data, the user asks about a database, tables or a data model, or a data shape has to change.",
+      "tags": [
+        "database",
+        "backend"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "veritabanı tasarla*",
+        "veri modeli",
+        "veritabanı*",
+        "tablo*",
+        "sqlite",
+        "migration*",
+        "şema tasarla*",
+        "kayıtları sakla*"
+      ],
+      "offer": [],
+      "path": "backend/skills/database-schema",
+      "notice": "backend/skills/database-schema/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "agent",
+      "name": "backend-builder",
+      "category": "backend",
+      "description": "Builds server-side work: API routes, data storage, validation, and calls to outside services, one assigned task at a time, inside the files it was given, and documents the data shape and every outside call. Use when a task is about an API, a database, saving data or a server, or when a plan task is assigned to the back end.",
+      "tags": [
+        "backend",
+        "database"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "sunucu tarafı",
+        "veritabanı",
+        "tablo*",
+        "şema*",
+        "uç nokta yaz*",
+        "backend görevi"
+      ],
+      "offer": [],
+      "path": "backend/agents/backend-builder.md",
+      "notice": "frontmatter",
+      "version": "0.2.0"
+    },
+    {
+      "kind": "agent",
+      "name": "data-analyst",
+      "category": "backend",
+      "description": "Answers one question about a data file (CSV, spreadsheet, exported table) with a script, a chart and a plain-language reading of the result, inside the files it was given, with the numbers checked a second way. Use when a task is a data question, a count, a comparison, a trend or a chart from data the project already holds.",
+      "tags": [
+        "data"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "veriyi analiz et*",
+        "veri sorusu",
+        "verideki sonuç*",
+        "grafik hazırla*",
+        "verilerden rapor",
+        "veri yorumla*"
+      ],
+      "offer": [],
+      "path": "backend/agents/data-analyst.md",
+      "notice": "frontmatter",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "ui-check",
+      "category": "design",
+      "description": "Checks a screen for the basics that make it usable by everyone: phone width, tap size, keyboard use, visible focus, color contrast, labels and alt text, text zoom. Shows a pass or fail table and fixes what fails. Use when a page or screen is built and must work on phones and for people using keyboards or screen readers.",
+      "tags": [
+        "design",
+        "ui",
+        "web"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "telefonda düzgün görün*",
+        "mobil uyum*",
+        "responsive",
+        "erişilebilir*",
+        "kontrast*",
+        "klavye ile",
+        "odak sırası",
+        "küçük ekran",
+        "ekran okuyucu"
+      ],
+      "offer": [],
+      "path": "design/skills/ui-check",
+      "notice": "design/skills/ui-check/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "ui-polish",
+      "category": "design",
+      "description": "Improves how a screen looks without changing what it does: spacing, text size, colors and contrast, alignment, buttons, and the loading, empty and error states, one small change at a time with a look after each. Use when the user says it looks ugly or plain, asks to make it prettier or more professional, or finds a screen crowded or confusing.",
+      "tags": [
+        "design",
+        "ui"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "çirkin",
+        "sade görünüyor",
+        "daha güzel",
+        "profesyonel görün*",
+        "güzelleştir*",
+        "görünüm*",
+        "boşluk*",
+        "yazı boyutu"
+      ],
+      "offer": [],
+      "path": "design/skills/ui-polish",
+      "notice": "design/skills/ui-polish/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "agent",
+      "name": "frontend-builder",
+      "category": "design",
+      "description": "Builds the visible part of an app: screens, components, state, forms and styles, one assigned task at a time, inside the files it was given, and reports a status word. Use when a task is about what the user sees and clicks, when a screen or component must be built or changed, or when a plan task is assigned to the front end.",
+      "tags": [
+        "design",
+        "ui",
+        "web"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "ön yüz",
+        "arayüz kodla*",
+        "bileşen*",
+        "frontend görevi",
+        "ekran kodla*",
+        "form yap*"
+      ],
+      "offer": [],
+      "path": "design/agents/frontend-builder.md",
+      "notice": "frontmatter",
+      "version": "0.1.2"
+    },
+    {
+      "kind": "skill",
+      "name": "agent-rules",
+      "category": "docs",
+      "description": "Creates or updates the project's instruction file for AI coding tools: AGENTS.md, and CLAUDE.md or Copilot instructions only if those tools are used. It holds what the project is, run and test commands, folder map, rules and files not to touch. Use when the user asks for AGENTS.md, project rules for the AI, or an instruction file.",
+      "tags": [
+        "docs",
+        "workflow"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "agents md",
+        "claude md",
+        "talimat dosyası",
+        "kural dosyası",
+        "yapay zekâ kuralları",
+        "proje kuralları",
+        "copilot talimat*",
+        "yapay zekâ talimat*"
+      ],
+      "offer": [],
+      "path": "docs/skills/agent-rules",
+      "notice": "docs/skills/agent-rules/LICENSE.md",
+      "version": "0.1.2"
+    },
+    {
+      "kind": "skill",
+      "name": "api-docs",
+      "category": "docs",
+      "description": "Writes reference documentation for an API: every endpoint with its purpose, an example request and a real example response, the error codes it can return, and a command to try it, all run against the real program. Use when an API needs documentation, other people or apps will call it, or the user asks what the routes are.",
+      "tags": [
+        "docs",
+        "backend"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "api belge*",
+        "api dokümantasyon*",
+        "uç nokta belgesi",
+        "örnek istek",
+        "api kılavuzu",
+        "endpoint belge*",
+        "swagger",
+        "openapi",
+        "hangi uç noktalar var"
+      ],
+      "offer": [],
+      "path": "docs/skills/api-docs",
+      "notice": "docs/skills/api-docs/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "architecture-notes",
+      "category": "docs",
+      "description": "Writes a one-page picture of how a project is built: its parts, how data flows through them for the main actions, a simple diagram and the decisions made with their reasons, checked against the real files. Use when someone new must understand the project, the structure is hard to keep in mind, or decisions should be written down.",
+      "tags": [
+        "docs",
+        "planning"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "mimari*",
+        "veri akışı",
+        "diyagram*",
+        "sistem şeması",
+        "parçalar birbirine",
+        "kararlar neden",
+        "proje yapısı nasıl"
+      ],
+      "offer": [],
+      "path": "docs/skills/architecture-notes",
+      "notice": "docs/skills/architecture-notes/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "docs-writer",
+      "category": "docs",
+      "description": "Writes or updates a README and user-facing docs in plain language: what the project is and how to install, run, configure, use and troubleshoot it, with every documented command actually tried. Use when the user asks for a README, a setup or user guide or install instructions, or when documentation is missing or out of date.",
+      "tags": [
+        "docs"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "belge*",
+        "dokümantasyon",
+        "readme",
+        "kılavuz*",
+        "kullanım kılavuzu",
+        "nasıl kurulur",
+        "kurulum talimat*",
+        "kullanma talimat*",
+        "açıklama yaz*"
+      ],
+      "offer": [],
+      "path": "docs/skills/docs-writer",
+      "notice": "docs/skills/docs-writer/LICENSE.md",
+      "version": "0.1.2"
+    },
+    {
+      "kind": "skill",
+      "name": "explain-codebase",
+      "category": "docs",
+      "description": "Maps an unfamiliar codebase for a newcomer: what it does, how folders are organized, where it starts, how a typical action flows, how to run and test it, and where common changes go, with file paths. Use when the user opens a project they did not write, returns to an old one, joins a team, or asks where something lives.",
+      "tags": [
+        "docs"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "anlamadım",
+        "nasıl çalışıyor",
+        "kod tabanı",
+        "kodu açıkla*",
+        "projeyi anla*",
+        "yabancı proje",
+        "devral*",
+        "eski proje*",
+        "bu kod ne"
+      ],
+      "offer": [],
+      "path": "docs/skills/explain-codebase",
+      "notice": "docs/skills/explain-codebase/LICENSE.md",
+      "version": "0.1.1"
+    },
+    {
+      "kind": "agent",
+      "name": "doc-builder",
+      "category": "docs",
+      "description": "Writes one documentation task: a README, an install guide, an API reference or a how-to page, inside the files it was given, trying every command and example it writes and marking what it could not try. Use when a plan task is about documentation, or when a project needs its README or API docs written.",
+      "tags": [
+        "docs"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "belge görevi",
+        "readme görevi",
+        "belge yaz*",
+        "kılavuz görevi",
+        "api belgesi yaz*",
+        "dokümantasyon görevi"
+      ],
+      "offer": [],
+      "path": "docs/agents/doc-builder.md",
+      "notice": "frontmatter",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "agent",
+      "name": "game-builder",
+      "category": "game",
+      "description": "Builds one game task, such as a mechanic, a character action, a score, a menu or a save, inside the files it was given. It reads which game engine the project uses and follows that engine's conventions. Use when a plan task is about gameplay or a game feature, or when a game script needs writing or changing.",
+      "tags": [
+        "gamedev"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "oyun görevi*",
+        "oyun mekaniği*",
+        "oynanış kodla*",
+        "oyun özelliği*",
+        "karakter hareketi",
+        "oyun nesnesi",
+        "oyun betiği"
+      ],
+      "offer": [],
+      "path": "game/agents/game-builder.md",
+      "notice": "frontmatter",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "feature-spec",
+      "category": "planning",
+      "description": "Turns one feature idea into a short spec file: who it is for, what they can do step by step, what is left out, what can go wrong, and a checklist that says when it is done. Use when the user says let's add a feature, wants something new in a project that already runs, asks how a feature should work, or gives a feature request that is still vague.",
+      "tags": [
+        "planning"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "yeni özellik",
+        "özellik ekle*",
+        "özellik tarif*",
+        "özellik iste*",
+        "nasıl çalışsın",
+        "kullanıcı hikayesi",
+        "gereksinim*",
+        "şartname*",
+        "ne yapmalı"
+      ],
+      "offer": [],
+      "path": "planning/skills/feature-spec",
+      "notice": "planning/skills/feature-spec/LICENSE.md",
+      "version": "0.1.1"
+    },
+    {
+      "kind": "skill",
+      "name": "idea-to-plan",
+      "category": "planning",
+      "description": "Turns a rough idea into a short project plan saved as PLAN.md, asking one question at a time about the goal, users, must-have features, tech choice and what is out of scope. Use when starting a new project from an idea or an empty folder, when the user wants to build something but does not know where to begin.",
+      "tags": [
+        "planning"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "fikrim",
+        "fikir var",
+        "aklımda",
+        "yapmak istiyorum",
+        "nereden başla*",
+        "nasıl başla*",
+        "proje planı",
+        "boş klasör",
+        "yeni proje",
+        "proje fikri"
+      ],
+      "offer": [
+        "empty-folder"
+      ],
+      "path": "planning/skills/idea-to-plan",
+      "notice": "planning/skills/idea-to-plan/LICENSE.md",
+      "version": "0.2.0"
+    },
+    {
+      "kind": "skill",
+      "name": "plan-challenge",
+      "category": "planning",
+      "description": "Questions a plan or an idea with at most five sharp questions before any code is written: the riskiest assumption, the first real user, the smallest test, what could go wrong, and what we will not do. Use when the user says test my plan, find the weak spots, is this a good idea, or before building something big.",
+      "tags": [
+        "planning"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "zayıf yer*",
+        "planı sorgula*",
+        "planımı sorgula*",
+        "fikri sorgula*",
+        "planı zorla*",
+        "ön ölüm",
+        "en riskli varsayım",
+        "iyi bir fikir mi",
+        "vazgeçmeli miyim",
+        "fikrimi test et"
+      ],
+      "offer": [],
+      "path": "planning/skills/plan-challenge",
+      "notice": "planning/skills/plan-challenge/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "scope-guard",
+      "category": "planning",
+      "description": "Sorts a growing list of wishes into Now, Later and No, cuts the project down to a first version that can really be finished, and records the decision. Use when a project has grown too big, the user keeps adding features, asks what the MVP should be, says it will never be finished, or wants to know what to cut.",
+      "tags": [
+        "planning"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "çok büyüdü",
+        "kapsam*",
+        "ilk sürüm",
+        "mvp",
+        "işi küçült*",
+        "kesmem gereken",
+        "neyi keseyim",
+        "bitiremiyorum",
+        "çok fazla özellik",
+        "şişti"
+      ],
+      "offer": [],
+      "path": "planning/skills/scope-guard",
+      "notice": "planning/skills/scope-guard/LICENSE.md",
+      "version": "0.1.1"
+    },
+    {
+      "kind": "skill",
+      "name": "task-breakdown",
+      "category": "planning",
+      "description": "Breaks a plan, milestone or feature into small tasks of an hour or two, each with a concrete check that proves it is done, and saves them in TASKS.md as a checklist. Use when a plan is agreed and work should start, when a feature feels too big to start, or when the user wants a checklist of small steps.",
+      "tags": [
+        "planning"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "görev listesi çıkar*",
+        "görevlere ayır*",
+        "adım adım",
+        "yapılacakları çıkar*",
+        "iş listesi",
+        "parçala*",
+        "kontrol listesi"
+      ],
+      "offer": [],
+      "path": "planning/skills/task-breakdown",
+      "notice": "planning/skills/task-breakdown/LICENSE.md",
+      "version": "0.1.4"
+    },
+    {
+      "kind": "skill",
+      "name": "tech-stack-chooser",
+      "category": "planning",
+      "description": "Compares two or three ways to build the project (language, framework or engine) in plain words, recommends one with the trade-offs, and records the decision. Use when the user asks which language, tool or technology to use, cannot decide between options, or wants to know whether a choice fits their level and their project.",
+      "tags": [
+        "planning"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "hangi dil*",
+        "hangi teknoloji*",
+        "hangi framework*",
+        "hangi motor*",
+        "hangisini kullan*",
+        "teknoloji seç*",
+        "dil seç*",
+        "hangisi daha iyi",
+        "programlama dil*",
+        "seçmeliyim"
+      ],
+      "offer": [],
+      "path": "planning/skills/tech-stack-chooser",
+      "notice": "planning/skills/tech-stack-chooser/LICENSE.md",
+      "version": "0.2.0"
+    },
+    {
+      "kind": "agent",
+      "name": "planner",
+      "category": "planning",
+      "description": "Turns a goal, an idea or a feature request into a short step-by-step plan with small verifiable tasks, risks and open questions, without writing code. Use when a task needs planning before anyone changes files, when the user asks how to approach something, or when a change will touch several parts of the project.",
+      "tags": [
+        "planning"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "planla*",
+        "plan yap*",
+        "plan çıkar*",
+        "nasıl yaparım",
+        "yaklaşım",
+        "yol haritası"
+      ],
+      "offer": [],
+      "path": "planning/agents/planner.md",
+      "notice": "frontmatter",
+      "version": "0.2.2"
+    },
+    {
+      "kind": "skill",
+      "name": "debug-helper",
+      "category": "quality",
+      "description": "Finds and fixes a bug step by step: the exact error, a reproduction, the cause with evidence, a root-cause fix, a try-out the way the user uses the program, and a regression test. Use when something crashes, throws an error, gives wrong results, worked before and broke, or the user says it does not work. Build errors: fix-build-errors.",
+      "tags": [
+        "debugging",
+        "testing"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "hata ver*",
+        "hatası",
+        "çalışmıyor",
+        "bozuldu",
+        "çöktü",
+        "çöküyor",
+        "hata ayıkla*",
+        "sorunu bul*",
+        "düzelt*",
+        "açılmıyor"
+      ],
+      "offer": [],
+      "path": "quality/skills/debug-helper",
+      "notice": "quality/skills/debug-helper/LICENSE.md",
+      "version": "0.1.2"
+    },
+    {
+      "kind": "skill",
+      "name": "dependency-update",
+      "category": "quality",
+      "description": "Brings out-of-date packages up to date safely: lists what is old, updates one package at a time with the tests run after each, commits each step so it can be undone, reads release notes before big jumps and runs a vulnerability scan. Use when packages are old, a scan reports a known weakness, or the user wants updates.",
+      "tags": [
+        "security",
+        "devops"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "paketleri güncelle*",
+        "eski paket*",
+        "bağımlılık*",
+        "paket güncelle*",
+        "güncel değil",
+        "kütüphaneleri güncelle*",
+        "güvenlik taraması"
+      ],
+      "offer": [],
+      "path": "quality/skills/dependency-update",
+      "notice": "quality/skills/dependency-update/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "fix-build-errors",
+      "category": "quality",
+      "description": "Works through build, compile, type and lint errors one at a time starting with the first, explains each in plain words, fixes the cause and runs the build again until it is clean. Use when the project does not compile or build, the terminal shows a wall of red errors, a type or lint error blocks progress, or an update broke the build.",
+      "tags": [
+        "debugging"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "derle*",
+        "build hata*",
+        "tip hatası",
+        "lint hata*",
+        "kırmızı hata*",
+        "tsc",
+        "paket hatası"
+      ],
+      "offer": [],
+      "path": "quality/skills/fix-build-errors",
+      "notice": "quality/skills/fix-build-errors/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "performance-check",
+      "category": "quality",
+      "description": "Makes something faster without guessing: states what feels slow, measures it, finds the single biggest bottleneck, changes one thing, measures again and keeps the change only if the numbers improved. Use when a page, command, query or app is slow, uses too much memory, or the user asks to speed it up or optimize it.",
+      "tags": [
+        "performance"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "yavaş*",
+        "çok yavaş",
+        "performans*",
+        "hızlandır*",
+        "geç açılıyor",
+        "takılıyor",
+        "donuyor",
+        "optimizasyon*",
+        "bellek şişiyor"
+      ],
+      "offer": [],
+      "path": "quality/skills/performance-check",
+      "notice": "quality/skills/performance-check/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "refactor-safely",
+      "category": "quality",
+      "description": "Cleans up messy code without changing what it does: one goal at a time, tests as a safety net, small steps, and a check after every step. Use when the user says the code is messy, too long, repeated or hard to read, wants it reorganized or simplified, or wants to tidy up before adding something new.",
+      "tags": [
+        "refactoring",
+        "testing"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "yeniden düzenle*",
+        "kodu temizle*",
+        "dağınık kod",
+        "karmaşık kod",
+        "sadeleştir*",
+        "tekrar eden kod",
+        "refactor*"
+      ],
+      "offer": [],
+      "path": "quality/skills/refactor-safely",
+      "notice": "quality/skills/refactor-safely/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "review-changes",
+      "category": "quality",
+      "description": "Reviews the current changes (uncommitted work, a branch or a pull request) against a checklist for correctness, tests, security, data safety and readability, and reports findings as blocker, should fix or nice to have. Use when the user is about to commit or merge, asks for a code review or second look, or asks if a change is safe.",
+      "tags": [
+        "code-review"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "incele*",
+        "kod inceleme",
+        "gözden geçir*",
+        "değişiklik*",
+        "ikinci göz",
+        "birleştirmeden önce",
+        "kontrol et*"
+      ],
+      "offer": [],
+      "path": "quality/skills/review-changes",
+      "notice": "quality/skills/review-changes/LICENSE.md",
+      "version": "0.1.1"
+    },
+    {
+      "kind": "skill",
+      "name": "test-first",
+      "category": "quality",
+      "description": "Writes a failing automated test before changing code, watches it fail, makes the smallest change that passes it, then runs the whole suite again (red, green, clean up). Use when adding a feature or fixing a bug in code that has or can have tests, when the user asks for tests or safer changes, or before a risky refactor.",
+      "tags": [
+        "testing"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "test*",
+        "birim test*",
+        "sına*",
+        "önce test",
+        "bozulmasın",
+        "güvenli değişiklik"
+      ],
+      "offer": [],
+      "path": "quality/skills/test-first",
+      "notice": "quality/skills/test-first/LICENSE.md",
+      "version": "0.1.2"
+    },
+    {
+      "kind": "skill",
+      "name": "try-it-in-browser",
+      "category": "quality",
+      "description": "Uses a web feature the way a real person does: runs the app, walks through one flow step by step in a browser, watches for errors and blank states, reports what breaks with the exact steps, and adds one end-to-end test that repeats the flow. Use when a web page or form was just built or changed and nobody has clicked through it yet.",
+      "tags": [
+        "testing",
+        "web"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "tarayıcıda dene*",
+        "kullanıcı gibi dene*",
+        "uçtan uca test",
+        "e2e",
+        "tıklayıp dene*",
+        "sayfayı dene*",
+        "akışı dene*",
+        "tarayıcı testi"
+      ],
+      "offer": [],
+      "path": "quality/skills/try-it-in-browser",
+      "notice": "quality/skills/try-it-in-browser/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "verify-before-done",
+      "category": "quality",
+      "description": "Before saying done, works, or fixed, runs the command or check that proves it right now (tests, build, running the program, opening the page), shows the output, and says what is missing when there is no proof. Use when work seems finished, before a summary, or when the user asks whether it really works.",
+      "tags": [
+        "testing"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "bitti demeden önce",
+        "kanıtla*",
+        "gerçekten çalışıyor mu",
+        "kanıt göster*",
+        "emin misin",
+        "gerçekten düzeldi mi"
+      ],
+      "offer": [],
+      "path": "quality/skills/verify-before-done",
+      "notice": "quality/skills/verify-before-done/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "agent",
+      "name": "debugger",
+      "category": "quality",
+      "description": "Investigates an error, a crash or wrong behavior with evidence: reproduces it, reads the stack trace, narrows down the cause, applies the smallest fix and adds a regression test. Use when something fails and the cause is not obvious, when an error message or stack trace needs explaining, or when code that worked before has broken.",
+      "tags": [
+        "debugging",
+        "testing"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "hata ver*",
+        "hatası",
+        "çalışmıyor",
+        "bozuldu",
+        "çöktü",
+        "hata ayıkla*",
+        "sorunu bul*",
+        "neden bozuldu"
+      ],
+      "offer": [],
+      "path": "quality/agents/debugger.md",
+      "notice": "frontmatter",
+      "version": "0.2.2"
+    },
+    {
+      "kind": "agent",
+      "name": "qa-explorer",
+      "category": "quality",
+      "description": "Uses the finished program the way a real person would, read-only: starts it, walks through the main flows, tries wrong input and edge cases, and returns a list of problems with exact steps, what it expected and what happened, plus a VERDICT line. Use when a feature is built, before a release, or when nobody has tried the whole thing yet.",
+      "tags": [
+        "testing",
+        "web"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "uygulamayı dene*",
+        "kullanıcı gibi kullan*",
+        "sorun listesi",
+        "keşif testi",
+        "elle test*",
+        "kalite denetçisi",
+        "kullanıcı gözüyle"
+      ],
+      "offer": [],
+      "path": "quality/agents/qa-explorer.md",
+      "notice": "frontmatter",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "agent",
+      "name": "reviewer",
+      "category": "quality",
+      "description": "Reviews code changes (uncommitted work, a branch or a pull request) for correctness, tests, security, data safety and readability, runs read-only checks, states whether each acceptance check is met, and returns findings with a clear verdict. Use when a change is ready and before it is merged, or for a second opinion.",
+      "tags": [
+        "code-review",
+        "security"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "incele*",
+        "kod inceleme",
+        "gözden geçir*",
+        "ikinci göz",
+        "kontrol et*"
+      ],
+      "offer": [],
+      "path": "quality/agents/reviewer.md",
+      "notice": "frontmatter",
+      "version": "0.2.3"
+    },
+    {
+      "kind": "agent",
+      "name": "tester",
+      "category": "quality",
+      "description": "Writes and runs automated tests for a given behavior, bug or file: finds the project's test setup, adds focused tests that fail for the right reason before a fix and pass after it, and reports commands and results. Use when tests are missing for new code, to reproduce a bug as a failing test, or to check the suite passes.",
+      "tags": [
+        "testing"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "test*",
+        "birim test*",
+        "sına*",
+        "test yaz*"
+      ],
+      "offer": [],
+      "path": "quality/agents/tester.md",
+      "notice": "frontmatter",
+      "version": "0.3.0"
+    },
+    {
+      "kind": "skill",
+      "name": "deploy-web",
+      "category": "release",
+      "description": "Puts a website or web app online: picks a host, checks the build, publishes a preview link first, sets environment variables, then goes live after a clear yes, with a custom domain if wanted. Use when the user wants to put the site online, share a link, publish a web page, or connect a domain name to the project.",
+      "tags": [
+        "devops",
+        "web"
+      ],
+      "stage": "ship",
+      "keywordsTr": [
+        "internete koy*",
+        "canlıya al*",
+        "online yap*",
+        "alan adı",
+        "domain",
+        "hosting",
+        "vercel",
+        "netlify",
+        "linki paylaş*"
+      ],
+      "offer": [],
+      "path": "release/skills/deploy-web",
+      "notice": "release/skills/deploy-web/LICENSE.md",
+      "version": "0.3.0"
+    },
+    {
+      "kind": "skill",
+      "name": "docker-basics",
+      "category": "release",
+      "description": "Puts a project in a container: a first Dockerfile and a compose file with every line explained, a .dockerignore, secrets passed at run time and never baked in, then builds it, runs it and proves the app answers. Use when the user wants the app to run the same everywhere, asks about Docker or containers, or a host needs a container image.",
+      "tags": [
+        "devops"
+      ],
+      "stage": "ship",
+      "keywordsTr": [
+        "docker*",
+        "dockerfile",
+        "konteyner*",
+        "compose",
+        "container",
+        "docker compose",
+        "imaj*",
+        "her yerde aynı çalışsın"
+      ],
+      "offer": [],
+      "path": "release/skills/docker-basics",
+      "notice": "release/skills/docker-basics/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "domain-email",
+      "category": "release",
+      "description": "Sets up email at the project's own domain: a few chosen addresses, mailboxes the user creates with their own passwords, SPF, DKIM and DMARC, forwarders, auto-replies and spam settings, then a real send and reply test whose authentication results are read. Use when the user wants an address like info@ their domain, or their mail lands in spam.",
+      "tags": [
+        "devops",
+        "web"
+      ],
+      "stage": "ship",
+      "keywordsTr": [
+        "kurumsal eposta",
+        "kurumsal mail",
+        "kurumsal posta",
+        "posta kur*",
+        "mail kur*",
+        "posta adresi aç*",
+        "spf",
+        "dkim",
+        "dmarc",
+        "spama düş*",
+        "webmail"
+      ],
+      "offer": [],
+      "path": "release/skills/domain-email",
+      "notice": "release/skills/domain-email/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "env-and-secrets",
+      "category": "release",
+      "description": "Keeps API keys and settings out of the code: a .env file for the real values, a .env.example with names only, the ignore rule, how the code reads them, and where they go when the app is online. Use when the user asks where the API key goes, sees a key in the code, needs a database address or token, or wants different settings here and online.",
+      "tags": [
+        "security",
+        "devops"
+      ],
+      "stage": "build",
+      "keywordsTr": [
+        "env",
+        "env dosyası",
+        "api anahtar*",
+        "api key",
+        "ortam değişken*",
+        "anahtarı nereye",
+        "nereye koy*",
+        "gizli ayar*"
+      ],
+      "offer": [],
+      "path": "release/skills/env-and-secrets",
+      "notice": "release/skills/env-and-secrets/LICENSE.md",
+      "version": "0.1.1"
+    },
+    {
+      "kind": "skill",
+      "name": "finish-branch",
+      "category": "release",
+      "description": "Closes finished work on a git branch: runs the tests fresh, then offers three choices, merge into the main branch, open a pull request on GitHub, or leave the branch for now, with a yes for every step. Use when the user says the work is done, let's merge, open a pull request, or what do I do with this branch.",
+      "tags": [
+        "git",
+        "release"
+      ],
+      "stage": "ship",
+      "keywordsTr": [
+        "iş bitti",
+        "dalı birleştir*",
+        "dalı kapat*",
+        "pull request*",
+        "pr aç*",
+        "birleştirip",
+        "ana dala"
+      ],
+      "offer": [],
+      "path": "release/skills/finish-branch",
+      "notice": "release/skills/finish-branch/LICENSE.md",
+      "version": "0.1.1"
+    },
+    {
+      "kind": "skill",
+      "name": "git-basics",
+      "category": "release",
+      "description": "Explains and runs everyday git steps one at a time: see what changed, save a commit, make a branch, undo a change safely, and put the project on GitHub. Use when the user asks about git or GitHub, wants to save or upload their work, made a mistake and wants to go back, or does not know what a commit or a branch is.",
+      "tags": [
+        "git"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "git nedir",
+        "github nedir",
+        "github a nasıl yükle*",
+        "github hesabı",
+        "commit*",
+        "branch*",
+        "dal aç*",
+        "geri al*",
+        "değişiklikleri kaydet*",
+        "sürüm kontrol*",
+        "git kullan*"
+      ],
+      "offer": [],
+      "path": "release/skills/git-basics",
+      "notice": "release/skills/git-basics/LICENSE.md",
+      "version": "0.2.0"
+    },
+    {
+      "kind": "skill",
+      "name": "github-actions-setup",
+      "category": "release",
+      "description": "Sets up a first automatic check on GitHub: a workflow file that installs the project, runs its tests and build on every push and pull request, and shows how to read the result. Use when the user wants tests to run automatically, asks about CI, wants a green check before merging, or wants GitHub to build the project for them.",
+      "tags": [
+        "devops",
+        "git"
+      ],
+      "stage": "ship",
+      "keywordsTr": [
+        "github actions",
+        "ci",
+        "otomatik test*",
+        "her push",
+        "testler otomatik",
+        "sürekli entegrasyon",
+        "yeşil tik"
+      ],
+      "offer": [],
+      "path": "release/skills/github-actions-setup",
+      "notice": "release/skills/github-actions-setup/LICENSE.md",
+      "version": "0.2.1"
+    },
+    {
+      "kind": "skill",
+      "name": "launch-checklist",
+      "category": "release",
+      "description": "Checks a website before and right after it goes public: one address with HTTPS, security headers, legal and contact pages, a real 404, sitemap and robots, search and share previews, broken links, the phone view, speed and a way back. Every check is proven with a command or the browser. Use when a site is about to go live or just went live.",
+      "tags": [
+        "web",
+        "devops",
+        "security"
+      ],
+      "stage": "ship",
+      "keywordsTr": [
+        "yayın öncesi kontrol*",
+        "canlıya almadan önce",
+        "canlı site kontrol*",
+        "site kontrol listesi",
+        "yayına hazır mı",
+        "seo kontrol*",
+        "güvenlik başlık*",
+        "yasal sayfa*",
+        "kvkk sayfa*",
+        "site harita*"
+      ],
+      "offer": [],
+      "path": "release/skills/launch-checklist",
+      "notice": "release/skills/launch-checklist/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "move-to-new-host",
+      "category": "release",
+      "description": "Moves a running site or web app to another host without losing data: a read-only look at the old server, a full backup, setup at a test address, a side-by-side comparison, a short planned switch of DNS, checks from several places, and the old server kept until the new one is proven. Use when the user changes hosting or wants to leave a server.",
+      "tags": [
+        "devops",
+        "web"
+      ],
+      "stage": "ship",
+      "keywordsTr": [
+        "hosting değiştir*",
+        "sunucu değiştir*",
+        "siteyi taşı*",
+        "sunucu taşı*",
+        "sunucuyu taşı*",
+        "hostinge taşı*",
+        "başka hostinge",
+        "vps kapat*",
+        "vds kapat*"
+      ],
+      "offer": [],
+      "path": "release/skills/move-to-new-host",
+      "notice": "release/skills/move-to-new-host/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "release-prep",
+      "category": "release",
+      "description": "Prepares a release step by step: finds what changed, proposes the next version number, updates the changelog, runs tests and a clean build, tries the result and drafts release notes, asking before tagging, pushing or publishing. Use when the user wants to publish, ship or release a new version or write release notes.",
+      "tags": [
+        "release",
+        "docs"
+      ],
+      "stage": "ship",
+      "keywordsTr": [
+        "sürüm*",
+        "yayınla*",
+        "yayın*",
+        "yeni versiyon",
+        "değişiklik günlüğü",
+        "sürüm notu",
+        "mağazaya yükle*",
+        "kurulum dosyası hazırla*",
+        "dağıt*"
+      ],
+      "offer": [],
+      "path": "release/skills/release-prep",
+      "notice": "release/skills/release-prep/LICENSE.md",
+      "version": "0.1.1"
+    },
+    {
+      "kind": "agent",
+      "name": "devops-helper",
+      "category": "release",
+      "description": "Builds one delivery task: an automatic check on every push, a container recipe, a compose file or the files a host needs to run the project. It stays inside the files it was given, tries what it can locally and never deploys or touches real accounts. Use when a plan task is about CI, Docker or putting the project online.",
+      "tags": [
+        "devops"
+      ],
+      "stage": "ship",
+      "keywordsTr": [
+        "dağıtım görevi",
+        "docker görevi",
+        "ci görevi",
+        "yayın hattı",
+        "pipeline*",
+        "devops*",
+        "konteyner görevi",
+        "sunucuya koyma görevi"
+      ],
+      "offer": [],
+      "path": "release/agents/devops-helper.md",
+      "notice": "frontmatter",
+      "version": "0.2.0"
+    },
+    {
+      "kind": "agent",
+      "name": "launch-checker",
+      "category": "release",
+      "description": "Independently checks a live or preview web address, read-only: redirects to one HTTPS address, security headers, a real 404, legal and contact pages, sitemap and page tags, broken links, DNS from several resolvers. Returns proofs and a VERDICT line. Use when a site is about to go live, just went live or moved to a new host.",
+      "tags": [
+        "web",
+        "devops"
+      ],
+      "stage": "ship",
+      "keywordsTr": [
+        "canlı site denetle*",
+        "yayın kontrolü yap*",
+        "site denetimi",
+        "başlık kontrolü",
+        "yönlendirme kontrolü",
+        "taşıma sonrası kontrol*"
+      ],
+      "offer": [],
+      "path": "release/agents/launch-checker.md",
+      "notice": "frontmatter",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "secrets-cleanup",
+      "category": "security",
+      "description": "Handles a leaked key, token or password step by step: find where it went, get it revoked, replace it, remove it from the current files, and only then decide about cleaning git history, with a separate yes for every step. Use when the user committed or pushed a password or API key, shared a secret by mistake, or found a key in the code.",
+      "tags": [
+        "security",
+        "git"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "commit ettim",
+        "yanlışlıkla şifre*",
+        "yanlışlıkla anahtar*",
+        "yanlışlıkla paylaştım",
+        "anahtarı paylaştım",
+        "github a yükledim",
+        "sızdır*",
+        "sızdı",
+        "geçmişten sil*",
+        "anahtarı iptal"
+      ],
+      "offer": [],
+      "path": "security/skills/secrets-cleanup",
+      "notice": "security/skills/secrets-cleanup/LICENSE.md",
+      "version": "0.1.2"
+    },
+    {
+      "kind": "skill",
+      "name": "security-check",
+      "category": "security",
+      "description": "Checks a project for common security problems: secrets or API keys in code and git history, missing input validation, weak access checks, risky dependencies and broad permissions, then lists fixes by priority. Use when a project is about to be published or shared, after adding sign-in, payments or uploads, or when asked if it is safe.",
+      "tags": [
+        "security"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "güvenli*",
+        "şifre*",
+        "parola*",
+        "anahtar*",
+        "token",
+        "sızıntı",
+        "zafiyet*",
+        "yetki*",
+        "saldırı*"
+      ],
+      "offer": [],
+      "path": "security/skills/security-check",
+      "notice": "security/skills/security-check/LICENSE.md",
+      "version": "0.3.0"
+    },
+    {
+      "kind": "agent",
+      "name": "security-auditor",
+      "category": "security",
+      "description": "Independently checks a project for common security problems, read-only: secrets in files and git history, unchecked input, weak access checks, risky dependencies and settings. Returns findings by priority and a VERDICT line. Use when a project is about to be published or shared, after adding sign-in, payments or uploads, or for a second opinion.",
+      "tags": [
+        "security",
+        "code-review"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "güvenlik denetle*",
+        "güvenlik taraması yap*",
+        "bağımsız güvenlik",
+        "güvenlik incele*",
+        "güvenlik açığı ara*",
+        "sızma kontrolü"
+      ],
+      "offer": [],
+      "path": "security/agents/security-auditor.md",
+      "notice": "frontmatter",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "api-service-starter",
+      "category": "starters",
+      "description": "Creates a first working API service with Node.js and Express, or Python with FastAPI: list, add and read routes, a health check, SQLite or a data file, tests and a .env file, then runs and calls it. Use when the user wants an API, a server or a backend, or needs to save data for an app, bot or website.",
+      "tags": [
+        "node-server",
+        "fastapi",
+        "javascript",
+        "python",
+        "backend"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "rest api",
+        "api servisi",
+        "api yaz*",
+        "arka uç",
+        "sunucu yaz*",
+        "uç nokta*",
+        "servis yaz*",
+        "veri kaydet*",
+        "fastapi",
+        "python api"
+      ],
+      "offer": [],
+      "path": "starters/skills/api-service-starter",
+      "notice": "starters/skills/api-service-starter/LICENSE.md",
+      "version": "0.2.0"
+    },
+    {
+      "kind": "skill",
+      "name": "browser-extension-starter",
+      "category": "starters",
+      "description": "Builds a first browser extension in JavaScript with Manifest V3: the fewest permissions, a content script that changes a page, a small popup, loading it unpacked, finding errors and packaging it. Use when the idea is a browser extension, a Chrome or Edge add-on, or a tool that reads or changes web pages the user visits.",
+      "tags": [
+        "javascript",
+        "extension"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "tarayıcı eklentisi",
+        "chrome eklentisi",
+        "tarayıcı uzantısı",
+        "eklenti*",
+        "uzantı*",
+        "chrome uzantı*",
+        "edge eklentisi",
+        "siteyi değiştiren eklenti"
+      ],
+      "offer": [],
+      "path": "starters/skills/browser-extension-starter",
+      "notice": "starters/skills/browser-extension-starter/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "cli-tool-starter",
+      "category": "starters",
+      "description": "Turns a script into a command line tool: arguments and options, a built-in help text, clear errors and exit codes, a version flag, tests, and a way to run it from any folder. Uses Python or Node.js. Use when the user has a script they run by editing it, wants a command to type in the terminal, or asks for a command line tool.",
+      "tags": [
+        "python",
+        "javascript",
+        "cli"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "komut satırı*",
+        "terminal aracı",
+        "cli",
+        "argüman*",
+        "komut yaz*",
+        "terminalde çalış*",
+        "her klasörden çalış*",
+        "yardım metni"
+      ],
+      "offer": [],
+      "path": "starters/skills/cli-tool-starter",
+      "notice": "starters/skills/cli-tool-starter/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "data-analysis-starter",
+      "category": "starters",
+      "description": "Sets up a first data analysis in Python: load a CSV or Excel file, look at it, clean it, answer one question, draw one chart and save the result, checking every number a second way. Use when the user has a data file, a spreadsheet or a CSV and wants to count, compare, find a trend or make a chart from it.",
+      "tags": [
+        "python",
+        "data"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "veri analiz*",
+        "analiz et*",
+        "veri seti*",
+        "csv",
+        "excel*",
+        "pandas",
+        "grafik çiz*",
+        "veri temizle*",
+        "istatistik*",
+        "tablo verisi",
+        "satış verisi"
+      ],
+      "offer": [],
+      "path": "starters/skills/data-analysis-starter",
+      "notice": "starters/skills/data-analysis-starter/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "desktop-app-starter",
+      "category": "starters",
+      "description": "Creates a first working Windows desktop app with Electron and TypeScript using Electron Forge: generates it in a subfolder, opens its window, adds a safe bridge to the computer and builds an installer. Use when the idea is a desktop app, a Windows program or a tray tool, or an Electron project needs its first version.",
+      "tags": [
+        "electron",
+        "typescript",
+        "desktop"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "masaüstü*",
+        "bilgisayar*",
+        "program",
+        "programı",
+        "windows uygulama*",
+        "windows program*",
+        "pencere*",
+        "exe",
+        "kurulum dosyası",
+        "sistem tepsi*",
+        "tepsi*",
+        "çevrimdışı",
+        "electron"
+      ],
+      "offer": [],
+      "path": "starters/skills/desktop-app-starter",
+      "notice": "starters/skills/desktop-app-starter/LICENSE.md",
+      "version": "0.1.1"
+    },
+    {
+      "kind": "skill",
+      "name": "game-prototype-godot",
+      "category": "starters",
+      "description": "Guides a first playable Godot prototype in GDScript: create the project, build a player scene, write a move and jump script, run it with no errors in the Output panel and save it in git. Use when the idea is a game, a 2D prototype or a game jam entry in Godot, or a Godot project needs its first playable version.",
+      "tags": [
+        "godot",
+        "gdscript",
+        "gamedev"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "godot",
+        "gdscript",
+        "gd script",
+        "godot ile",
+        "açık kaynak oyun motoru",
+        "hafif oyun motoru",
+        "godot oyunu",
+        "sahne ve düğüm"
+      ],
+      "offer": [],
+      "path": "starters/skills/game-prototype-godot",
+      "notice": "starters/skills/game-prototype-godot/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "game-prototype-unity",
+      "category": "starters",
+      "description": "Guides a first playable Unity prototype in C#: create the project in Unity Hub, set up git for Unity, write a player controller, build a tiny test scene and reach Play mode with no Console errors. Use when the idea is a game, a 2D or 3D prototype, a platformer or a game jam entry in Unity, or a Unity project needs its first playable version.",
+      "tags": [
+        "unity",
+        "csharp",
+        "gamedev"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "oyun*",
+        "unity",
+        "platform oyunu",
+        "2d",
+        "3d",
+        "karakter*",
+        "düşman*",
+        "seviye*",
+        "oynanış",
+        "oyun prototipi",
+        "fps",
+        "rpg",
+        "bulmaca",
+        "game jam"
+      ],
+      "offer": [],
+      "path": "starters/skills/game-prototype-unity",
+      "notice": "starters/skills/game-prototype-unity/LICENSE.md",
+      "version": "0.2.0"
+    },
+    {
+      "kind": "skill",
+      "name": "landing-page-starter",
+      "category": "starters",
+      "description": "Creates a one-page promo site in plain HTML, CSS and a little JavaScript, mobile friendly, with a clear headline and one call to action, and shows it in the browser, ready to publish. Use when the user wants a page for their product, event or service, a simple one-page site, a waiting list page or a link page, and needs no sign-in or database.",
+      "tags": [
+        "javascript",
+        "web"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "açılış sayfası",
+        "tek sayfalık",
+        "tek sayfa",
+        "tanıtım sitesi",
+        "bekleme listesi",
+        "kartvizit sitesi",
+        "ürün tanıtım*",
+        "etkinlik sayfası"
+      ],
+      "offer": [],
+      "path": "starters/skills/landing-page-starter",
+      "notice": "starters/skills/landing-page-starter/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "mobile-app-starter",
+      "category": "starters",
+      "description": "Creates a first working phone app with Expo and React Native in TypeScript: checks tools, generates the app in a subfolder, opens it on a real phone with Expo Go, sets up type and health checks. Use when the idea is a mobile app, an Android or iPhone app, or an Expo or React Native project needs its first version.",
+      "tags": [
+        "expo",
+        "react-native",
+        "typescript",
+        "mobile"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "mobil*",
+        "telefon*",
+        "cep telefonu",
+        "akıllı telefon",
+        "android",
+        "ios",
+        "iphone",
+        "uygulama mağazası",
+        "play store",
+        "app store",
+        "expo",
+        "react native"
+      ],
+      "offer": [],
+      "path": "starters/skills/mobile-app-starter",
+      "notice": "starters/skills/mobile-app-starter/LICENSE.md",
+      "version": "0.2.1"
+    },
+    {
+      "kind": "skill",
+      "name": "project-setup",
+      "category": "starters",
+      "description": "Sets up a new project folder from the plan: folder layout, git repository, README, .gitignore and one clear command to run the project, explaining each step. Use when the plan is ready and the folder is empty or nearly empty, when the user asks for the project skeleton, to initialize git, or to make the project run for the first time.",
+      "tags": [
+        "planning",
+        "docs"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "kurulum",
+        "iskelet",
+        "klasör yapısı",
+        "proje kur*",
+        "projeyi kur*",
+        "projeyi oluştur*",
+        "başlangıç",
+        "git"
+      ],
+      "offer": [
+        "empty-folder"
+      ],
+      "path": "starters/skills/project-setup",
+      "notice": "starters/skills/project-setup/LICENSE.md",
+      "version": "0.1.2"
+    },
+    {
+      "kind": "skill",
+      "name": "python-bot-starter",
+      "category": "starters",
+      "description": "Builds a first working Python bot or automation script: a virtual environment, a Telegram or Discord bot or a scheduled job, the token kept in a .env file, then run, test and stop it safely. Use when the idea is a chat bot, a Telegram bot, a Discord bot, a reminder or notification bot, a scraper, or a script that automates a task on a schedule.",
+      "tags": [
+        "python",
+        "bot",
+        "automation",
+        "scraping"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "bot*",
+        "telegram",
+        "discord",
+        "otomasyon*",
+        "otomatik*",
+        "hatırlat*",
+        "bildirim*",
+        "zamanlanmış",
+        "her gün",
+        "her sabah",
+        "veri çek*",
+        "betik",
+        "script",
+        "python"
+      ],
+      "offer": [],
+      "path": "starters/skills/python-bot-starter",
+      "notice": "starters/skills/python-bot-starter/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "web-app-starter",
+      "category": "starters",
+      "description": "Creates a first working web app: plain HTML and JavaScript for a one-page tool (nothing installed), or Next.js or Vite with React in TypeScript for more; checks tools, runs it in the browser, sets up checks. Use when the idea is a website, web app, small browser tool, dashboard, shop or blog, or a React or Next.js project needs its first version.",
+      "tags": [
+        "nextjs",
+        "react",
+        "typescript",
+        "web"
+      ],
+      "stage": "start",
+      "keywordsTr": [
+        "web sitesi",
+        "site yap*",
+        "site kur*",
+        "sitesi",
+        "web uygulama*",
+        "internet sitesi",
+        "sayfa yap*",
+        "web sayfası",
+        "panel*",
+        "blog*",
+        "mağaza*",
+        "online mağaza",
+        "online satış",
+        "e ticaret",
+        "randevu*",
+        "rezervasyon*",
+        "portfolyo",
+        "tanıtım sayfası",
+        "tarayıcı*",
+        "next js",
+        "react"
+      ],
+      "offer": [],
+      "path": "starters/skills/web-app-starter",
+      "notice": "starters/skills/web-app-starter/LICENSE.md",
+      "version": "0.1.4"
+    },
+    {
+      "kind": "skill",
+      "name": "handoff-notes",
+      "category": "team",
+      "description": "Before a session ends, writes what was done, what comes next and the open questions into .sibersentez/HANDOFF.md, so a new session (or another AI tool) can continue without the old conversation. Use when the user says let's continue tomorrow, I am closing this session, or write notes so we can pick this up later.",
+      "tags": [
+        "workflow",
+        "docs"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "yarın devam",
+        "kaldığımız yerden",
+        "oturumu kapat",
+        "devir notu",
+        "yeni oturum",
+        "nerede kalmıştık"
+      ],
+      "offer": [],
+      "path": "team/skills/handoff-notes",
+      "notice": "team/skills/handoff-notes/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "skill",
+      "name": "next-step",
+      "category": "team",
+      "description": "Answers what to do now with one recommended next step and the reason: reads the files in .sibersentez/, the PLAN.md and TASKS.md in the project root, the git state and the latest test result, then names a skill or a single command. Changes nothing. Use when the user says what now, what should I do next, or I am lost.",
+      "tags": [
+        "workflow",
+        "planning"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "şimdi ne yapayım",
+        "şimdi ne yapmam gerekiyor",
+        "sıradaki adım*",
+        "sonraki adım*",
+        "sırada ne var",
+        "bundan sonra ne",
+        "kaybolduk"
+      ],
+      "offer": [],
+      "path": "team/skills/next-step",
+      "notice": "team/skills/next-step/LICENSE.md",
+      "version": "0.1.1"
+    },
+    {
+      "kind": "skill",
+      "name": "orchestrate",
+      "category": "team",
+      "description": "Runs a whole job from start to finish with a small team of roles (plan, build, check, finish), handing work over through files in .sibersentez/. Sizes the job first, never writes code itself, asks you only to approve the plan and the result. Use when the user says do this job, build this feature from start to finish, or take care of it for me.",
+      "tags": [
+        "workflow",
+        "planning"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "bu işi yap",
+        "baştan sona",
+        "uçtan uca",
+        "yapay zeka ekibi*",
+        "işi bitir",
+        "sen halret",
+        "ekip halinde",
+        "ajanlarla çalış"
+      ],
+      "offer": [],
+      "path": "team/skills/orchestrate",
+      "notice": "team/skills/orchestrate/LICENSE.md",
+      "version": "0.1.7"
+    },
+    {
+      "kind": "skill",
+      "name": "orchestrate-build",
+      "category": "team",
+      "description": "Build step of a team job: hands one task at a time from TASKS.md to its role (in a medium or big job the tester's red test first, then the builder), reads each report file and keeps task statuses honest. The conductor never writes code. Use when the user says start building the approved plan, do the next task, or continue the team work.",
+      "tags": [
+        "workflow",
+        "testing"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "yapıma başla",
+        "ekibin sıradaki görevi",
+        "ekip görevlerini yap",
+        "onaylanan planı uygula",
+        "işçiye ver",
+        "ekip işine devam"
+      ],
+      "offer": [],
+      "path": "team/skills/orchestrate-build",
+      "notice": "team/skills/orchestrate-build/LICENSE.md",
+      "version": "0.1.4"
+    },
+    {
+      "kind": "skill",
+      "name": "orchestrate-plan",
+      "category": "team",
+      "description": "Plan step of a team job: clarifies the goal, writes .sibersentez/PLAN.md and .sibersentez/TASKS.md (using any existing PLAN.md or TASKS.md as input) and gets the user's approval before any building starts. Use when the user says plan this job, break this feature into tasks for the team, or approve the plan before you start.",
+      "tags": [
+        "workflow",
+        "planning"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "ekip işini planla",
+        "ekip için plan",
+        "planı onayla",
+        "plan onayı",
+        "ekip planı",
+        "işi görevlere böl"
+      ],
+      "offer": [],
+      "path": "team/skills/orchestrate-plan",
+      "notice": "team/skills/orchestrate-plan/LICENSE.md",
+      "version": "0.1.5"
+    },
+    {
+      "kind": "skill",
+      "name": "orchestrate-review",
+      "category": "team",
+      "description": "Check step of a team job: gives finished work to the reviewer for an independent verdict, then one last look at the whole job, and runs at most two fix rounds through the builder or debugger before asking the user. Use when the user says check the work, have someone else review it, or is this really done.",
+      "tags": [
+        "workflow",
+        "code-review"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "ekip işini denetle",
+        "bağımsız denetim",
+        "yeni oturumda denetle",
+        "denetçiye ver",
+        "gerçekten bitti mi"
+      ],
+      "offer": [],
+      "path": "team/skills/orchestrate-review",
+      "notice": "team/skills/orchestrate-review/LICENSE.md",
+      "version": "0.1.3"
+    },
+    {
+      "kind": "skill",
+      "name": "orchestrate-wrapup",
+      "category": "team",
+      "description": "Finish step of a team job: checks the plan's done-when list item by item with fresh proof, notes drift from the plan, writes the summary into .sibersentez/LEDGER.md, suggests what to remember, gets the user's yes on the result and points to finish-branch. Use when the user says wrap it up, is the job finished, or what was done.",
+      "tags": [
+        "workflow",
+        "docs"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "işi kapat",
+        "özet çıkar",
+        "bitirdik mi",
+        "son kontrol",
+        "sonucu onayla",
+        "işi topla"
+      ],
+      "offer": [],
+      "path": "team/skills/orchestrate-wrapup",
+      "notice": "team/skills/orchestrate-wrapup/LICENSE.md",
+      "version": "0.1.2"
+    },
+    {
+      "kind": "skill",
+      "name": "project-memory",
+      "category": "team",
+      "description": "Keeps a short file of the project's lasting decisions, working commands and user preferences in .sibersentez/MEMORY.md, so every new session starts informed. Adds only short bullet points and never secrets. Use when the user says remember this, save this decision for later, or note how we run and test this project.",
+      "tags": [
+        "workflow",
+        "docs"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "bunu hatırla",
+        "proje hafızası",
+        "kararı kaydet",
+        "tercihlerimi not al",
+        "unutma",
+        "kalıcı not"
+      ],
+      "offer": [],
+      "path": "team/skills/project-memory",
+      "notice": "team/skills/project-memory/LICENSE.md",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "agent",
+      "name": "builder",
+      "category": "team",
+      "description": "General-purpose builder. Builds exactly one task from .sibersentez/TASKS.md inside the files that task lists, proves it with a red then green test (or the task's manual steps), and writes a report ending with a status word. Use when a planned task is ready, when a reviewer sent a task back, or for a small precise change.",
+      "tags": [
+        "workflow"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "verilen görevi yap",
+        "görevi uygula",
+        "kodu yaz",
+        "işçi ajan",
+        "görev dosyasına göre yaz"
+      ],
+      "offer": [],
+      "path": "team/agents/builder.md",
+      "notice": "frontmatter",
+      "version": "0.1.3"
+    },
+    {
+      "kind": "agent",
+      "name": "scout",
+      "category": "team",
+      "description": "Explores a codebase or answers one focused question about it, read-only, and returns findings with file paths and line numbers plus what it could not find. Use when a plan needs facts about existing code, when someone asks where something is done or how parts connect, or before changing an unfamiliar area.",
+      "tags": [
+        "workflow"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "keşfet*",
+        "araştır*",
+        "nerede yapılıyor",
+        "nasıl bağlanıyor",
+        "kodu tara*"
+      ],
+      "offer": [],
+      "path": "team/agents/scout.md",
+      "notice": "frontmatter",
+      "version": "0.1.0"
+    },
+    {
+      "kind": "agent",
+      "name": "task-slicer",
+      "category": "team",
+      "description": "Reads .sibersentez/PLAN.md and cuts it into small owned tasks in .sibersentez/TASKS.md, each with its files, a do-not-touch list, dependencies and an acceptance check. Use when an approved plan needs to become tasks for builders and testers, or when a task list must be redone after the plan changed.",
+      "tags": [
+        "workflow",
+        "planning"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "planı görevlere böl*",
+        "görev dilimle*",
+        "iş paketi",
+        "görev tablosu"
+      ],
+      "offer": [],
+      "path": "team/agents/task-slicer.md",
+      "notice": "frontmatter",
+      "version": "0.1.3"
+    }
+  ],
+  "proposedTags": []
+}

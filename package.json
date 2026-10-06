@@ -1,0 +1,111 @@
+{
+  "name": "sibersentez",
+  "productName": "SiberSentez",
+  "version": "0.14.0",
+  "description": "Build something with AI coding tools, even if you have never written code: start from an idea, with the AI tool you already have, and go back whenever you like. Runs only on this computer.",
+  "author": "Samet Nazlım",
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/VreBey/sibersentez-ai-coding-for-beginners#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VreBey/sibersentez-ai-coding-for-beginners.git"
+  },
+  "bugs": {
+    "url": "https://github.com/VreBey/sibersentez-ai-coding-for-beginners/issues"
+  },
+  "private": true,
+  "main": "electron/main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "devDependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "copyright": "Copyright (c) 2026 Samet Nazlım (https://sibersentez.com)",
+    "appId": "com.sibersentez.app",
+    "productName": "SiberSentez",
+    "artifactName": "SiberSentez-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "server/**",
+      "public/**",
+      "electron/**",
+      "package.json",
+      "!node_modules/node-pty/prebuilds/{darwin-*,linux-*,win32-arm64}/**",
+      "!node_modules/node-pty/{deps,src,scripts,third_party,typings}/**",
+      "!node_modules/node-pty/**/*.{pdb,cc,h,gyp,gypi,md}"
+    ],
+    "extraResources": [
+      {
+        "from": "kit",
+        "to": "kit"
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "allowElevation": false,
+      "packElevateHelper": false,
+      "include": "build/installer.nsh",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SiberSentez",
+      "deleteAppDataOnUninstall": false,
+      "multiLanguageInstaller": true,
+      "displayLanguageSelector": false,
+      "installerLanguages": [
+        "en_US",
+        "tr_TR"
+      ]
+    },
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "npmRebuild": false
+  },
+  "allowScripts": {
+    "electron-winstaller": false,
+    "node-pty@1.1.0": true
+  },
+  "dependencies": {
+    "node-pty": "1.1.0"
+  }
+}

@@ -1,2 +1,10 @@
+# Text files are LF in every checkout, Windows included (core.autocrlf would turn them into CRLF, and the tests read
+# the sources as they are kept); Windows scripts keep CRLF (cmd and PowerShell expect it)
 * text=auto eol=lf
-*.webp binary
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.nsh text eol=crlf
+*.png binary
+*.ico binary
+*.woff2 binary

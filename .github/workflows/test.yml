@@ -1,0 +1,31 @@
+name: Tests
+
+# Every push and pull request: the whole test suite on Windows (the product is Windows only). No secrets are used and
+# nothing is published; the installer is built by hand (npm run dist), not here.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      # The tests never start Electron; its 100 MB binary is not needed here
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # The runner's own TEMP is an 8.3 short path (C:\Users\RUNNER~1\...): the tests compare real, long folder
+      # names, as on a person's computer; the runner's work drive gives a long one
+      - run: npm test
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}

@@ -1,0 +1,95 @@
+/* SiberSentez — calm turquoise dusk. Values only; original variable names preserved.
+   Variable Segoe and Cascadia are optional local fonts; Segoe UI and Consolas are fallbacks. */
+:root {
+  /* Surfaces */
+  --bg: #0F1624;
+  --bg-2: #131C2B;
+  --panel: #182232;
+  --panel-solid: #1B2637;
+  --panel-2: #223044;
+  --line: #FFFFFF12;
+  --line-2: #FFFFFF29;
+  /* Text */
+  --text: #EDF2F7;
+  --text-2: #BFCBDC;
+  --muted: #98A9BF;
+  /* Colours with a meaning: accent (links, the chosen item), gold (the library, skills), busy (working, success),
+     idle (waiting for you, warnings), stop (errors, danger), orange (running agents), pink and teal (accents) */
+  --accent: #39B6C7;
+  --gold: #DE7D2C;
+  --busy: #79CBA5;
+  --idle: #E8D16A;
+  --stop: #F18B94;
+  --pink: #CF98BE;
+  --teal: #86C8CD;
+  --orange: #DE7D2C;
+  /* The same colours as channels, for tints */
+  --accent-rgb: 57, 182, 199;
+  --gold-rgb: 222, 125, 44;
+  --busy-rgb: 121, 203, 165;
+  --idle-rgb: 232, 209, 106;
+  --stop-rgb: 241, 139, 148;
+  --orange-rgb: 222, 125, 44;
+  --teal-rgb: 134, 200, 205;
+  --pink-rgb: 207, 152, 190;
+  /* Light on dark (white tints over a surface) and shade (black shadows and scrims): a light theme swaps them */
+  --tint-rgb: 255, 255, 255;
+  --shade-rgb: 0, 0, 0;
+  /* Shape and type */
+  --radius: 14px;
+  --radius-sm: 8px;
+  --font: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --display: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  --mono: "Cascadia Mono", Consolas, monospace;
+  --shadow: 0 18px 50px #050A144D;
+  /* Modern HQ building (cutaway-hq.js, hq.css): the night behind the art, the name plates, their gold words, the
+     dimming of a quiet floor and the light of a tool call */
+  --hq-bg: #111B2B;
+  --hq-plate: #101A2A;
+  --hq-card: #1A2638;
+  --hq-note: #202B40;
+  --hq-line: #53647D;
+  --hq-text: #EDF2F7;
+  --hq-note-text: #C0CCDE;
+  --hq-gold: #DEB58C;
+  --hq-gold-2: #F0C59C;
+  --hq-focus: #64CAD6;
+  --hq-hover: #C7EDF0;
+  --hq-shade: #080F1D;
+  --hq-flash: #8BD7C7;
+  --hq-mark: #39291F;
+  /* The workshop (views/workshop.js, hq-render.js; the "Bina Onayli" design of 2026-10-01): the guide's scrim, the
+     figures and furniture drawn in code, and the screen's surfaces, borders and glow */
+  --hq-scrim: rgba(8, 15, 29, 0.88);
+  --hq-person-shirt: #243B58;
+  --hq-person-hair: #302824;
+  --hq-skin: #D7A37B;
+  --hq-skin-shade: #AA7858;
+  --hq-metal: #DAE3E8;
+  --hq-metal-dark: #687885;
+  --hq-chair-body: #222C35;
+  --hq-shoe: #49362C;
+  --hq-shell: #0B111C;
+  --hq-surface: #121C2A;
+  --hq-raised: #192638;
+  --hq-border: #29394C;
+  --hq-soft: #8293AB;
+  --hq-glow: rgba(57, 182, 199, 0.08);
+  color-scheme: dark;
+}
+
+/* WCAG contrast verification: opaque sRGB token pairs, relative luminance.
+   --text / --bg: 16.07:1 (minimum 4.5:1, PASS)
+   --text / --panel: 14.19:1 (minimum 4.5:1, PASS)
+   --text-2 / --bg: 11.02:1 (minimum 4.5:1, PASS)
+   --text-2 / --panel: 9.74:1 (minimum 4.5:1, PASS)
+   --muted / --bg: 7.55:1 (minimum 4.5:1, PASS)
+   --muted / --panel: 6.67:1 (minimum 4.5:1, PASS)
+   --accent / --panel: 6.61:1 (minimum 3:1, PASS)
+   --busy / --panel: 8.30:1 (minimum 3:1, PASS)
+   --idle / --panel: 10.47:1 (minimum 3:1, PASS)
+   --stop / --panel: 6.74:1 (minimum 3:1, PASS)
+   --gold / --panel: 5.39:1 (minimum 3:1, PASS)
+   --orange / --panel: 5.39:1 (minimum 3:1, PASS)
+   These ratios do not certify composited tints, opacity, or the whole application.
+*/

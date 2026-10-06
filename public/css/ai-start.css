@@ -1,0 +1,133 @@
+/* Styles of starting an AI tool (docs/ai-start.md). Loaded after app.css. */
+
+/* ---------- "Then: start with AI" in the project drawer ---------- */
+.ai-start .flow-btns { margin-top: 2px; }
+.ai-idea { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 13px; color: var(--text); cursor: pointer; }
+.ai-idea input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+.ai-idea-hint { margin: 0 0 10px; }
+.ai-notes { margin: 8px 0 0; padding: 0 0 0 18px; color: var(--text-2); }
+.ai-notes li { margin: 2px 0; }
+.ai-status { margin: 8px 0 0; color: var(--text-2); }
+.ai-status.warn { color: var(--idle); }
+.ai-none { margin-top: 10px; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line-2); display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ai-none p { margin: 0; flex: 1 1 200px; }
+.ai-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0 0; color: var(--muted); }
+.ai-link { padding: 2px 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.ai-link:hover { color: #a9bcff; }
+.ai-link[disabled] { color: var(--muted); text-decoration: none; cursor: default; }
+.ai-link:focus-visible, .ai-idea input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- the tools panel (a dialog over the page and the drawer) ---------- */
+.ai-panel-scrim { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; background: rgba(3, 4, 8, 0.62); backdrop-filter: blur(3px); }
+.ai-panel-scrim[hidden] { display: none; }
+.ai-panel {
+  width: min(760px, 100%); max-height: min(88vh, 900px); overflow: auto; padding: 20px 22px 18px; border-radius: var(--radius);
+  background-color: #0f121b; background-image: linear-gradient(180deg, #131826, #0c0f16); border: 1px solid var(--line-2); box-shadow: var(--shadow);
+  --muted: #8f98ae;
+}
+.ai-panel:focus { outline: none; }
+.ai-panel-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.ai-panel-head h2 { margin: 0; flex: 1; display: flex; align-items: center; gap: 8px; font: 650 18px/1.3 var(--display); }
+.ai-panel-head h2 .ic { width: 18px; height: 18px; color: var(--gold); }
+.ai-panel-intro { margin: 0 0 12px; color: var(--text-2); font-size: 13.5px; }
+.ai-panel-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 12px; }
+.ai-panel-bar .act-btn[disabled] { opacity: 0.55; cursor: progress; }
+.ai-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ai-card { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(var(--tint-rgb), 0.025); }
+.ai-card.on { border-color: rgba(var(--busy-rgb), 0.3); background: rgba(var(--busy-rgb), 0.04); }
+.ai-card p { margin: 6px 0 0; }
+.ai-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ai-card-head b { font-size: 14px; margin-right: auto; }
+.ai-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid var(--line-2); color: var(--text-2); }
+.ai-chip.ok { color: var(--busy); border-color: rgba(var(--busy-rgb), 0.4); background: rgba(var(--busy-rgb), 0.08); }
+.ai-chip.off { color: var(--muted); }
+.ai-chip.ready-yes { color: #d9ffe9; }
+.ai-chip.ready-no { color: var(--idle); border-color: rgba(var(--idle-rgb), 0.45); }
+.ai-chip.ready-unknown { color: var(--text-2); }
+.ai-warn { color: var(--idle); }
+.ai-how-h { color: var(--muted); }
+.ai-cmds { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ai-cmd { display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.ai-how { font-size: 12px; color: var(--text-2); }
+.ai-cmd code { display: block; padding: 6px 9px; border-radius: 8px; background: rgba(var(--shade-rgb), 0.35); border: 1px solid var(--line); font: 12px/1.45 var(--mono); color: var(--text); overflow-wrap: anywhere; user-select: all; }
+.ai-copy { min-height: 30px; padding: 4px 10px; font-size: 12px; }
+.ai-copy .ic { width: 14px; height: 14px; }
+.ai-copy[data-done] { border-color: rgba(var(--busy-rgb), 0.5); color: var(--busy); }
+.ai-card a { color: var(--accent); }
+.ai-panel-foot { margin: 14px 0 0; }
+
+@media (max-width: 560px) {
+  .ai-cmd { grid-template-columns: minmax(0, 1fr) auto; }
+  .ai-how { grid-column: 1 / -1; }
+  .ai-panel { padding: 16px 14px; }
+}
+
+@media (forced-colors: active) {
+  .ai-panel, .ai-card, .ai-chip, .ai-none, .ai-cmd code { border: 1px solid CanvasText; }
+  .ai-link { color: LinkText; }
+}
+
+/* ---------- the setup check and the error box (public/js/setupCheck.js) ---------- */
+.sc { margin: 0 0 14px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line-2); background: rgba(var(--tint-rgb), 0.02); }
+.sc h3 { margin: 0 0 4px; font: 650 14px/1.3 var(--display); }
+.sc > p { margin: 4px 0 0; }
+.sc-ok { color: var(--busy); display: flex; align-items: center; gap: 6px; }
+.sc-ok .ic { width: 15px; height: 15px; }
+.sc-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sc-item { padding: 8px 10px 9px 12px; border-radius: 10px; border-left: 3px solid var(--line-2); background: rgba(var(--shade-rgb), 0.18); }
+.sc-item.warn { border-left-color: var(--idle); }
+.sc-item.info { border-left-color: var(--accent); }
+.sc-item b { font-size: 13.5px; }
+.sc-item p { margin: 3px 0 0; color: var(--text-2); }
+.sc-fixes { margin-top: 6px; }
+.sc-err { margin: 14px 0 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line-2); }
+.sc-err summary { cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.sc-err summary:focus-visible, .sc-text:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sc-err > p { margin: 6px 0; }
+.sc-text { width: 100%; box-sizing: border-box; resize: vertical; min-height: 72px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-2); background: rgba(var(--shade-rgb), 0.35); color: var(--text); font: 12px/1.45 var(--mono); }
+
+/* The header button that opens the tools panel (next to the guide's ?) */
+.tools-btn .ic { width: 16px; height: 16px; color: var(--gold); }
+
+/* "How to run it" in the project drawer (runHint.js): numbered steps, each command with a copy button */
+.run-plan + .run-plan { margin-top: 10px; }
+.run-kind { display: block; font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+.run-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.run-steps > li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: start; }
+.run-steps p { margin: 1px 0 4px; }
+.run-n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line-2); font-size: 11px; font-weight: 700; color: var(--muted); }
+.run-cmd { grid-template-columns: minmax(0, 1fr) auto; margin: 2px 0 8px; }
+.run-cmd.can-type { grid-template-columns: minmax(0, 1fr) auto auto; }
+
+/* "What changed" in the project drawer (changes.js): one line per file, its kind, its name, how long ago */
+.chg-list { list-style: none; margin: 6px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.chg-list li { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12px; }
+.chg-list code { font: 12px/1.4 var(--mono); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chg-list time { color: var(--muted); font-size: 11px; }
+.chg-kind { font-size: 11px; font-weight: 650; padding: 1px 6px; border-radius: 6px; text-align: center; background: rgba(var(--tint-rgb), 0.06); color: var(--text-2); }
+.chg-kind.k-new { color: var(--busy); background: rgba(var(--busy-rgb), 0.12); }
+.chg-kind.k-deleted { color: var(--stop); background: rgba(var(--stop-rgb), 0.12); }
+/* "Type in terminal" beside a command of the tools panel (views/tools.js addTypeButtons) */
+.ai-cmd.can-type { grid-template-columns: 86px minmax(0, 1fr) auto auto; }
+@media (max-width: 640px) { .ai-cmd.can-type { grid-template-columns: minmax(0, 1fr) auto auto; } }
+/* "Do a job" (views/job.js): the four steps of the team flow, the job box and the team install line */
+.job-steps { list-style: none; margin: 4px 0 6px; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.job-steps > li { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-2); color: var(--muted); font-size: 12px; font-weight: 600; text-align: center; }
+.job-steps > li.done { color: var(--busy); border-color: rgba(var(--busy-rgb), 0.45); }
+.job-steps > li.now { color: var(--text); border-color: var(--accent); background: rgba(var(--accent-rgb), 0.14); }
+.job-now { margin: 0 0 8px; }
+.job-label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+.job-text { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-2); background: rgba(var(--accent-rgb), 0.04); color: var(--text); font: inherit; }
+.job-text:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.job-team { margin: 6px 0; }
+.job-team.ok { color: var(--busy); }
+
+/* Restore points (public/js/restore.js) */
+.rst-list { list-style: none; margin: 6px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rst-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.rst-row.on .rst-meta { color: var(--text); font-weight: 600; }
+.rst-meta { color: var(--text-2); min-width: 0; }
+.rst-confirm { margin-top: 8px; }
+.rst-l { margin: 6px 0 2px; }
+.rst-names { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rst-names code { font: 12px/1.4 var(--mono); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }

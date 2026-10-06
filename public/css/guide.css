@@ -1,0 +1,47 @@
+/* First-run guide (docs/first-run.md): a centered card over a dim page, and a soft ring on the part of the page the
+   current step talks about. Motion follows motion.css; reduced motion turns it off there. */
+.guide-wrap { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(4, 5, 9, 0.4); }
+.guide-wrap[hidden] { display: none; }
+.guide { width: min(460px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 18px 20px 16px; border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; }
+.guide-head { display: flex; align-items: center; gap: 10px; }
+.guide-ic { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(var(--accent-rgb), 0.14); color: var(--accent); flex: none; }
+.guide-ic .ic { width: 18px; height: 18px; }
+.guide-count { font-size: 12px; color: var(--muted); }
+.guide-x { margin-left: auto; }
+.guide h2 { margin: 2px 0 0; font: 650 18px var(--display); color: var(--text); }
+.guide p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-2); }
+.guide .guide-again { font-size: 12px; color: var(--muted); }
+.guide-go { align-self: flex-start; color: var(--accent); border-color: rgba(var(--accent-rgb), 0.4); }
+.guide-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
+.guide-dots { display: flex; gap: 6px; }
+.guide-dot { width: 8px; height: 8px; padding: 0; border-radius: 50%; border: 0; background: var(--line-2); cursor: pointer; }
+.guide-dot.on { background: var(--accent); width: 18px; border-radius: 4px; }
+.guide-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.guide-nav { display: flex; gap: 8px; margin-left: auto; }
+.guide-next { color: #fff; background: rgba(var(--accent-rgb), 0.22); border-color: rgba(var(--accent-rgb), 0.55); }
+
+/* The page part the step points at: a ring that still reads through the light dim layer (the header and the tabs
+   are their own stacking contexts, so a z-index here could not lift it above the layer) */
+.guide-spot { box-shadow: 0 0 0 2px var(--accent), 0 0 0 8px rgba(var(--accent-rgb), 0.35); border-radius: 10px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .guide { transition: opacity var(--dur-med) var(--ease-out), transform var(--dur-med) var(--ease-out); }
+  @starting-style { .guide { opacity: 0; transform: translateY(8px) scale(0.98); } }
+  .guide-dot { transition: width var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+}
+
+/* The header's "?" button */
+.guide-btn { font: 650 14px var(--font); color: var(--text-2); }
+
+/* The full tour (tour.js): no dim layer, the page stays visible and alive; the box sits at the bottom middle, away
+   from what the steps point at (the side menu, the header, the top and the right of the Building) */
+.tour-wrap { position: fixed; left: 50%; bottom: 16px; z-index: 81; width: min(470px, calc(100vw - 32px)); transform: translateX(-50%); pointer-events: none; }
+.tour-wrap[hidden] { display: none; }
+.tour { pointer-events: auto; padding: 16px 18px 14px; border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px; border: 1px solid rgba(var(--accent-rgb), 0.45); }
+.tour-head { display: flex; align-items: center; gap: 10px; }
+.tour-sim { font-size: 11px; color: var(--accent); border: 1px solid rgba(var(--accent-rgb), 0.4); border-radius: 999px; padding: 1px 8px; }
+.tour h2 { margin: 2px 0 0; font: 650 17px var(--display); color: var(--text); }
+.tour p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-2); }
+.tour-bar { flex: 1 1 140px; height: 6px; accent-color: var(--accent); }
+.tour .guide-x { margin-left: auto; }
+.guide-spot { scroll-margin: 120px; }

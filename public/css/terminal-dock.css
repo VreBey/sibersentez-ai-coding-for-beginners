@@ -1,0 +1,59 @@
+/* The terminal dock (docs/embedded-terminal.md): terminals at the bottom of the SiberSentez window, one tab each */
+body { padding-bottom: var(--dock-space, 0px); }
+.term-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; height: var(--td-h, 320px); display: flex; flex-direction: column; background: #0b0d14; border-top: 1px solid var(--line-2); box-shadow: 0 -12px 32px rgba(var(--shade-rgb), 0.45); }
+.term-dock.folded { height: 38px; }
+.term-dock.folded .td-body, .term-dock.folded .td-grip { display: none; }
+.td-grip { height: 6px; margin-top: -3px; cursor: ns-resize; flex: none; }
+.td-grip:focus-visible { outline: 2px solid #8ab4ff; outline-offset: -2px; }
+.td-bar { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px; flex: none; border-bottom: 1px solid var(--line-2); }
+.td-tabs { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.td-kind { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
+.td-tab { display: inline-flex; align-items: center; gap: 7px; height: 28px; max-width: 220px; padding: 0 6px 0 10px; border: 0; border-radius: 7px 7px 0 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; flex: none; }
+.td-tab:hover { background: rgba(var(--tint-rgb), 0.05); color: var(--text); }
+.td-tab.on { background: rgba(var(--tint-rgb), 0.08); color: #f3f5fa; }
+.td-tab:focus-visible { outline: 2px solid #8ab4ff; outline-offset: -2px; }
+.td-tab .td-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.td-tab.unread .td-dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent); }
+.td-tab.ended { opacity: 0.6; }
+/* The tool asks something (promptHelp.js): the waiting colour, pulsing like a waiting session */
+.td-tab.asks .td-dot { background: var(--waiting); }
+@media (prefers-reduced-motion: reduce) { .td-tab.asks .td-dot { animation: none; } }
+.td-tab .td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-tab .td-x { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; }
+.td-tab .td-x:hover { background: rgba(var(--tint-rgb), 0.1); }
+/* An AI that ended by itself: going on where it stopped, at the foot of its terminal */
+.td-resume { position: absolute; left: 12px; right: 12px; bottom: 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--panel-solid); color: var(--text); font-size: 13px; z-index: 2; }
+/* The first close of a running AI: the tab says a second click stops it */
+.td-tab.confirm { color: var(--stop); border-color: currentColor; }
+.td-tab.confirm .td-x { background: rgba(var(--stop-rgb), 0.18); }
+.td-tab .td-x .ic { width: 13px; height: 13px; }
+.td-fold .td-chev { transition: transform 0.15s; }
+.term-dock.folded .td-fold .td-chev { transform: rotate(180deg); }
+.td-body { position: relative; flex: 1; min-height: 0; padding: 6px 0 0 10px; }
+.td-pane { position: absolute; inset: 6px 0 0 10px; }
+.td-pane[hidden] { display: none; }
+
+/* "What the AI asks" (public/js/promptHelp.js): a note over the terminal's top right; it only explains */
+.ph-box {
+  position: absolute; top: 8px; right: 14px; z-index: 3; width: min(360px, calc(100% - 28px)); max-height: calc(100% - 16px); overflow: auto;
+  padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(var(--idle-rgb), 0.6); background: var(--panel-solid); color: var(--text);
+  box-shadow: 0 10px 28px rgba(var(--shade-rgb), 0.5); font: 12.5px/1.45 var(--font);
+}
+.ph-box[hidden] { display: none; }
+.ph-head { display: flex; align-items: center; gap: 8px; }
+.ph-head b { flex: 1; font-size: 13.5px; color: var(--idle); }
+.ph-close { width: 24px; height: 24px; font-size: 16px; line-height: 1; }
+.ph-box p { margin: 6px 0 0; color: var(--text-2); }
+.ph-box code { display: block; margin-top: 6px; padding: 4px 7px; border-radius: 6px; background: rgba(var(--shade-rgb), 0.35); font: 12px var(--mono); color: var(--text); overflow-wrap: anywhere; }
+.ph-box .ph-pick { color: var(--text); }
+.ph-box .ph-warn { color: var(--stop); }
+.ph-box .ph-foot { font-size: 11.5px; color: var(--muted); }
+/* A known error's fix inside the note: the command gets the whole width, the copy button beside it */
+.ph-box .sc-list { margin-top: 2px; }
+.ph-box .ai-cmd { grid-template-columns: minmax(0, 1fr) auto; }
+.ph-box .ai-how { grid-column: 1 / -1; }
+
+/* A dev server's address (terminalDock.js showPreview): bottom right over the terminal, under the question note */
+.td-preview { position: absolute; right: 14px; bottom: 10px; z-index: 2; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; box-shadow: 0 8px 22px rgba(var(--shade-rgb), 0.45); }
+.td-preview[hidden] { display: none; }
+.td-preview .ic { width: 14px; height: 14px; }
