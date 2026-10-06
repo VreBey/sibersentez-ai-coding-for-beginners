@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Bash
 license: "MIT (see the notice at the top of this file)"
 metadata:
   author: "SiberSentez"
-  version: "0.2.3"
+  version: "0.2.4"
   sibersentez-tags: "code-review, security"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "incele*, kod inceleme, gözden geçir*, ikinci göz, kontrol et*"
@@ -55,6 +55,9 @@ Write your result in the language the request was written in.
 
 ## Result format
 
+For a team job, verify PLAN.md and TASKS.md match the conductor's current `Job-ID`, then copy it below the review
+heading. Missing/different ids are a blocker. Never relabel an old review; perform a fresh review.
+
 You write no file. Return the whole review as your answer, in exactly this shape (the values in it are examples);
 the conductor adds it unchanged to `.sibersentez/REVIEW.md` and reads the last line. Head a task review `## Review T2`
 (the task id) and the whole-job pass `## Review: whole job`. The conductor tells you the round in your prompt; copy
@@ -63,6 +66,7 @@ it to the `Round:` line and never work it out yourself.
 ```markdown
 ## Review T1
 
+Job-ID: <current job id>
 Reviewed in: a separate session | the same session, lower confidence
 Round: 1 of 2
 Notes: <none, or for example "no git, lower confidence">

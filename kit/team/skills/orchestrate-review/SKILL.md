@@ -4,7 +4,7 @@ description: "Check step of a team job: gives finished work to the reviewer for 
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.3"
+  version: "0.1.4"
   sibersentez-tags: "workflow, code-review"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "ekip işini denetle, bağımsız denetim, yeni oturumda denetle, denetçiye ver, gerçekten bitti mi"
@@ -41,6 +41,9 @@ Do not ask the user whether helpers exist. Your tool decides that.
 
 ## 2. What the reviewer gets
 
+Pass the current `Job-ID` from PLAN.md and verify TASKS.md agrees. Every review must copy it below its heading.
+A missing/different id never passes; perform a fresh review instead of relabeling an old one.
+
 The paths to `PLAN.md`, `TASKS.md`, `LEDGER.md` (it holds the start state) and every `REPORT-<id>.md`, plus the task
 ids to check, and the round ("Round: 1 of 2"): the reviewer cannot count rounds itself. The reviewer answers in
 this shape. You add that answer **unchanged** to `.sibersentez/REVIEW.md` under its own heading and never overwrite an
@@ -50,6 +53,7 @@ line in the file is the verdict that counts.
 ```markdown
 ## Review T1
 
+Job-ID: <current job id>
 Reviewed in: a separate session | the same session, lower confidence
 Round: 1 of 2
 Notes: <none, or for example "no git, lower confidence">
@@ -77,7 +81,8 @@ git the reviewer compares the `REPORT-<id>.md` file lists and notes "no git, low
 
 Read the last `VERDICT:` line of `REVIEW.md`.
 
-- `APPROVE` and no blockers: the work passes. Go to Finish.
+- `APPROVE` and no blockers on a task review: the task passes. When every task has passed, run the whole-job pass
+  (3b); only an `APPROVE` with no blockers in the latest `## Review: whole job` section goes to Finish.
 - Anything else: a **fix round**. Send each blocker to the `builder` (a missing or wrong change) or the `debugger` (a
   red test or a crash), with the review text and the task's `files` list. Their new report replaces the old one.
   Then ask for a new review of just those tasks; it is appended as a new section.
@@ -87,7 +92,8 @@ Count the rounds in `.sibersentez/LEDGER.md`. **At most two fix rounds.** If the
 Say in one sentence what is still wrong, and offer the user three plain choices:
 
 1. keep going: one more round on the same problem;
-2. accept it as it is: the problem stays, the ledger says so;
+2. accept it as it is: the problem stays, the ledger says so (the app keeps showing Check, since the last whole-job
+   review is not an approval);
 3. rethink the plan together: the plan may be the problem, so look at it again (`plan-challenge`).
 
 ## 3b. The whole-job pass

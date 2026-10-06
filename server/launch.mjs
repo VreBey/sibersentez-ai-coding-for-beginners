@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { newJobId, validJobId, jobMessageName } from './job-id.mjs';
 
 export const FIRST_DIR = '.sibersentez';
 // The folder's name before the product was renamed (2026-09-30)
@@ -53,7 +54,7 @@ const MAX_EXISTING = 64 * 1024; // an existing file larger than this is never re
 export const PROMPT_SAFE_RE = /^[A-Za-z0-9 .,'/_-]{1,200}$/;
 export function launchPrompt(fileName) {
   const p = `Please read ${FIRST_DIR}/${fileName} and follow it. Reply in the user's language.`;
-  if (!FIRST_NAMES.includes(fileName) || !PROMPT_SAFE_RE.test(p)) throw new Error('unsafe prompt');
+  if ((!FIRST_NAMES.includes(fileName) && !/^job-J[0-9a-f]{32}\.md$/.test(fileName)) || !PROMPT_SAFE_RE.test(p)) throw new Error('unsafe prompt');
   return p;
 }
 
@@ -108,13 +109,16 @@ export function firstMessageText(idea) {
 // characters), quoted, and the team flow of the SiberSentez kit (docs/kit-v2.md §3). The tool uses the orchestrate
 // skill when it is installed; otherwise it follows the same steps itself. SiberSentez writes nothing into the project's
 // own files: the tool may offer the starter lines of agent-rules, and adds them only after the person's yes.
-export function jobMessageText(job) {
+export function jobMessageText(job, jobId = newJobId()) {
+  if (!validJobId(jobId)) throw new Error('invalid job id');
   const quoted = String(job || '')
     .split(/\r?\n/)
     .map((l) => `> ${l}`.trimEnd())
     .join('\n');
   return [
     '# A job from SiberSentez',
+    '',
+    `Job-ID: ${jobId}`,
     '',
     'SiberSentez wrote this file so that you start from the job below. It is not part of the project: the .sibersentez',
     'folder has its own .gitignore.',
@@ -124,6 +128,15 @@ export function jobMessageText(job) {
     quoted,
     '',
     '## How I want it done',
+    '',
+    'Keep the Job-ID above for this job, including when resuming. Before any build, copy it as a top-level',
+    'Job-ID: line below the title in .sibersentez/PLAN.md and TASKS.md, and immediately below every review heading',
+    'in .sibersentez/REVIEW.md. Pass it to every helper. Never copy an old review into this job or relabel it.',
+    'The app owns .sibersentez/current-job.json; do not edit it. If it names another job, stop and explain that',
+    'a newer job was started. Existing plans, tasks and reviews with another or missing id belong to earlier work;',
+    'preserve them and make a fresh plan for this job. Always finish with an independent whole-job review under',
+    '## Review: whole job, with this Job-ID and a final VERDICT object containing verdict (APPROVE or REVISE),',
+    'blockers (an array) and nits (an array).',
     '',
     '1. Use the orchestrate skill for this job if it is installed. It runs Plan, Build, Check and Finish with a small',
     '   team of roles and keeps its files in the .sibersentez folder.',
@@ -271,12 +284,13 @@ function entryState(file, text, xfs) {
 // already is used as it is (nothing written), another text is never overwritten (the next name is tried).
 // { ok: true, folder: 'create' | 'keep', file, op: 'create' | 'same', gitignore: 'create' | 'keep' } or
 // { ok: false, error: 'first-message-blocked' | 'first-message-busy' }.
-export function planFirstMessage(dir, text, xfs = fs) {
+export function planFirstMessage(dir, text, xfs = fs, jobId = null) {
+  const names = jobId ? [jobMessageName(jobId)] : FIRST_NAMES;
   const folder = folderState(dir, xfs);
   if (folder === 'blocked') return { ok: false, error: 'first-message-blocked' };
   const gitignore = folder === 'missing' || entryState(path.join(dir, FIRST_DIR, '.gitignore'), GITIGNORE_TEXT, xfs) === 'missing' ? 'create' : 'keep';
-  if (folder === 'missing') return { ok: true, folder: 'create', file: FIRST_NAMES[0], op: 'create', gitignore };
-  for (const name of FIRST_NAMES) {
+  if (folder === 'missing') return { ok: true, folder: 'create', file: names[0], op: 'create', gitignore };
+  for (const name of names) {
     const s = entryState(path.join(dir, FIRST_DIR, name), text, xfs);
     if (s === 'missing') return { ok: true, folder: 'keep', file: name, op: 'create', gitignore };
     if (s === 'same') return { ok: true, folder: 'keep', file: name, op: 'same', gitignore };
@@ -287,7 +301,8 @@ export function planFirstMessage(dir, text, xfs = fs) {
 // Writes the first message (and .sibersentez/.gitignore when missing). Every file is created exclusively ('wx'): an
 // entry that appears meanwhile is never overwritten, it is read and compared like in planFirstMessage.
 // Returns the plan that was carried out, or { ok: false, error } ('first-message-failed' on a write error).
-export function writeFirstMessage(dir, text, xfs = fs) {
+export function writeFirstMessage(dir, text, xfs = fs, jobId = null) {
+  const names = jobId ? [jobMessageName(jobId)] : FIRST_NAMES;
   takeOverLegacyFolder(dir, xfs);
   const folderPath = path.join(dir, FIRST_DIR);
   let folder = folderState(dir, xfs);
@@ -315,7 +330,7 @@ export function writeFirstMessage(dir, text, xfs = fs) {
     if (g === 'failed') return { ok: false, error: 'first-message-failed' };
     gitignore = g === 'create' ? 'create' : 'keep';
   }
-  for (const name of FIRST_NAMES) {
+  for (const name of names) {
     const file = path.join(folderPath, name);
     const s = entryState(file, text, xfs);
     if (s === 'same') return { ok: true, folder: folder === 'missing' ? 'create' : 'keep', file: name, op: 'same', gitignore };

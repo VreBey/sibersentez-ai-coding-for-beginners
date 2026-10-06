@@ -33,6 +33,7 @@ import { createFit, planApplyImports, KEY_RE, normalizeIdea } from './fit.mjs';
 // "Start with AI" (docs/ai-start.md)
 import { sharedToolDetector, toolById, TOOL_IDS, envValue } from './tools.mjs';
 import { firstMessageText, jobMessageText, planFirstMessage, writeFirstMessage, launchPrompt, toolArgs, jobArgs, launcherText, pickLaunchDir, buildAiArgv, buildAiFallbackArgv, newLauncherName, cleanupLaunchers, SAFE_LAUNCH_RE } from './launch.mjs';
+import { newJobId, readCurrentJob, writeCurrentJob, CURRENT_JOB_FILE } from './job-id.mjs';
 import { createGitHub, cleanupIncoming, parseGitHubUrl, parseRepoName, describeDownload, planDownloadImport, readSources, findSource, updateSources, sourceRow, diffItems, FETCH_ID_RE } from './github.mjs';
 import { reviewItem } from './review.mjs';
 import { readKit } from './kit.mjs';
@@ -1150,11 +1151,17 @@ export function createActions({
     if (!where.ok || !SAFE_LAUNCH_RE.test(cmdExe)) return fail(409, 'launch-path-unsafe', 'launch-path');
 
     // 3. The first message: planned read-only here, written only in live mode
-    const text = ctx.job ? jobMessageText(ctx.job) : ctx.idea ? firstMessageText(ctx.idea) : null;
+    const jobId = ctx.job ? newJobId() : null;
+    if (jobId) base.jobId = jobId;
+    const text = ctx.job ? jobMessageText(ctx.job, jobId) : ctx.idea ? firstMessageText(ctx.idea) : null;
     let first = null;
     if (text) {
-      first = planFirstMessage(ctx.dir, text);
+      first = planFirstMessage(ctx.dir, text, fs, jobId);
       if (!first.ok) return fail(409, first.error, 'first-message');
+      if (jobId) {
+        const current = readCurrentJob(path.join(ctx.dir, '.sibersentez'));
+        if (current.present && !current.jobId) return fail(409, 'first-message-blocked', 'job-identity');
+      }
     }
     const launcher = newLauncherName();
     // In SiberSentez's own terminal the pseudo console starts in the project folder itself and cmd gets the launcher by
@@ -1179,7 +1186,7 @@ export function createActions({
     const restorePoint = await takeStartPoint(ctx.pointProjectId, ctx.job || '');
     const written = [];
     if (text) {
-      const w = writeFirstMessage(ctx.dir, text);
+      const w = writeFirstMessage(ctx.dir, text, fs, jobId);
       if (!w.ok) return fail(w.error === 'first-message-failed' ? 500 : 409, w.error, 'first-message');
       if (w.folder === 'create') written.push('.sibersentez/');
       if (w.gitignore === 'create') written.push('.sibersentez/.gitignore');
@@ -1187,6 +1194,11 @@ export function createActions({
       // Another start may have taken the planned name meanwhile: the prompt names the file really written
       if (w.file !== first.file) lt = makeLauncher(w.file);
       first = w;
+    }
+    if (jobId) {
+      const active = writeCurrentJob(path.join(ctx.dir, '.sibersentez'), jobId);
+      if (!active.ok) return fail(active.error === 'first-message-failed' ? 500 : 409, active.error, 'job-identity', { written });
+      written.push(`.sibersentez/${CURRENT_JOB_FILE}`);
     }
     const launcherFile = path.join(where.dir, launcher);
     try {

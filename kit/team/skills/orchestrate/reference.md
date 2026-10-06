@@ -41,6 +41,7 @@ files already changed in the start state written in `LEDGER.md`, and the `files`
 ```markdown
 # Plan: <short title>
 
+Job-ID: <current job id>
 Size: small | medium | big
 Goal: <one sentence>
 
@@ -65,6 +66,8 @@ Result: open
 
 ```markdown
 # Tasks
+
+Job-ID: <current job id>
 
 ## T1: Write a failing test for <behavior>
 - owner: tester
@@ -148,6 +151,7 @@ The last line is one status word and nothing else.
 ```markdown
 ## Review T1
 
+Job-ID: <current job id>
 Reviewed in: a separate session | the same session, lower confidence
 Round: 1 of 2
 Notes: <none, or for example "no git, lower confidence">

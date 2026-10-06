@@ -1,6 +1,6 @@
 {
   "name": "sibersentez-kit",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "license": "MIT (see LICENSE.md)",
   "count": 73,
   "items": [
@@ -552,7 +552,7 @@
       "offer": [],
       "path": "planning/agents/planner.md",
       "notice": "frontmatter",
-      "version": "0.2.2"
+      "version": "0.2.3"
     },
     {
       "kind": "skill",
@@ -838,7 +838,7 @@
       "offer": [],
       "path": "quality/agents/reviewer.md",
       "notice": "frontmatter",
-      "version": "0.2.3"
+      "version": "0.2.4"
     },
     {
       "kind": "agent",
@@ -1664,7 +1664,7 @@
       "offer": [],
       "path": "team/skills/orchestrate",
       "notice": "team/skills/orchestrate/LICENSE.md",
-      "version": "0.1.7"
+      "version": "0.1.8"
     },
     {
       "kind": "skill",
@@ -1710,7 +1710,7 @@
       "offer": [],
       "path": "team/skills/orchestrate-plan",
       "notice": "team/skills/orchestrate-plan/LICENSE.md",
-      "version": "0.1.5"
+      "version": "0.1.6"
     },
     {
       "kind": "skill",
@@ -1732,7 +1732,7 @@
       "offer": [],
       "path": "team/skills/orchestrate-review",
       "notice": "team/skills/orchestrate-review/LICENSE.md",
-      "version": "0.1.3"
+      "version": "0.1.4"
     },
     {
       "kind": "skill",
@@ -1755,7 +1755,7 @@
       "offer": [],
       "path": "team/skills/orchestrate-wrapup",
       "notice": "team/skills/orchestrate-wrapup/LICENSE.md",
-      "version": "0.1.2"
+      "version": "0.1.3"
     },
     {
       "kind": "skill",
@@ -1841,7 +1841,7 @@
       "offer": [],
       "path": "team/agents/task-slicer.md",
       "notice": "frontmatter",
-      "version": "0.1.3"
+      "version": "0.1.4"
     }
   ],
   "proposedTags": []

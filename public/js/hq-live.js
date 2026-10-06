@@ -108,7 +108,7 @@ export function liveSnapshot(store, p, { now = Date.now(), mainRoomKind = 'dev',
 const STEPS = ['plan', 'build', 'check', 'finish', 'done'];
 export function jobOf(d) {
   if (!d || !STEPS.includes(d.step)) return null;
-  return { step: d.step, tasks: d.tasks || null, review: d.review || null, current: d.current || null, title: d.plan?.title || null, updatedAt: d.updatedAt || null };
+  return { step: d.step, tasks: d.tasks || null, review: d.review || null, ...(d.reviewIssue === 'job-identity' ? { reviewIssue: d.reviewIssue } : {}), current: d.current || null, title: d.plan?.title || null, updatedAt: d.updatedAt || null };
 }
 
 // The project's feed and tool calls within the rewind's reach (the scene reads nothing older)

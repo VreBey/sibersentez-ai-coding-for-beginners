@@ -189,6 +189,12 @@ tool ends):
 
 ### What is written into the project
 
+For a job (`job`, rather than `withIdea`), the app issues a fresh id and exclusively creates
+`.sibersentez/job-<id>.md`, then atomically replaces its own `.sibersentez/current-job.json` marker. The marker
+binds the plan, tasks and each review to this job, so an older approval cannot finish it. Preview writes neither;
+resume keeps the existing identity. Unknown marker contents block the start. See [Job identity](kit-in-app.md#2-how-the-job-reaches-the-ai).
+The nine-name rule below applies to idea messages, not new job messages.
+
 Only in live mode, only with `withIdea: true` and a saved idea (`project.idea`; a session uses its project's):
 
 - `.sibersentez/ilk-mesaj.md` (UTF-8): the idea as a quote and plain instructions: work out a plan with me step by step

@@ -22,7 +22,7 @@ test('archive: newest first, at most HISTORY_MAX, real folders only, a Turkish n
   const arc = path.join(dir, '.sibersentez', 'archive');
   write(path.join(arc, '2026-09-30-giris-sayfasi', 'PLAN.md'), '# Plan: Giriş sayfası\n\nApproved: yes\nResult: accepted\n');
   write(path.join(arc, '2026-09-30-giris-sayfasi', 'TASKS.md'), '## T1: Form\n- status: done\n\n## T2: Şifre\n- status: done\n');
-  write(path.join(arc, '2026-10-01-menü-sayfası', 'REVIEW.md'), 'VERDICT: {"verdict":"REVISE","blockers":1,"nits":0}\n');
+  write(path.join(arc, '2026-10-01-menü-sayfası', 'REVIEW.md'), 'VERDICT: {"verdict":"REVISE","blockers":["Fix the menu"],"nits":[]}\n');
   write(path.join(arc, 'notes.txt'), 'not a job');
   fs.mkdirSync(path.join(ROOT, 'elsewhere'));
   fs.symlinkSync(path.join(ROOT, 'elsewhere'), path.join(arc, '2026-10-02-link'), 'junction');

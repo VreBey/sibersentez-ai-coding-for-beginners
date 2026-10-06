@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Write
 license: "MIT (see the notice at the top of this file)"
 metadata:
   author: "SiberSentez"
-  version: "0.2.2"
+  version: "0.2.3"
   sibersentez-tags: "planning"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "planla*, plan yap*, plan çıkar*, nasıl yaparım, yaklaşım, yol haritası"
@@ -62,6 +62,8 @@ Keep it to one screen. Mention packages to install or accounts to create as prop
 
 ## Hand-off contract
 
+- For a team job, copy the conductor's current `Job-ID:` below the plan title, before any sections. Retain it
+  across revisions; a missing id needs a decision. Never infer it from an old review.
 - Reads: the request, the project's notes and code, `PLAN.md` or `TASKS.md` in the project root (as input only, never
   changed) and `.sibersentez/HANDOFF.md` and `.sibersentez/MEMORY.md` when they exist.
 - When the request is a team job, your only write is `.sibersentez/PLAN.md`. Its sections: `Size:` (small, medium or

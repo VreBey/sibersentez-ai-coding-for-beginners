@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Write
 license: "MIT (see the notice at the top of this file)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.3"
+  version: "0.1.4"
   sibersentez-tags: "workflow, planning"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "planı görevlere böl*, görev dilimle*, iş paketi, görev tablosu"
@@ -31,6 +31,9 @@ Write your result in the language the request was written in. Keep the key words
 `depends on`, `acceptance`, `risks`, `status`) in English.
 
 ## How to slice
+
+Copy the plan's `Job-ID:` below the TASKS.md title, before tasks. If it is missing or differs from the conductor's
+current id, report NEEDS_CONTEXT instead of reusing old tasks. Retain it across revisions.
 
 1. Read `.sibersentez/PLAN.md` (goal, scope, approach, done-when) and the code the plan points to. Find the real paths.
 2. Cut the work into tasks of one to two hours. A task that would take longer than about two hours, or would touch

@@ -4,7 +4,7 @@ description: "Finish step of a team job: checks the plan's done-when list item b
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.2"
+  version: "0.1.3"
   sibersentez-tags: "workflow, docs"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "işi kapat, özet çıkar, bitirdik mi, son kontrol, sonucu onayla, işi topla"
@@ -24,6 +24,9 @@ left. You write no application code.
 - Never switch off your tool's permission prompts or safety checks, and never tell the user to.
 
 ## 1. Check the promise
+
+PLAN.md, TASKS.md and the latest whole-job review must carry the current `Job-ID`. Missing/different ids mean
+the evidence cannot close this job: return to planning/checking. Never relabel an old review to make it pass.
 
 1. Read `.sibersentez/PLAN.md`. Take its **Done when** list.
 2. For each item, find the proof: a report file, a command result in `REVIEW.md`, or something you can run now. When

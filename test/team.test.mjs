@@ -30,10 +30,10 @@ const TASKS = [
 ].join('\n');
 
 test('plan: title, size and approval; an unapproved or empty plan', () => {
-  assert.deepEqual(parsePlan(PLAN), { title: 'Sign-in page', size: 'small', approved: true, accepted: false });
-  assert.deepEqual(parsePlan('# Plan: x\nApproved: no\n'), { title: 'x', size: null, approved: false, accepted: false });
+  assert.deepEqual(parsePlan(PLAN), { title: 'Sign-in page', size: 'small', approved: true, accepted: false, jobId: null, legacy: true });
+  assert.deepEqual(parsePlan('# Plan: x\nApproved: no\n'), { title: 'x', size: null, approved: false, accepted: false, jobId: null, legacy: true });
   // The wrap-up's "Result: accepted"; markdown marks leave the title (the drawer showed `index.html` with its backticks)
-  assert.deepEqual(parsePlan('# Plan: The `index.html` **list**\nApproved: yes\nResult: accepted\n'), { title: 'The index.html list', size: null, approved: true, accepted: true });
+  assert.deepEqual(parsePlan('# Plan: The `index.html` **list**\nApproved: yes\nResult: accepted\n'), { title: 'The index.html list', size: null, approved: true, accepted: true, jobId: null, legacy: true });
   assert.equal(parsePlan('# Plan: x\nApproved: yes\nResult: open\n').accepted, false);
   assert.equal(parseTasks('## T1: Write `index.html`\n- status: doing\n')[0].title, 'Write index.html');
   assert.equal(parsePlan(''), null);
@@ -42,9 +42,9 @@ test('plan: title, size and approval; an unapproved or empty plan', () => {
 
 test('tasks: id, title, owner and status per block; an unknown status counts as todo', () => {
   assert.deepEqual(parseTasks(TASKS), [
-    { id: 'T1', title: 'Write a failing test for sign-in', owner: 'tester', status: 'done' },
-    { id: 'T2', title: 'Implement sign-in', owner: 'builder', status: 'doing' },
-    { id: 'T3', title: 'Odd status', owner: 'builder', status: 'todo' },
+    { id: 'T1', title: 'Write a failing test for sign-in', owner: 'tester', status: 'done', jobId: null },
+    { id: 'T2', title: 'Implement sign-in', owner: 'builder', status: 'doing', jobId: null },
+    { id: 'T3', title: 'Odd status', owner: 'builder', status: 'todo', jobId: null },
   ]);
   assert.deepEqual(parseTasks('no tasks here'), []);
   assert.equal(parseTasks(`## T1: ${'x'.repeat(500)}\n- status: todo`)[0].title.length, 120, 'a long title is cut');
@@ -52,14 +52,14 @@ test('tasks: id, title, owner and status per block; an unknown status counts as 
 
 test('verdict: the last VERDICT line wins; broken JSON or an unknown verdict is none', () => {
   const two = 'first\nVERDICT: {"verdict":"REVISE","blockers":[{"file":"a"}],"nits":[]}\nfixed\nVERDICT: {"verdict":"APPROVE","blockers":[],"nits":["x"]}\n';
-  assert.deepEqual(parseVerdict(two), { verdict: 'APPROVE', blockers: 0, nits: 1, tasks: [] });
-  // The tasks the review headings of the file name (up to the last verdict)
+  assert.deepEqual(parseVerdict(two), { verdict: 'APPROVE', blockers: 0, nits: 1, tasks: [], scope: 'unknown', jobId: null });
+  // A task verdict belongs only to the last review section, not all previous headings.
   const headed = '## Review T1\nVERDICT: {"verdict":"APPROVE","blockers":[],"nits":[]}\n## Review T2, t3 (round 2)\nVERDICT: {"verdict":"REVISE","blockers":[{}],"nits":[]}\n';
-  assert.deepEqual(parseVerdict(headed), { verdict: 'REVISE', blockers: 1, nits: 0, tasks: ['T1', 'T2', 'T3'] });
+  assert.deepEqual(parseVerdict(headed), { verdict: 'REVISE', blockers: 1, nits: 0, tasks: ['T2', 'T3'], scope: 'tasks', jobId: null });
   assert.deepEqual(parseVerdict('## Review of the whole job\nVERDICT: {"verdict":"APPROVE","blockers":[],"nits":[]}').tasks, []);
   // The real file of the first job: a task review, then a whole-job review last; it still says it checked T1
   const firstJob = '## Review T1\nVERDICT: {"verdict":"APPROVE","blockers":[],"nits":["a"]}\n## Review: whole job\nVERDICT: {"verdict":"APPROVE","blockers":[],"nits":["a","b"]}\n';
-  assert.deepEqual(parseVerdict(firstJob), { verdict: 'APPROVE', blockers: 0, nits: 2, tasks: ['T1'] });
+  assert.deepEqual(parseVerdict(firstJob), { verdict: 'APPROVE', blockers: 0, nits: 2, tasks: ['T1'], scope: 'whole', jobId: null });
   assert.equal(teamStep({ plan: { title: 'x', approved: true }, tasks: [{ id: 'T2', status: 'done' }], review: parseVerdict(firstJob) }), 'check');
   assert.equal(parseVerdict('VERDICT: {not json}'), null);
   assert.equal(parseVerdict('VERDICT: {"verdict":"MAYBE"}'), null);
@@ -67,8 +67,9 @@ test('verdict: the last VERDICT line wins; broken JSON or an unknown verdict is 
 });
 
 test('step: none, plan, build, check, finish', () => {
-  const tasks = (...s) => s.map((status, i) => ({ id: `T${i + 1}`, title: '', owner: 'builder', status }));
-  const ok = { title: 'x', size: 'small', approved: true };
+  const jobId = 'J' + 'a'.repeat(32);
+  const tasks = (...s) => s.map((status, i) => ({ id: `T${i + 1}`, title: '', owner: 'builder', status, jobId }));
+  const ok = { title: 'x', size: 'small', approved: true, jobId };
   assert.equal(teamStep({ plan: null, tasks: [], review: null }), 'none');
   assert.equal(teamStep({ plan: { ...ok, approved: false }, tasks: tasks('todo'), review: null }), 'plan');
   assert.equal(teamStep({ plan: ok, tasks: [], review: null }), 'plan');
@@ -76,15 +77,15 @@ test('step: none, plan, build, check, finish', () => {
   assert.equal(teamStep({ plan: ok, tasks: tasks('done', 'blocked'), review: null }), 'build');
   assert.equal(teamStep({ plan: ok, tasks: tasks('done', 'done'), review: null }), 'check');
   assert.equal(teamStep({ plan: ok, tasks: tasks('done'), review: { verdict: 'REVISE', blockers: 1, nits: 0 } }), 'check');
-  assert.equal(teamStep({ plan: ok, tasks: tasks('done'), review: { verdict: 'APPROVE', blockers: 0, nits: 2 } }), 'finish');
+  assert.equal(teamStep({ plan: ok, tasks: tasks('done'), review: { verdict: 'APPROVE', blockers: 0, nits: 2, scope: 'whole', jobId } }), 'finish');
   // A second job (T2) with the first job's review (T1) still in the folder: not checked yet (the drawer showed Finish)
-  const second = [{ id: 'T2', title: '', owner: 'builder', status: 'done' }];
-  const old = { verdict: 'APPROVE', blockers: 0, nits: 4, tasks: ['T1'] };
+  const second = [{ id: 'T2', title: '', owner: 'builder', status: 'done', jobId }];
+  const old = { verdict: 'APPROVE', blockers: 0, nits: 4, tasks: ['T1'], scope: 'whole', jobId };
   assert.equal(teamStep({ plan: ok, tasks: second, review: old }), 'check');
   assert.equal(teamSummary({ plan: ok, tasks: second, review: old }).review, null);
   assert.equal(teamStep({ plan: ok, tasks: second, review: { ...old, tasks: ['T1', 'T2'] } }), 'finish');
   assert.equal(reviewOf(second, { ...old, tasks: [] }).nits, 4, 'a review naming no task counts');
-  assert.equal(teamStep({ plan: { ...ok, accepted: true }, tasks: tasks('done'), review: { verdict: 'APPROVE', blockers: 0, nits: 2 } }), 'done');
+  assert.equal(teamStep({ plan: { ...ok, accepted: true }, tasks: tasks('done'), review: { verdict: 'APPROVE', blockers: 0, nits: 2, scope: 'whole', jobId } }), 'done');
   // Accepted but a REVISE came after: the check comes first
   assert.equal(teamStep({ plan: { ...ok, accepted: true }, tasks: tasks('done'), review: { verdict: 'REVISE', blockers: 1, nits: 0 } }), 'check');
   const s = teamSummary({ plan: ok, tasks: tasks('done', 'todo', 'doing'), review: null });

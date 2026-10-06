@@ -4,7 +4,7 @@ description: "Plan step of a team job: clarifies the goal, writes .sibersentez/P
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.5"
+  version: "0.1.6"
   sibersentez-tags: "workflow, planning"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "ekip işini planla, ekip için plan, planı onayla, plan onayı, ekip planı, işi görevlere böl"
@@ -42,6 +42,9 @@ cost, data that must not be touched). If the answer is "I don't know", pick a se
 assumption in the plan.
 
 ## 3. Write the plan
+
+Give the planner and task-slicer the current `Job-ID`. Both files must copy `Job-ID:` immediately below the title,
+before any sections. Retain it across revisions and resumes; never reuse an earlier job's approval.
 
 1. State the size (small, medium, big) from `orchestrate`. A small job (one behavior, at most about 3 files, under an
    hour, no data, account or money) gets a one-line plan and **one builder task**: what changes and how it is

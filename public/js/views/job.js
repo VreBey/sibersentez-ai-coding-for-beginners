@@ -64,7 +64,10 @@ export function jobNowText(d) {
     // The team may check part of the work before the last task (seen in a real job): a check that asked for fixes is said
     return d.review?.verdict === 'REVISE' && d.review.blockers ? `${now} ${t('jobNowRevise', { count: d.review.blockers })}` : now;
   }
-  if (d.step === 'check') return d.review?.verdict === 'REVISE' ? t('jobNowRevise', { count: d.review.blockers || 1 }) : t('jobNowCheck');
+  if (d.step === 'check') {
+    if (d.reviewIssue === 'job-identity') return t('jobNowIdentity');
+    return d.review?.verdict === 'REVISE' ? t('jobNowRevise', { count: d.review.blockers || 1 }) : t('jobNowCheck');
+  }
   if (d.step === 'done') return t('jobNowDone');
   return t('jobNowFinish');
 }

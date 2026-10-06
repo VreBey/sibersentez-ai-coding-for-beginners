@@ -30,6 +30,8 @@ import {
   LAUNCHER_NAME_RE,
 } from '../server/launch.mjs';
 import { createActions } from '../server/actions.mjs';
+import { JOB_ID_RE, jobMessageName, readCurrentJob } from '../server/job-id.mjs';
+import { projectTeam } from '../server/team.mjs';
 import { createHandler } from '../server/app.mjs';
 import { PUBLIC_DIR } from '../server/config.mjs';
 import { actionBody } from '../public/js/actions.js';
@@ -610,8 +612,9 @@ describe('start-ai action', () => {
       // A job: the first message is planned (preview: nothing written) and the tool is told to read it
       const j = await env.post({ action: 'start-ai', projectId: 'idea', tool: 'claude', job: 'Giriş sayfası ekle' });
       assert.equal(j.status, 200, JSON.stringify(j.json));
-      assert.deepEqual(j.json.firstMessage, { file: '.sibersentez/ilk-mesaj.md', op: 'create', gitignore: 'create' });
-      assert.ok(j.json.launcher.text.includes(`"${launchPrompt('ilk-mesaj.md')}"`));
+      assert.match(j.json.jobId, JOB_ID_RE);
+      assert.deepEqual(j.json.firstMessage, { file: `.sibersentez/${jobMessageName(j.json.jobId)}`, op: 'create', gitignore: 'create' });
+      assert.ok(j.json.launcher.text.includes(`"${launchPrompt(jobMessageName(j.json.jobId))}"`));
       assert.equal(env.spawnCalls.length, 0);
     } finally {
       await env.close();
@@ -1288,4 +1291,49 @@ test('a job starts Claude Code in plan mode (it asks the person to approve its p
   assert.match(lt.text, /claude\.exe" --permission-mode "plan" "Read the job file"/);
   const actions = fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8');
   assert.ok(actions.includes("args: ctx.resume ? ['--resume', ctx.sessionId] : [...(ctx.job ? jobArgs(tool) : []), ...toolArgs(tool, file ? launchPrompt(file) : null)]"), 'only a job, never a resume');
+});
+
+test('live jobs get unique persistent ids; more than nine jobs work; preview and resume preserve identity', async () => {
+  const live = await startServer({ mode: 'live' });
+  const dry = await startServer({ mode: 'dry' });
+  const folder = path.join(DIR_IDEA, '.sibersentez');
+  try {
+    const ids = new Set();
+    let latest;
+    for (let i = 0; i < 11; i++) {
+      live.tick(5000);
+      const r = await live.post({ action: 'start-ai', projectId: 'idea', tool: 'claude', job: 'Add a page' });
+      assert.equal(r.status, 200, JSON.stringify(r.json));
+      latest = r.json.jobId;
+      assert.match(latest, JOB_ID_RE);
+      assert.ok(!ids.has(latest));
+      ids.add(latest);
+      assert.equal(readCurrentJob(folder).jobId, latest);
+      assert.ok(fs.readFileSync(path.join(DIR_IDEA, r.json.firstMessage.file), 'utf8').includes(`Job-ID: ${latest}`));
+      assert.ok(r.json.result.written.includes('.sibersentez/current-job.json'));
+      assert.equal(projectTeam({ catalog: catalog(), projectId: 'idea' }).body.step, 'plan');
+    }
+    const before = listTree(DIR_IDEA);
+    const preview = await dry.post({ action: 'start-ai', projectId: 'idea', tool: 'claude', job: 'New preview' });
+    assert.equal(preview.status, 200);
+    assert.deepEqual(listTree(DIR_IDEA), before);
+    assert.equal(readCurrentJob(folder).jobId, latest);
+    live.tick(5000);
+    const resumed = await live.post({ action: 'start-ai', sessionId: S_A, tool: 'claude', resume: true });
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.json.jobId, undefined);
+    assert.equal(readCurrentJob(folder).jobId, latest);
+    assert.deepEqual(listTree(DIR_IDEA), before);
+    const marker = path.join(folder, 'current-job.json');
+    fs.writeFileSync(marker, 'user notes');
+    live.tick(5000);
+    const started = live.spawnCalls.length;
+    const blocked = await live.post({ action: 'start-ai', projectId: 'idea', tool: 'claude', job: 'Another job' });
+    assert.equal(blocked.status, 409);
+    assert.equal(live.spawnCalls.length, started);
+    assert.equal(fs.readFileSync(marker, 'utf8'), 'user notes');
+  } finally {
+    await live.close();
+    await dry.close();
+  }
 });

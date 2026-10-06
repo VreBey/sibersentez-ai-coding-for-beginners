@@ -8,6 +8,7 @@ import { isLocalPath } from './fsutil.mjs';
 import { normPath } from './util.mjs';
 import { isRealDir, hasStreamColon } from './library.mjs';
 import { readSmall } from './suggest.mjs';
+import { documentJobId, jobIdLine, validJobId, readCurrentJob, CURRENT_JOB_FILE } from './job-id.mjs';
 
 export const TEAM_DIR = '.sibersentez';
 // A project that has only the folder of the product's old name (renamed 2026-09-30) is read from there
@@ -19,43 +20,76 @@ const TITLE_MAX = 120;
 // A title as the person reads it: control characters out, markdown code and emphasis marks (`x`, **x**) out
 const clip = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/`+|\*\*|__/g, '').trim()).slice(0, TITLE_MAX).join('');
 
-// PLAN.md: its title, its size, whether the person approved it and whether they accepted the result (pure)
+// PLAN.md: its title, its size, whether the person approved it and whether they accepted the result (pure). legacy:
+// written before job identities existed (no Job-ID line at all, as opposed to a broken one).
 export function parsePlan(text) {
   if (typeof text !== 'string' || !text.trim()) return null;
   const title = /^#\s*Plan:\s*(.+)$/im.exec(text)?.[1];
   const size = /^Size:\s*(small|medium|big)\b/im.exec(text)?.[1]?.toLowerCase();
-  return { title: title ? clip(title) : '', size: SIZES.has(size) ? size : null, approved: /^Approved:\s*yes\b/im.test(text), accepted: /^Result:\s*accepted\b/im.test(text) };
+  const legacy = !text.split(/\r?\n/).some((l) => jobIdLine(l) !== null);
+  return { title: title ? clip(title) : '', size: SIZES.has(size) ? size : null, approved: /^Approved:\s*yes\b/im.test(text), accepted: /^Result:\s*accepted\b/im.test(text), jobId: documentJobId(text), legacy };
 }
 
 // TASKS.md: every "## T<n>: title" block with its owner and status (pure). A block without a known status is todo.
 export function parseTasks(text) {
   if (typeof text !== 'string') return [];
   const out = [];
+  const jobId = documentJobId(text);
   const heads = [...text.matchAll(/^##\s+(T\d{1,4})\s*:\s*(.*)$/gim)];
   heads.forEach((m, i) => {
     const block = text.slice(m.index, i + 1 < heads.length ? heads[i + 1].index : text.length);
     const status = /^\s*-\s*status:\s*([a-z]+)/im.exec(block)?.[1]?.toLowerCase();
     const owner = /^\s*-\s*owner:\s*([a-z-]{1,40})/im.exec(block)?.[1]?.toLowerCase() || '';
-    out.push({ id: m[1].toUpperCase(), title: clip(m[2]), owner, status: STATUSES.has(status) ? status : 'todo' });
+    out.push({ id: m[1].toUpperCase(), title: clip(m[2]), owner, status: STATUSES.has(status) ? status : 'todo', jobId });
   });
   return out.slice(0, 200);
 }
 
-// REVIEW.md: the last VERDICT line (pure). { verdict: 'APPROVE' | 'REVISE', blockers, nits } or null.
+// REVIEW.md: the last verdict in the latest review section (pure). An unfinished section or malformed last
+// verdict invalidates an older approval. Task reviews stay distinct from the kit's mandatory whole-job pass.
 export function parseVerdict(text) {
   if (typeof text !== 'string') return null;
-  const lines = [...text.matchAll(/^VERDICT:\s*(\{.*\})\s*$/gm)];
-  const lastMatch = lines.at(-1);
-  const last = lastMatch?.[1];
-  if (!last) return null;
-  // The tasks the reviews in the file name in their "## Review T1, T2" headings (a "whole job" review names none, so
-  // the file as a whole says which job it checked)
-  const heads = [...text.slice(0, lastMatch.index).matchAll(/^##\s*Review\b(.*)$/gim)].map((m) => m[1]).join(' ');
-  const tasks = [...new Set([...heads.matchAll(/\bT(\d{1,4})\b/gi)].map((m) => `T${m[1]}`))].slice(0, 50);
+  let scope = 'unknown';
+  let sectionTasks = [];
+  let sectionIds = [];
+  const seenTasks = new Set();
+  let last = null;
+  let fence = null;
+  for (const line of text.split(/\r?\n/)) {
+    // Review templates quoted in fenced Markdown are examples, not evidence.
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null;
+      continue;
+    }
+    if (marker) {
+      fence = marker[1];
+      continue;
+    }
+    const heading = /^ {0,3}##[ \t]+Review\b(.*)$/i.exec(line);
+    if (heading) {
+      sectionIds = [];
+      const label = heading[1].trim().replace(/[ \t]+#+[ \t]*$/, '');
+      sectionTasks = [...new Set([...label.matchAll(/\bT(\d{1,4})\b/gi)].map((m) => `T${m[1]}`))];
+      for (const id of sectionTasks) seenTasks.add(id);
+      scope = /^:?[ \t]*(?:of[ \t]+the[ \t]+)?whole[ \t]+job(?:[ \t]*\([^)]*\))?$/i.test(label) ? 'whole' : sectionTasks.length ? 'tasks' : 'unknown';
+      last = null;
+    }
+    const identity = jobIdLine(line);
+    if (identity !== null) sectionIds.push(identity);
+    const verdict = /^ {0,3}VERDICT:[ \t]*(.*)$/i.exec(line);
+    if (verdict) last = verdict[1];
+  }
+  if (last === null) return null;
   try {
     const v = JSON.parse(last);
     if (v?.verdict !== 'APPROVE' && v?.verdict !== 'REVISE') return null;
-    return { verdict: v.verdict, blockers: Array.isArray(v.blockers) ? v.blockers.length : 0, nits: Array.isArray(v.nits) ? v.nits.length : 0, tasks };
+    if (!Array.isArray(v.blockers) || !Array.isArray(v.nits)) return null;
+    // A whole-job heading names no tasks. Earlier task headings identify its coverage when available;
+    // standalone whole-job reviews remain supported. Do not merge unrelated task verdicts for display.
+    const tasks = scope === 'whole' ? [...seenTasks] : sectionTasks;
+    const jobId = sectionIds.length === 1 && validJobId(sectionIds[0]) ? sectionIds[0] : null;
+    return { verdict: v.verdict, blockers: v.blockers.length, nits: v.nits.length, tasks, scope, jobId };
   } catch {
     return null;
   }
@@ -63,33 +97,50 @@ export function parseVerdict(text) {
 
 // Which step the job is at (pure): none (no team files), plan (no approved plan or no tasks yet), build (tasks left),
 // check (all done, no approving verdict yet), finish (all done and approved), done (the person accepted the result)
-export function teamStep({ plan, tasks, review }) {
+// A job finished before job identities (no Job-ID line, no current-job marker) that the person already accepted
+// stays done: the acceptance was theirs, so an upgrade does not reopen it.
+const legacyAccepted = (plan, currentJob) => !!(plan?.legacy && plan.accepted && !currentJob?.present);
+export function teamStep({ plan, tasks, review, currentJob = null }) {
+  if (currentJob?.present && (!currentJob.jobId || plan?.jobId !== currentJob.jobId)) return 'plan';
   if (!plan && !tasks.length) return 'none';
   if (!plan?.approved || !tasks.length) return 'plan';
+  if (plan.jobId && tasks.some((t) => t.jobId !== plan.jobId)) return 'plan';
   if (tasks.some((t) => t.status !== 'done')) return 'build';
-  review = reviewOf(tasks, review);
-  if (review?.verdict !== 'APPROVE' || review.blockers) return 'check';
+  if (!validJobId(plan.jobId)) return legacyAccepted(plan, currentJob) ? 'done' : 'check';
+  review = reviewOf(tasks, review, plan.jobId);
+  if (review?.verdict !== 'APPROVE' || review.blockers !== 0 || review.scope !== 'whole') return 'check';
+  if (review.tasks?.length && !tasks.every((t) => review.tasks.includes(t.id))) return 'check';
   // The wrap-up writes "Result: accepted" into PLAN.md once the person said yes to the result
   return plan.accepted ? 'done' : 'finish';
 }
 
 // The review, when it is about these tasks (pure). One that names none of them belongs to an earlier job left in
 // the folder (the drawer jumped to Finish before the new job was checked): it counts as no review.
-export function reviewOf(tasks, review) {
+export function reviewOf(tasks, review, jobId = undefined) {
+  if (jobId !== undefined && (review?.jobId || null) !== (jobId || null)) return null;
   if (!review?.tasks?.length) return review || null;
   const ids = new Set(tasks.map((t) => t.id));
   return review.tasks.some((id) => ids.has(id)) ? review : null;
 }
 
-export function teamSummary({ plan, tasks, review, updatedAt = null, history = [] }) {
+export function teamSummary({ plan, tasks, review, currentJob = null, updatedAt = null, history = [] }) {
+  if (currentJob?.present && (!currentJob.jobId || plan?.jobId !== currentJob.jobId)) {
+    plan = null;
+    tasks = [];
+    review = null;
+  } else if (plan?.jobId && tasks.some((t) => t.jobId !== plan.jobId)) {
+    tasks = [];
+    review = null;
+  }
   const count = (s) => tasks.filter((t) => t.status === s).length;
   const current = tasks.find((t) => t.status === 'doing') || tasks.find((t) => t.status === 'blocked') || tasks.find((t) => t.status === 'todo') || null;
   return {
-    step: teamStep({ plan, tasks, review }),
+    step: teamStep({ plan, tasks, review, currentJob }),
     plan,
     tasks: { total: tasks.length, todo: count('todo'), doing: count('doing'), done: count('done'), blocked: count('blocked') },
     current: current ? { id: current.id, title: current.title, owner: current.owner, status: current.status } : null,
-    review: reviewOf(tasks, review),
+    review: reviewOf(tasks, review, plan?.jobId || null),
+    reviewIssue: plan && !legacyAccepted(plan, currentJob) && (!validJobId(plan.jobId) || (review && review.jobId !== plan.jobId)) ? 'job-identity' : null,
     updatedAt,
     history,
   };
@@ -131,14 +182,14 @@ export function teamFacts(dir) {
   const read = (name) => readSmall(path.join(folder, name));
   // When the job last changed: the newest of its files (the page offers to go on only with the session that ran then)
   let updatedAt = 0;
-  for (const name of ['PLAN.md', 'TASKS.md', 'REVIEW.md', 'LEDGER.md', 'HANDOFF.md']) {
+  for (const name of ['PLAN.md', 'TASKS.md', 'REVIEW.md', 'LEDGER.md', 'HANDOFF.md', CURRENT_JOB_FILE]) {
     try {
       updatedAt = Math.max(updatedAt, fs.statSync(path.join(folder, name)).mtimeMs);
     } catch {
       /* not there */
     }
   }
-  return { plan: parsePlan(read('PLAN.md')), tasks: parseTasks(read('TASKS.md')), review: parseVerdict(read('REVIEW.md')), updatedAt: updatedAt ? Math.floor(updatedAt) : null, history: jobHistory(folder) };
+  return { plan: parsePlan(read('PLAN.md')), tasks: parseTasks(read('TASKS.md')), review: parseVerdict(read('REVIEW.md')), currentJob: readCurrentJob(folder), updatedAt: updatedAt ? Math.floor(updatedAt) : null, history: jobHistory(folder) };
 }
 
 // GET /api/projects/<id>/team
