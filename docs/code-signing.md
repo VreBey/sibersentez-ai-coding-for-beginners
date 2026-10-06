@@ -1,7 +1,8 @@
 # Code signing
 
-Status: the build runs on GitHub Actions; signing waits for SignPath Foundation to accept the project (applied
-2026-10-06). Until then the installer is published unsigned, as before.
+Status (2026-10-06): the build runs on GitHub Actions and the code signing policy page is online. The application to
+SignPath Foundation waits until the project has some reputation to show (its form asks for usage, downloads, stars or
+coverage). Until then the installer is published unsigned, as before.
 
 ## Why SignPath Foundation
 
