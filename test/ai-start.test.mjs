@@ -1232,7 +1232,8 @@ describe('page: drawer section, tools panel, start card', () => {
       assert.ok(h.includes(S.aiFirstRun));
       // The links on the card, compared whole (a substring check of a URL is not how a link is told apart)
       const links = [...h.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
-      assert.ok(!links.includes('https://code.claude.com/docs/en/setup'), 'Claude Code is installed: no install guide link');
+      const guide = new URL('https://code.claude.com/docs/en/setup').href;
+      assert.equal(links.filter((l) => l === guide).length, 0, 'Claude Code is installed: no install guide link');
       assert.ok(h.includes('rel="noopener noreferrer"'));
     });
     assert.ok(toolsPanelHtml({ status: 'loading', tools: [] }).includes(STRINGS.en.aiLoading));
