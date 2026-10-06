@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parsePlan, parseTasks, parseVerdict, teamStep, teamFacts, teamSummary } from '../server/team.mjs';
 import { jobMessageText } from '../server/launch.mjs';
-import { newJobId, jobMessageName, readCurrentJob, writeCurrentJob } from '../server/job-id.mjs';
+import { newJobId, jobMessageName, readCurrentJob, writeCurrentJob, markerError } from '../server/job-id.mjs';
 import { jobNowText } from '../public/js/views/job.js';
 import { jobOf } from '../public/js/hq-live.js';
 import { setLanguage, STRINGS } from '../public/js/i18n.js';
@@ -109,9 +109,47 @@ test('the marker is atomic and rejects links, unknown contents and write failure
   fs.symlinkSync(folder, linked, 'junction');
   assert.equal(writeCurrentJob(linked, A).ok, false);
   assert.equal(readCurrentJob(folder).jobId, B);
+  // An unknown small plain file is set aside (kept as .bak-<random>, never deleted) and the new job starts
   fs.writeFileSync(path.join(folder, 'current-job.json'), 'user notes');
-  assert.equal(writeCurrentJob(folder, A).ok, false);
-  assert.equal(fs.readFileSync(path.join(folder, 'current-job.json'), 'utf8'), 'user notes');
+  assert.equal(readCurrentJob(folder).problem, 'unknown');
+  assert.equal(markerError(readCurrentJob(folder)), null);
+  assert.equal(writeCurrentJob(folder, A).ok, true);
+  assert.equal(readCurrentJob(folder).jobId, A);
+  const kept = fs.readdirSync(folder).filter((n) => /^current-job\.json\.bak-[0-9a-f]{8}$/.test(n));
+  assert.equal(kept.length, 1);
+  assert.equal(fs.readFileSync(path.join(folder, kept[0]), 'utf8'), 'user notes');
+  // A marker from a newer format is unknown too, set aside the same way
+  fs.writeFileSync(path.join(folder, 'current-job.json'), JSON.stringify({ version: 2, jobId: B }));
+  assert.equal(writeCurrentJob(folder, B).ok, true);
+  assert.equal(readCurrentJob(folder).jobId, B);
+});
+
+test('a marker that is a folder, a link or a large file is never touched and gets its own reason; a read failure says try again', () => {
+  const folder = path.join(ROOT, 'marker-odd');
+  fs.mkdirSync(path.join(folder, 'current-job.json'), { recursive: true });
+  assert.equal(readCurrentJob(folder).problem, 'not-file');
+  assert.deepEqual(writeCurrentJob(folder, A), { ok: false, error: 'job-marker-unknown' });
+  assert.ok(fs.statSync(path.join(folder, 'current-job.json')).isDirectory());
+  const big = path.join(ROOT, 'marker-big');
+  fs.mkdirSync(big);
+  fs.writeFileSync(path.join(big, 'current-job.json'), 'x'.repeat(5000));
+  assert.deepEqual(writeCurrentJob(big, A), { ok: false, error: 'job-marker-unknown' });
+  assert.equal(fs.readFileSync(path.join(big, 'current-job.json'), 'utf8').length, 5000);
+  const busyFs = { ...fs, lstatSync: (p, o) => (String(p).endsWith('current-job.json') ? (() => { const e = new Error('busy'); e.code = 'EBUSY'; throw e; })() : fs.lstatSync(p, o)) };
+  assert.deepEqual(readCurrentJob(big, busyFs), { present: true, jobId: null, problem: 'busy' });
+  assert.equal(markerError(readCurrentJob(big, busyFs)), 'job-marker-busy');
+  // A lasting failure (not a lock) is not worth another try
+  const deniedFs = { ...fs, lstatSync: (p, o) => (String(p).endsWith('current-job.json') ? (() => { const e = new Error('loop'); e.code = 'ELOOP'; throw e; })() : fs.lstatSync(p, o)) };
+  assert.equal(readCurrentJob(big, deniedFs).problem, 'not-file');
+  assert.equal(markerError(readCurrentJob(big, deniedFs)), 'job-marker-unknown');
+  // An unknown marker that cannot be moved just now (locked) asks to try again and is left as it was
+  const locked = path.join(ROOT, 'marker-locked');
+  fs.mkdirSync(locked);
+  fs.writeFileSync(path.join(locked, 'current-job.json'), 'notes');
+  const lockedFs = { ...fs, renameSync: () => { const e = new Error('locked'); e.code = 'EBUSY'; throw e; } };
+  assert.deepEqual(writeCurrentJob(locked, A, lockedFs), { ok: false, error: 'job-marker-busy' });
+  assert.equal(fs.readFileSync(path.join(locked, 'current-job.json'), 'utf8'), 'notes');
+  for (const lang of ['en', 'tr']) for (const code of ['job-marker-unknown', 'job-marker-busy']) assert.ok(STRINGS[lang][`aiErr_${code}`], `${lang} ${code}`);
 });
 
 test('a new active job hides the old completed plan immediately and survives rereading', () => {

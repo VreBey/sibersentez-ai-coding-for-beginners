@@ -788,8 +788,8 @@ const WAVE2_AGENTS = { security: ['security-auditor'], quality: ['qa-explorer'],
 const WAVE2_ITEM_NAMES = new Set([...Object.values(WAVE2_SKILLS).flat(), ...Object.values(WAVE2_AGENTS).flat()]);
 const STATUS_WORDS = ['DONE', 'DONE_WITH_CONCERNS', 'NEEDS_CONTEXT', 'BLOCKED'];
 
-test('kit wave 2: the new skills and agents are in their categories, and the catalog is 0.6.1 (job identity)', () => {
-  assert.equal(CATALOG.version, '0.6.1');
+test('kit wave 2: the new skills and agents are in their categories, and the catalog is 0.6.2 (job identity, jobs started outside the app)', () => {
+  assert.equal(CATALOG.version, '0.6.2');
   for (const [category, names] of Object.entries(WAVE2_SKILLS)) {
     for (const name of names) {
       const it = SKILLS.find((x) => x.name === name);

@@ -32,8 +32,8 @@ import { createPointAsync, planRestore, applyRestore, POINT_ID_RE } from './rest
 import { createFit, planApplyImports, KEY_RE, normalizeIdea } from './fit.mjs';
 // "Start with AI" (docs/ai-start.md)
 import { sharedToolDetector, toolById, TOOL_IDS, envValue } from './tools.mjs';
-import { firstMessageText, jobMessageText, planFirstMessage, writeFirstMessage, launchPrompt, toolArgs, jobArgs, launcherText, pickLaunchDir, buildAiArgv, buildAiFallbackArgv, newLauncherName, cleanupLaunchers, SAFE_LAUNCH_RE } from './launch.mjs';
-import { newJobId, readCurrentJob, writeCurrentJob, CURRENT_JOB_FILE } from './job-id.mjs';
+import { firstMessageText, jobMessageText, planFirstMessage, writeFirstMessage, launchPrompt, toolArgs, jobArgs, launcherText, pickLaunchDir, buildAiArgv, buildAiFallbackArgv, newLauncherName, cleanupLaunchers, SAFE_LAUNCH_RE, FIRST_DIR } from './launch.mjs';
+import { newJobId, readCurrentJob, writeCurrentJob, markerError, CURRENT_JOB_FILE } from './job-id.mjs';
 import { createGitHub, cleanupIncoming, parseGitHubUrl, parseRepoName, describeDownload, planDownloadImport, readSources, findSource, updateSources, sourceRow, diffItems, FETCH_ID_RE } from './github.mjs';
 import { reviewItem } from './review.mjs';
 import { readKit } from './kit.mjs';
@@ -1159,8 +1159,10 @@ export function createActions({
       first = planFirstMessage(ctx.dir, text, fs, jobId);
       if (!first.ok) return fail(409, first.error, 'first-message');
       if (jobId) {
-        const current = readCurrentJob(path.join(ctx.dir, '.sibersentez'));
-        if (current.present && !current.jobId) return fail(409, 'first-message-blocked', 'job-identity');
+        // An unknown marker (a small plain file) is set aside by the live start; a link, a folder or a file that
+        // cannot be read just now stops the start with its own reason
+        const markerErr = markerError(readCurrentJob(path.join(ctx.dir, FIRST_DIR)));
+        if (markerErr) return fail(409, markerErr, 'job-identity');
       }
     }
     const launcher = newLauncherName();
@@ -1196,7 +1198,7 @@ export function createActions({
       first = w;
     }
     if (jobId) {
-      const active = writeCurrentJob(path.join(ctx.dir, '.sibersentez'), jobId);
+      const active = writeCurrentJob(path.join(ctx.dir, FIRST_DIR), jobId);
       if (!active.ok) return fail(active.error === 'first-message-failed' ? 500 : 409, active.error, 'job-identity', { written });
       written.push(`.sibersentez/${CURRENT_JOB_FILE}`);
     }

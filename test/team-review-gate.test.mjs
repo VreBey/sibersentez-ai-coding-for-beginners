@@ -69,6 +69,21 @@ test('quoted Markdown examples do not count as review evidence', () => {
   assert.equal(step('    ' + whole + '    ' + verdict()), 'check', 'indented code is not an approval');
 });
 
+test('a round number after the whole-job heading and task ranges are read as written', () => {
+  for (const h of ['## Review: whole job, round 2\n', '## Review: whole job - round 2\n', '## Review: whole job (round 2)\n']) assert.equal(step(h + verdict()), 'finish', h);
+  assert.equal(step('## Review: whole job, the rest\n' + verdict()), 'check', 'anything else after the heading stays unknown');
+  const three = [1, 2, 3].map((n) => ({ id: `T${n}`, status: 'done', jobId }));
+  assert.deepEqual(parseVerdict('## Review T1-T3\n' + verdict()).tasks, ['T1', 'T2', 'T3']);
+  assert.deepEqual(parseVerdict('## Review T1–3, T5\n' + verdict()).tasks, ['T1', 'T2', 'T3', 'T5']);
+  assert.equal(step('## Review T1-T3\n' + verdict() + whole + verdict(), three), 'finish');
+  assert.equal(step('## Review T1-T2\n' + verdict() + whole + verdict(), three), 'check', 'a range that misses a task does not cover it');
+  assert.deepEqual(parseVerdict('## Review T1—T3\n' + verdict()).tasks, ['T1', 'T2', 'T3'], 'an em dash is a range too');
+  assert.deepEqual(parseVerdict('## Review T1 - 10/06\n' + verdict()).tasks, ['T1'], 'a date after the task is not a range');
+  assert.deepEqual(parseVerdict('## Review T2 - 3 fixes\n' + verdict()).tasks, ['T2'], 'a count after the task is not a range');
+  assert.deepEqual(parseVerdict('## Review T1-3 T5\n' + verdict()).tasks, ['T1', 'T2', 'T3', 'T5']);
+  assert.deepEqual(parseVerdict('## Review T3-T1\n' + verdict()).tasks, ['T3'], 'a backward range names its first task only');
+});
+
 test('whole-job task coverage includes jobs with more than fifty tasks', () => {
   const many = Array.from({ length: 70 }, (_, i) => ({ id: `T${i + 1}`, status: 'done', jobId }));
   const reviewed = many.map((t) => `## Review ${t.id}\n${verdict()}`).join('') + whole + verdict();

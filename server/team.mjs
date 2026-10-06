@@ -70,9 +70,20 @@ export function parseVerdict(text) {
     if (heading) {
       sectionIds = [];
       const label = heading[1].trim().replace(/[ \t]+#+[ \t]*$/, '');
-      sectionTasks = [...new Set([...label.matchAll(/\bT(\d{1,4})\b/gi)].map((m) => `T${m[1]}`))];
+      // "T1, T3" and ranges "T1-T3" / "T1–T3" / "T1—T3" / "T1-3" (at most 200 ids per range, like the task list). A
+      // bare second number counts only when the list goes on or ends there ("T1 - 10/06" is a date, not a range).
+      const ids = [];
+      for (const m of label.matchAll(/\bT(\d{1,4})\b(?:[ \t]*[-–—][ \t]*(?:T(\d{1,4})\b|(\d{1,4})(?=[ \t]*(?:,|$|[ \t]T\d))))?/gi)) {
+        const from = Number(m[1]);
+        const end = m[2] || m[3];
+        const to = end ? Number(end) : from;
+        if (to >= from && to - from < 200) for (let n = from; n <= to; n++) ids.push(`T${n}`);
+        else ids.push(`T${from}`);
+      }
+      sectionTasks = [...new Set(ids)];
       for (const id of sectionTasks) seenTasks.add(id);
-      scope = /^:?[ \t]*(?:of[ \t]+the[ \t]+)?whole[ \t]+job(?:[ \t]*\([^)]*\))?$/i.test(label) ? 'whole' : sectionTasks.length ? 'tasks' : 'unknown';
+      // "whole job", "whole job (round 2)", "whole job, round 2", "whole job - round 2"
+      scope = /^:?[ \t]*(?:of[ \t]+the[ \t]+)?whole[ \t]+job(?:[ \t]*\([^)]*\)|[ \t]*[,–—-][ \t]*round[ \t]+\d{1,2})?$/i.test(label) ? 'whole' : sectionTasks.length ? 'tasks' : 'unknown';
       last = null;
     }
     const identity = jobIdLine(line);

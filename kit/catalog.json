@@ -1,6 +1,6 @@
 {
   "name": "sibersentez-kit",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "license": "MIT (see LICENSE.md)",
   "count": 73,
   "items": [
@@ -1664,7 +1664,7 @@
       "offer": [],
       "path": "team/skills/orchestrate",
       "notice": "team/skills/orchestrate/LICENSE.md",
-      "version": "0.1.8"
+      "version": "0.1.9"
     },
     {
       "kind": "skill",

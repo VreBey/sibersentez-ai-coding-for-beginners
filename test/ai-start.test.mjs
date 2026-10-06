@@ -1325,13 +1325,27 @@ test('live jobs get unique persistent ids; more than nine jobs work; preview and
     assert.equal(readCurrentJob(folder).jobId, latest);
     assert.deepEqual(listTree(DIR_IDEA), before);
     const marker = path.join(folder, 'current-job.json');
+    // An unknown plain marker is set aside (kept as .bak-<random>) and the new job starts with its own id
     fs.writeFileSync(marker, 'user notes');
     live.tick(5000);
     const started = live.spawnCalls.length;
-    const blocked = await live.post({ action: 'start-ai', projectId: 'idea', tool: 'claude', job: 'Another job' });
+    const recovered = await live.post({ action: 'start-ai', projectId: 'idea', tool: 'claude', job: 'Another job' });
+    assert.equal(recovered.status, 200);
+    assert.equal(live.spawnCalls.length, started + 1);
+    assert.equal(readCurrentJob(folder).jobId, recovered.json.jobId);
+    const kept = fs.readdirSync(folder).filter((n) => n.startsWith('current-job.json.bak-'));
+    assert.equal(kept.length, 1);
+    assert.equal(fs.readFileSync(path.join(folder, kept[0]), 'utf8'), 'user notes');
+    // A marker that is a folder is never touched: the start stops with its own reason
+    fs.rmSync(marker);
+    fs.mkdirSync(marker);
+    live.tick(5000);
+    const before2 = live.spawnCalls.length;
+    const blocked = await live.post({ action: 'start-ai', projectId: 'idea', tool: 'claude', job: 'Third job' });
     assert.equal(blocked.status, 409);
-    assert.equal(live.spawnCalls.length, started);
-    assert.equal(fs.readFileSync(marker, 'utf8'), 'user notes');
+    assert.equal(blocked.json.error, 'job-marker-unknown');
+    assert.equal(live.spawnCalls.length, before2);
+    assert.ok(fs.statSync(marker).isDirectory());
   } finally {
     await live.close();
     await dry.close();

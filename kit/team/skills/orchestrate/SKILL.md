@@ -4,7 +4,7 @@ description: "Runs a whole job from start to finish with a small team of roles (
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.8"
+  version: "0.1.9"
   sibersentez-tags: "workflow, planning"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "bu işi yap, baştan sona, uçtan uca, yapay zeka ekibi*, işi bitir, sen halret, ekip halinde, ajanlarla çalış"
@@ -45,11 +45,15 @@ the job survives a full context window or a lost session.
 
 Look in the project folder before anything else:
 
-- Keep the app's `Job-ID` throughout the job and resumes. Never edit the app-owned `.sibersentez/current-job.json`.
-  If it names another job, stop: a newer job started. Pass the id to every helper; put `Job-ID:` below the titles
-  in PLAN.md and TASKS.md and below every REVIEW.md review heading. Files with missing/different ids are earlier
-  work: preserve them, never relabel old evidence. Outside the app, generate `J` plus 32 random lowercase hex digits
-  once for a new job and keep that id on resume.
+- Keep the app's `Job-ID` throughout the job and resumes. When the app started the job (its first message names the
+  `Job-ID`), never edit `.sibersentez/current-job.json`; if it names another job, stop: a newer job started. Pass the
+  id to every helper; put `Job-ID:` below the titles in PLAN.md and TASKS.md and below every REVIEW.md review heading.
+  Files with missing/different ids are earlier work: preserve them, never relabel old evidence.
+- No `Job-ID` given: if `PLAN.md` has a `Job-ID` equal to the one in `.sibersentez/current-job.json`, this is a
+  resume of that job: keep its id. Otherwise it is a new job started without the app: generate `J` plus 32 random
+  lowercase hex digits once and keep that id on resume. Write it to `.sibersentez/current-job.json` as
+  `{"version":1,"jobId":"J…"}` so the app follows this job. If the file names another job and that job's `PLAN.md`
+  has no `Result: accepted` line, ask the user before replacing it. Never reuse the id in that file for a new job.
 - `.sibersentez/HANDOFF.md` and `.sibersentez/MEMORY.md`: read them first if they exist (see `handoff-notes` and
   `project-memory`).
 - `.sibersentez/LEDGER.md`, `TASKS.md`, `REVIEW.md`: a job may already be running. Say where it stands and continue

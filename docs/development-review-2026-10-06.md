@@ -27,6 +27,14 @@ data path. A start-action test launches eleven simulated jobs with identical tex
 ids without the former nine-message limit, and confirms preview/resume preserve identity. Real AI tools were
 not launched; their process starts are fakes and all test writes are in temporary folders.
 
+Second pass (0.15.1, then 0.15.2): an independent review found that jobs accepted before job ids fell back to
+Check after the upgrade; such jobs (no Job-ID line, no marker) stay done. A Job-ID written with Markdown emphasis,
+code marks or a list bullet is read as the plain id; review headings may say "whole job, round 2" and name task
+ranges ("T1-T3"). An unknown plain marker is set aside as `current-job.json.bak-<random>` and the new job starts;
+a marker that is a link, a folder or a large file stops the start with its own reason (`job-marker-unknown`), a
+marker that cannot be read just now asks to try again (`job-marker-busy`). Kit 0.6.2 tells a job started outside
+the app to write its own marker so the app follows it.
+
 Tool lifecycle support, layout, restore presentation and performance work remain proposals. No installer was
 built and the installed app was not updated by this source change.
 

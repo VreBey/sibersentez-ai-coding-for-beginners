@@ -74,6 +74,7 @@ id. Never relabel an old review to make it pass. The UI explains this in both la
 through the conductor, planner, task-slicer, reviewer and wrap-up; new app messages carry these rules even when an
 older team kit is installed. The archive-on-next-job rule still preserves old work. This is a consistency check,
 not proof of who reviewed: an AI or local process that rewrites matching ids and approval text can still misreport.
+Kit 0.6.2: a job started outside the app writes its own marker, so the app follows it.
 
 A finished job's files are moved to `.sibersentez/archive/<date>-<name>/` by the orchestrate skill when the next job
 starts (the kit's own hand-off files, no question needed); the ledger, memory and handoff notes stay.
