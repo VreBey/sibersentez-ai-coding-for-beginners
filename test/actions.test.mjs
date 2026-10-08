@@ -355,17 +355,17 @@ test('POST: Content-Type other than application/json -> 415 (text/plain, form, m
   }
 });
 
-test('POST: body at most 4096 bytes; 4097 bytes -> 413 (with Content-Length and when chunked)', async () => {
+test('POST: body at most 16384 bytes (a job of 2000 characters fits); 16385 bytes -> 413 (with Content-Length and when chunked)', async () => {
   const env = await startServer();
   try {
-    const exact = paddedBody(4096);
-    assert.equal(Buffer.byteLength(exact), 4096);
+    const exact = paddedBody(16384);
+    assert.equal(Buffer.byteLength(exact), 16384);
     const r = await env.post(exact);
-    assert.equal(r.status, 400, '4096 bytes pass the size rule (400 because of the extra field)');
-    const big = paddedBody(4097);
-    assert.equal(Buffer.byteLength(big), 4097);
+    assert.equal(r.status, 400, '16384 bytes pass the size rule (400 because of the extra field)');
+    const big = paddedBody(16385);
+    assert.equal(Buffer.byteLength(big), 16385);
     assert.equal((await env.post(big)).status, 413);
-    const chunked = await request(env.port, { method: 'POST', path: '/api/action', headers: goodHeaders(env.port, env.actions.token), chunks: ['{"action":"explorer","x":"' + 'a'.repeat(3000), 'b'.repeat(2000) + '"}'] });
+    const chunked = await request(env.port, { method: 'POST', path: '/api/action', headers: goodHeaders(env.port, env.actions.token), chunks: ['{"action":"explorer","x":"' + 'a'.repeat(12000), 'b'.repeat(5000) + '"}'] });
     assert.equal(chunked.status, 413);
   } finally {
     await env.close();
@@ -808,8 +808,8 @@ test('rejection order is fixed: Content-Type, size and JSON before the token; Or
   try {
     let r = await env.post(body, { ...wrongToken, 'Content-Type': 'text/plain' });
     assert.equal(r.status, 415, 'wrong token + text/plain -> 415');
-    r = await env.post(paddedBody(4097), wrongToken);
-    assert.equal(r.status, 413, 'wrong token + 4097 bytes -> 413');
+    r = await env.post(paddedBody(16385), wrongToken);
+    assert.equal(r.status, 413, 'wrong token + 16385 bytes -> 413');
     r = await env.post('{broken', wrongToken);
     assert.equal(r.status, 400, 'wrong token + broken JSON -> 400');
     assert.equal(r.json.error, 'bad-json');

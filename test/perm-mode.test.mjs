@@ -32,6 +32,26 @@ test('ingest: the newest line\'s mode is kept on the lead; an older line or an o
   assert.equal(sessionView(ing, s).permissionMode, 'acceptEdits', 'the page gets it');
 });
 
+test('ingest: a mode the tool changes itself (its own "permission-mode" line, as Claude Code 2.1.29x writes after the plan is approved) is kept until the person\'s next line', () => {
+  const ing = new Ingest(fakeCatalog());
+  ing.cutoff = 0;
+  const s = ing.getSession('s1', null);
+  feed(ing, s, { type: 'permission-mode', permissionMode: 'plan', sessionId: 's1' });
+  feed(ing, s, userLine('Plan it', 'plan', '2026-10-02T09:00:00Z'));
+  assert.equal(s.permissionMode, 'plan');
+  feed(ing, s, { type: 'permission-mode', permissionMode: 'default', sessionId: 's1' });
+  assert.equal(s.permissionMode, 'default', 'the plan approved in the terminal');
+  feed(ing, s, { type: 'permission-mode', permissionMode: 'acceptEdits', sessionId: 's1' });
+  assert.equal(sessionView(ing, s).permissionMode, 'acceptEdits', 'then "accept edits" chosen: the page gets it');
+  feed(ing, s, { type: 'permission-mode', permissionMode: 'x<script>', sessionId: 's1' });
+  assert.equal(s.permissionMode, 'acceptEdits', 'not a plain word');
+  feed(ing, s, userLine('Go on', 'auto', '2026-10-02T09:30:00Z'));
+  assert.equal(s.permissionMode, 'auto', 'the person\'s next line decides again');
+  const ag = ing.getAgent({ agentId: 'a1', sessionId: 's1', slug: 'x', workflowRunId: null }, 'C:\\none\\agent-a1.jsonl');
+  feed(ing, ag, { type: 'permission-mode', permissionMode: 'bypassPermissions', sessionId: 's1' });
+  assert.ok(!ag.permissionMode, 'only the lead');
+});
+
 test('the page: every mode Claude Code writes has words in both languages and a tone; unknown says nothing', () => {
   const tones = { plan: 'ok', default: 'ok', dontAsk: 'ok', acceptEdits: 'warn', auto: 'warn', bypassPermissions: 'stop' };
   for (const lang of ['en', 'tr']) {

@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolveConfig, DEFAULT_PORT, DEFAULT_DAYS } from '../server/config.mjs';
 import { initHub, HUB_SKELETON, registryFile, libraryFile, normalizeRegistry, normalizeLibrary, readRegistry, readLibrary } from '../server/hub.mjs';
+import { STRINGS } from '../public/js/i18n.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-config-'));
@@ -419,4 +420,16 @@ test('SIBERSENTEZ_INSTANCE: a header-safe value is kept, anything else is ignore
   const w3 = world();
   w3.writeConfig({ instance: 'from-file' });
   assert.equal(w3.resolve().instance, null, 'sibersentez.json cannot set it');
+});
+
+test('the licence paths in Settings keep their separator (review 2026-10-07 B5: "resourcesLICENSE.txt" was shown)', () => {
+  for (const lang of ['en', 'tr']) {
+    const text = STRINGS[lang].setLicenseText;
+    assert.ok(text.includes(String.raw`resources\LICENSE.txt`), lang);
+    assert.ok(text.includes(String.raw`resources\THIRD_PARTY_NOTICES.md`), lang);
+    assert.doesNotMatch(text, /resourcesLICENSE|resourcesTHIRD/, lang);
+  }
+  // No string of the app loses a backslash that way: a lone backslash before a letter that is no escape
+  const src = fs.readFileSync(new URL('../public/js/strings/nav.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /[^\\]\\[A-Zac-mo-qsw-z]/, 'a single backslash before a letter is dropped by JavaScript');
 });

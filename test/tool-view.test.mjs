@@ -77,3 +77,24 @@ test('wiring: the minute broadcast carries tools; the store keeps them; both tab
   for (const view of ['projects.js', 'roster.js']) assert.ok(read('public', 'js', 'views', view).includes('data-k="tool"'), view);
   assert.ok(read('public', 'index.html').includes('<link rel="stylesheet" href="/css/tool-view.css">'));
 });
+
+test('the tools panel: the tool jobs start with first and marked; the others folded, installed ones first; nothing installed: every card open (review U13)', async () => {
+  const { toolsPanelHtml } = await import('../public/js/views/tools.js');
+  const { setLanguage, STRINGS } = await import('../public/js/i18n.js');
+  setLanguage('en');
+  const tool = (id, installed) => ({ id, installed, installs: installed ? 1 : 0, others: [], ready: installed ? 'yes' : 'unknown', app: false, onPath: true, via: 'npm' });
+  const st = { status: 'ready', at: 0, tools: [tool('claude', true), tool('codex', true), tool('gemini', false)], node: null };
+  const html = toolsPanelHtml(st, 0, [], '', 'codex');
+  const chosenAt = html.indexOf('data-ai-tool="codex"');
+  assert.ok(chosenAt > 0 && chosenAt < html.indexOf('<details class="ai-more">'), 'the chosen tool before the fold');
+  assert.ok(html.includes(STRINGS.en.aiChosenChip) && html.includes('ai-card on chosen'));
+  const more = html.slice(html.indexOf('<details class="ai-more">'));
+  assert.ok(more.indexOf('data-ai-tool="claude"') < more.indexOf('data-ai-tool="gemini"'), 'installed ones first under the fold');
+  assert.ok(more.includes(STRINGS.en.aiOtherTools.replace('{count}', '6')));
+  // Nothing chosen and Claude Code installed: Claude Code
+  assert.ok(toolsPanelHtml(st, 0, [], '', '').indexOf('data-ai-tool="claude"') < toolsPanelHtml(st, 0, [], '', '').indexOf('<details'));
+  // Nothing installed: no fold, every card open to choose from
+  const none = toolsPanelHtml({ ...st, tools: [] }, 0, [], '', '');
+  assert.ok(!none.includes('<details class="ai-more">') && !none.includes(STRINGS.en.aiChosenChip));
+  for (const lang of ['en', 'tr']) for (const k of ['aiChosenTitle', 'aiChosenChip', 'aiChosenWhere', 'aiOtherTools']) assert.ok(STRINGS[lang][k], `${lang} ${k}`);
+});

@@ -8,10 +8,11 @@ import { projectSuggestions } from './suggest.mjs';
 import { projectRun } from './runhint.mjs';
 import { projectChanges, createChangesCache } from './changes.mjs';
 import { projectTeam } from './team.mjs';
-import { projectRestore } from './restore.mjs';
+import { projectRestore, createJobChangesCache } from './restore.mjs';
 import { createFit } from './fit.mjs';
 import { PERIODS } from './usage.mjs';
 import { sharedToolDetector, toolsAnswer } from './tools.mjs';
+import { createUpdateChecker, UPDATE_CHECK_FILE } from './update.mjs';
 
 export const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -138,9 +139,13 @@ function actionRoute(url) {
 // fit (optional): the fit service (server/fit.mjs) shared with the actions; one is made on first use when absent.
 // usage (optional): the usage ledger (server/usage.mjs) behind GET /api/usage; without it the route answers 404.
 // tools (optional): the AI tool detector (server/tools.mjs); default the one the start-ai action shares.
-export function createHandler({ ingest, catalog, clients, port, publicDir, actions = null, instance = null, fit = null, usage = null, tools = null }) {
+export function createHandler({ ingest, catalog, clients, port, publicDir, actions = null, instance = null, fit = null, usage = null, tools = null, updates = null }) {
+  // "A new version is out" (server/update.mjs): asked by the page only when the person turned it on in Settings
+  let updateChecker = updates;
   // "What changed" answers, kept a few seconds per project (server/changes.mjs createChangesCache)
   const changesCache = createChangesCache();
+  // "This job's result": one comparison per project and job for a few seconds (restore.mjs createJobChangesCache)
+  const jobChangesCache = createJobChangesCache();
   let fitService = fit;
   // Action endpoints apply their own, stricter rules (404 when off -> Origin -> Sec-Fetch-Site -> ...),
   // so they are split off before the general Sec-Fetch-Site and method checks. The Host check (421) still comes first.
@@ -219,6 +224,15 @@ export function createHandler({ ingest, catalog, clients, port, publicDir, actio
       const r = projectRestore({ catalog, projectId: m[1] });
       return sendJson(res, r.status, r.body);
     }
+    // What changed since a job's start copy (docs/restore.md §9): read-only, no action mode needed
+    m = /^\/api\/projects\/([A-Za-z0-9][A-Za-z0-9._-]{0,99})\/job-changes$/.exec(p);
+    if (m) {
+      jobChangesCache({ catalog, projectId: m[1], jobId: url.searchParams.get('job') || '' }).then(
+        (r) => sendJson(res, r.status, r.body),
+        () => sendJson(res, 500, { error: 'job-changes-failed' }),
+      );
+      return;
+    }
     // What changed in the project (docs/changes.md): read-only, no action mode needed
     m = /^\/api\/projects\/([A-Za-z0-9][A-Za-z0-9._-]{0,99})\/changes$/.exec(p);
     if (m) {
@@ -247,6 +261,19 @@ export function createHandler({ ingest, catalog, clients, port, publicDir, actio
     // route. Detection runs on the first request, is cached for five minutes; ?refresh=1 checks again (throttled).
     // The answer holds no path and no output of any tool.
     if (p === '/api/about') return sendJson(res, 200, aboutAnswer());
+    // The one request SiberSentez makes outside this computer for itself, and only when the person turned it on: the
+    // latest release of its own repository, at most once a day (server/update.mjs). The answer: versions and the
+    // release page's link. The last answer is kept in the hub (update-check.json), so starting again does not ask again.
+    // The switch lives in the page (its browser storage): a local program that calls this route itself makes the
+    // same single request a day at most, nothing more (review 2026-10-08).
+    if (p === '/api/update') {
+      if (!updateChecker) updateChecker = createUpdateChecker({ current: aboutAnswer().version, file: typeof catalog?.hubDir === 'string' && catalog.hubDir ? path.join(catalog.hubDir, UPDATE_CHECK_FILE) : null });
+      updateChecker.check().then(
+        (a) => sendJson(res, 200, a),
+        () => sendJson(res, 200, { ok: false, reason: 'network' }),
+      );
+      return;
+    }
     if (p === '/api/tools') {
       toolsAnswer(tools || sharedToolDetector(), { refresh: url.searchParams.get('refresh') === '1' }).then(
         (r) => sendJson(res, r.status, r.body),

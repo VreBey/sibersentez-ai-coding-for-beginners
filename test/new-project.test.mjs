@@ -464,6 +464,30 @@ describe('server: which folder can be a project (catalog rules) and adding it', 
     assert.deepEqual(again.addProjectFolder(path.join(d, 'src') + (fs.mkdirSync(path.join(d, 'src')), '')).projectId, r.projectId, 'a folder inside it opens it');
   });
 
+  test('fresh (a folder just made for a new project, review U05): inside a listed project it is refused before anything is remembered; its own folder made again is added', () => {
+    const w = world();
+    const c = w.catalog();
+    const d = w.dir('Site');
+    const first = c.addProjectFolder(d, { fresh: true });
+    assert.deepEqual([first.ok, first.existed, first.reason], [true, false, 'added']);
+    const inner = w.dir('Site', 'Blog');
+    assert.deepEqual(c.addProjectFolder(inner, { fresh: true }), { ok: false, reason: 'inside-project' });
+    const remembered = JSON.parse(fs.readFileSync(path.join(w.hub, 'registry', 'discovered.json'), 'utf8')).projects.map((e) => e.path);
+    assert.deepEqual(remembered, [d], 'the refused folder is not remembered');
+    // Without fresh the old rule stays: a folder inside it opens it
+    assert.equal(c.addProjectFolder(inner).projectId, first.projectId);
+    // The project's own folder, deleted and made again: it is that project, new on disk (not "already listed")
+    const again = c.addProjectFolder(d, { fresh: true });
+    assert.deepEqual([again.ok, again.projectId, again.existed, again.reason], [true, first.projectId, false, 'added']);
+    // Over the channel: fresh only when the shell says exactly true
+    const seen = [];
+    const ch = createProjectChannel({ catalog: { addProjectFolder: (p, o) => (seen.push(o.fresh), { ok: false, reason: 'x' }) } });
+    ch.handle({ sibersentez: 'shell-call', id: 1, type: 'project-add', path: d, fresh: true });
+    ch.handle({ sibersentez: 'shell-call', id: 2, type: 'project-add', path: d, fresh: 'yes' });
+    ch.handle({ sibersentez: 'shell-call', id: 3, type: 'project-add', path: d });
+    assert.deepEqual(seen, [true, false, false]);
+  });
+
   test('a registered project folder opens the registered project', () => {
     const w = world();
     const d = w.dir('registered');

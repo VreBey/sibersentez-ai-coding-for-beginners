@@ -368,14 +368,20 @@ export class Catalog {
   // "sibersentez" and written at once, then listed. A folder that already belongs to a listed project (registered, found
   // by a tool, or remembered) opens that project instead (existed: true). A folder that holds listed projects is
   // refused ('holds-projects'): as a project of its own it would take their folders over (a subfolder belongs to the
-  // project above it). The user's registry is never written. Returns { ok: true, projectId, existed, saved, reason: 'added' | 'existing' }
-  // or { ok: false, reason }.
-  addProjectFolder(folder, { appDir = null } = {}) {
+  // project above it). The user's registry is never written. fresh (a folder the shell has just made for a new project,
+  // review U05): a folder that belongs to a listed project is refused ('inside-project') before anything is remembered.
+  // Returns { ok: true, projectId, existed, saved, reason: 'added' | 'existing' } or { ok: false, reason }.
+  addProjectFolder(folder, { appDir = null, fresh = false } = {}) {
     const check = this.checkNewProjectFolder(folder, { appDir });
     if (!check.ok) return check;
     const dir = check.path;
     const known = this.knownProjectFor(dir);
     const n = normPath(dir);
+    // A fresh folder that is a listed project's own folder (made again after it was deleted) is that project, new on
+    // disk: it opens as added
+    const own = !!known && (normPath(known.path) === n || (known._norm || []).includes(n));
+    if (fresh && known && !own) return { ok: false, reason: 'inside-project' };
+    const existed = !!known && !(fresh && own);
     if (!known && this.allProjects().some((p) => p.path && !p.tmpOnly && !p.broad && normPath(p.path).startsWith(n + '/'))) return { ok: false, reason: 'holds-projects' };
     this.memory.record(dir, { via: SIBERSENTEZ_VIA, lastSeenAt: Date.now() });
     const saved = this.memory.flush() || (!!this.memory.file && !this.memory.dirty);
@@ -386,7 +392,7 @@ export class Catalog {
     p.via = this.sortTools(new Set([...(p.via || []), SIBERSENTEZ_VIA]));
     if (p.kind === 'adhoc' && p.description === PROJECT_NOTE && !known) p.description = ADDED_NOTE;
     if (!p.lastSeenAt) p.lastSeenAt = Date.now();
-    return { ok: true, projectId: p.id, existed: !!known, saved, reason: known ? 'existing' : 'added' };
+    return { ok: true, projectId: p.id, existed, saved, reason: existed ? 'existing' : 'added' };
   }
 
   // The remembered folder a project's idea is kept with: the project's own folder, else a remembered folder of that

@@ -18,19 +18,34 @@ import { spawn as nodeSpawn } from 'node:child_process';
 
 // Tools SiberSentez can start (docs/ai-start.md, "Tools"). commands: file names looked up in PATH order (first found
 // wins; for Cursor the specific name first, so an unrelated "agent" program is not preferred). version: arguments
-// that print the version. ready: arguments whose exit code 0 means signed in (null: the tool has no such command).
+// that print the version. ready: arguments whose exit code 0 means signed in (null: the tool has no such command);
+// readyOut: for a tool whose command answers 0 either way (Cursor's `status`), what its output must say as well: the
+// output is looked at for that and dropped, never kept or logged (it holds the account's e-mail). The tools without
+// such a command are read from their own settings files (fileReady, review F2).
 // prompt: how the first message is passed when the tool starts interactively ('arg': as the first argument, or the
-// option that takes it). A one-shot mode (-p, exec) is never used.
+// option that takes it). A one-shot mode (-p, exec) is never used. plan: the arguments that start it in its own plan
+// mode, where it reads and plans first and asks the person to approve the plan (checked against each tool's own --help
+// and package, 2026-10-07: Claude Code --permission-mode plan; Gemini CLI 0.61 --approval-mode plan with its
+// exit_plan_mode question "Ready to start implementation?"); absent: no such mode known. planMin: the oldest version
+// the plan arguments were checked on; an older or unknown version starts as usual (an option it does not know would
+// stop it from starting at all). Qwen Code 0.25 --approval-mode plan and Cursor CLI 2026.10.01 --plan were checked
+// the same way, and GitHub Copilot CLI 1.0.93 --plan ("Start in plan mode", it asks to approve the plan itself) on
+// 2026-10-08 (roadmap F4). Not used: Codex CLI has no plan mode (its read-only sandbox cannot go on with the work once a
+// plan is approved); OpenCode's `--agent plan` plans and stops, and going on needs Tab to its build agent, which a
+// beginner would not know, so a job would stand still. Both start as usual. resume: the arguments before a session id that continue that session where it stopped (each tool's
+// --help, 2026-10-07: claude --resume <id>, codex resume <id>, gemini --resume <uuid>, copilot --resume=<id> (as it
+// prints it itself: its value is optional, a trailing "=" joins the id, launch.mjs resumeArgs), cursor
+// --resume <chatId>, qwen --resume <id>, opencode --session <id>); resumeMin as planMin.
 export const TOOLS = Object.freeze([
-  Object.freeze({ id: 'claude', name: 'Claude Code', commands: ['claude'], version: ['--version'], ready: ['auth', 'status'], prompt: 'arg' }),
-  Object.freeze({ id: 'codex', name: 'Codex CLI', commands: ['codex'], version: ['--version'], ready: ['login', 'status'], prompt: 'arg', appPackage: /^OpenAI\.Codex_/i }),
-  Object.freeze({ id: 'gemini', name: 'Gemini CLI', commands: ['gemini'], version: ['--version'], ready: null, prompt: '-i' }),
-  Object.freeze({ id: 'copilot', name: 'GitHub Copilot CLI', commands: ['copilot'], version: ['version'], ready: null, prompt: '-i' }),
+  Object.freeze({ id: 'claude', name: 'Claude Code', commands: ['claude'], version: ['--version'], ready: ['auth', 'status'], prompt: 'arg', plan: Object.freeze(['--permission-mode', 'plan']), resume: Object.freeze(['--resume']) }),
+  Object.freeze({ id: 'codex', name: 'Codex CLI', commands: ['codex'], version: ['--version'], ready: ['login', 'status'], prompt: 'arg', appPackage: /^OpenAI\.Codex_/i, resume: Object.freeze(['resume']), resumeMin: '0.160.0' }),
+  Object.freeze({ id: 'gemini', name: 'Gemini CLI', commands: ['gemini'], version: ['--version'], ready: null, prompt: '-i', plan: Object.freeze(['--approval-mode', 'plan']), planMin: '0.61.0', resume: Object.freeze(['--resume']), resumeMin: '0.61.0' }),
+  Object.freeze({ id: 'copilot', name: 'GitHub Copilot CLI', commands: ['copilot'], version: ['version'], ready: null, prompt: '-i', plan: Object.freeze(['--plan']), planMin: '1.0.93', resume: Object.freeze(['--resume=']), resumeMin: '1.0.92' }),
   // `agent` is a generic name: another program could carry it, so it counts only when its folder or its version output
   // says Cursor (generic)
-  Object.freeze({ id: 'cursor', name: 'Cursor CLI', commands: ['cursor-agent', 'agent'], generic: Object.freeze({ agent: /cursor/i }), version: ['--version'], ready: null, prompt: 'arg' }),
-  Object.freeze({ id: 'qwen', name: 'Qwen Code', commands: ['qwen'], version: ['--version'], ready: null, prompt: 'arg' }),
-  Object.freeze({ id: 'opencode', name: 'OpenCode', commands: ['opencode'], version: ['--version'], ready: null, prompt: '--prompt' }),
+  Object.freeze({ id: 'cursor', name: 'Cursor CLI', commands: ['cursor-agent', 'agent'], generic: Object.freeze({ agent: /cursor/i }), version: ['--version'], ready: ['status'], readyOut: (out) => /logged in/i.test(out) && !/not logged in/i.test(out), prompt: 'arg', plan: Object.freeze(['--plan']), planMin: '2026.10.01', resume: Object.freeze(['--resume']), resumeMin: '2026.10.01' }),
+  Object.freeze({ id: 'qwen', name: 'Qwen Code', commands: ['qwen'], version: ['--version'], ready: null, prompt: 'arg', plan: Object.freeze(['--approval-mode', 'plan']), planMin: '0.25.0', resume: Object.freeze(['--resume']), resumeMin: '0.25.0' }),
+  Object.freeze({ id: 'opencode', name: 'OpenCode', commands: ['opencode'], version: ['--version'], ready: null, prompt: '--prompt', resume: Object.freeze(['--session']), resumeMin: '1.18.35' }),
 ]);
 export const TOOL_IDS = Object.freeze(TOOLS.map((t) => t.id));
 export const toolById = (id) => TOOLS.find((t) => t.id === id) || null;
@@ -226,6 +241,62 @@ function defaultIsFile(p) {
   }
 }
 
+// A small JSON settings file of a tool, or null (missing, too large, not JSON)
+function defaultReadJson(p) {
+  try {
+    const st = fs.statSync(p);
+    if (!st.isFile() || st.size > 256 * 1024) return null;
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+// Whether a tool without a sign-in command is set up to sign in, from its own files (review F2, the setup wizard):
+// 'yes' | 'no' | 'unknown'. Only the names of fields and whether a file or a variable exists are looked at; no key, token
+// or account name is ever read into an answer. Gemini CLI: the sign-in type it chose (settings.json security.auth), its
+// Google sign-in file, or GEMINI_API_KEY. Qwen Code: its sign-in type, and for a provider the variable its key comes
+// from (envKey) or a key field. OpenCode: a provider in its credentials file, or a variable of a provider it reads.
+export const OPENCODE_ENV_KEYS = Object.freeze(['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY', 'OPENROUTER_API_KEY', 'NVIDIA_API_KEY', 'GROQ_API_KEY', 'DEEPSEEK_API_KEY', 'MISTRAL_API_KEY', 'XAI_API_KEY']);
+export function fileReady(id, { env = process.env, readJson = defaultReadJson, isFile = defaultIsFile } = {}) {
+  const home = envValue(env, 'USERPROFILE');
+  if (!home) return 'unknown';
+  const has = (name) => !!envValue(env, name);
+  const typeOf = (s) => {
+    const t = s?.security?.auth?.selectedType ?? s?.selectedAuthType;
+    return typeof t === 'string' && t.trim() ? t.trim() : null;
+  };
+  if (id === 'gemini') {
+    // The chosen type alone is no sign-in (review 2026-10-08): Google sign-in needs its file, a key its variable. The key
+    // can also come from a .env file Gemini CLI reads (in the project or the home folder): not looked for, so unknown
+    const s = readJson(path.win32.join(home, '.gemini', 'settings.json'));
+    const google = isFile(path.win32.join(home, '.gemini', 'oauth_creds.json'));
+    const type = typeOf(s);
+    if (!type) return google || has('GEMINI_API_KEY') ? 'yes' : 'no';
+    if (type === 'oauth-personal') return google ? 'yes' : 'no';
+    if (type === 'gemini-api-key') return has('GEMINI_API_KEY') ? 'yes' : 'unknown';
+    if (type === 'vertex-ai') return has('GOOGLE_API_KEY') || has('GOOGLE_CLOUD_PROJECT') ? 'yes' : 'unknown';
+    return 'unknown';
+  }
+  if (id === 'qwen') {
+    const s = readJson(path.win32.join(home, '.qwen', 'settings.json'));
+    const type = typeOf(s);
+    if (!type) return has('OPENAI_API_KEY') || has('DASHSCOPE_API_KEY') ? 'yes' : 'no';
+    if (type === 'qwen-oauth') return isFile(path.win32.join(home, '.qwen', 'oauth_creds.json')) ? 'yes' : 'no';
+    const providers = s?.modelProviders && typeof s.modelProviders === 'object' ? Object.values(s.modelProviders).flat() : [];
+    const keyed = providers.some((p) => p && typeof p === 'object' && ((typeof p.envKey === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(p.envKey) && has(p.envKey)) || (typeof p.apiKey === 'string' && p.apiKey.length > 0)));
+    return keyed || has('OPENAI_API_KEY') ? 'yes' : 'no';
+  }
+  if (id === 'opencode') {
+    const data = envValue(env, 'XDG_DATA_HOME') || path.win32.join(home, '.local', 'share');
+    const a = readJson(path.win32.join(data, 'opencode', 'auth.json'));
+    if (a && typeof a === 'object' && !Array.isArray(a) && Object.keys(a).length) return 'yes';
+    return OPENCODE_ENV_KEYS.some(has) ? 'yes' : 'no';
+  }
+  return 'unknown';
+}
+const FILE_READY = new Set(['gemini', 'qwen', 'opencode']);
+
 function defaultIsDir(p) {
   try {
     return fs.statSync(p).isDirectory();
@@ -272,6 +343,7 @@ export function createToolDetector({
   isFile = defaultIsFile,
   isDir = defaultIsDir,
   readDir = defaultReadDir,
+  readJson = defaultReadJson,
   now = Date.now,
   ttlMs = TTL_MS,
   minRefreshMs = MIN_REFRESH_MS,
@@ -325,10 +397,11 @@ export function createToolDetector({
     const chosen = installs[0] || null;
     let ready = 'unknown';
     if (chosen && tool.ready) {
-      // Exit code only: the output is not even read (it can hold the account's e-mail)
-      const r = await run(chosen, tool.ready, readyTimeoutMs, false);
-      ready = r.timedOut || r.error || r.code === null ? 'unknown' : r.code === 0 ? 'yes' : 'no';
-    }
+      // Exit code only: the output is not even read (it can hold the account's e-mail). readyOut: looked at once for its
+      // words and dropped
+      const r = await run(chosen, tool.ready, readyTimeoutMs, !!tool.readyOut);
+      ready = r.timedOut || r.error || r.code === null ? 'unknown' : r.code === 0 && (!tool.readyOut || tool.readyOut(String(r.out || ''))) ? 'yes' : 'no';
+    } else if (chosen && FILE_READY.has(tool.id)) ready = fileReady(tool.id, { env, readJson, isFile });
     let app = false;
     if (tool.appPackage) {
       const local = envValue(env, 'LOCALAPPDATA');
@@ -384,6 +457,8 @@ export function publicTools(result) {
     // Which installer folder PATH is missing (a known word: the page shows the fix, never the folder itself)
     pathDir: t.installed && t.chosen?.extra && PATH_DIRS.includes(t.chosen.key) ? t.chosen.key : null,
     app: !!t.app,
+    // The command's name only (no folder), for the setup wizard's sign-in line ("agent login")
+    cmd: t.installed && t.chosen?.file && /^[a-z][a-z0-9-]{0,30}$/i.test(path.win32.basename(t.chosen.file).replace(/\.[^.]+$/, '')) ? path.win32.basename(t.chosen.file).replace(/\.[^.]+$/, '').toLowerCase() : null,
   }));
   return {
     at: Number(result?.at) || 0,

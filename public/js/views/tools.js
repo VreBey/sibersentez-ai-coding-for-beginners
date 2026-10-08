@@ -7,12 +7,14 @@
 import { esc, ago, num } from '../format.js';
 import { icon } from '../icons.js';
 import { t } from '../i18n.js';
-import { argvSummary } from '../actions.js';
+import { argvSummary, actionsState } from '../actions.js';
 import { ADAPTER_OF_TOOL } from '../toolTags.js';
 import { store } from '../store.js';
 import { setupCheckHtml, errorBoxHtml, matchError } from '../setupCheck.js';
+import { wizardState, wizardHtml } from './setupWizard.js';
 
-// What the page knows about each tool: how to install it (the official commands; SiberSentez never runs them), what
+// What the page knows about each tool: how to install it (the official commands; SiberSentez never runs them: the
+// person runs them, typed into the setup terminal or copied; the setup wizard, views/setupWizard.js, walks through them), what
 // account it needs, and whether an install command needs Node.js (node: 'npm' = only the npm command).
 export const TOOL_INFO = Object.freeze({
   claude: Object.freeze({
@@ -101,6 +103,8 @@ export function normalizeTools(d) {
       onPath: x.onPath !== false,
       pathDir: PATH_DIRS.has(x.pathDir) ? x.pathDir : null,
       app: x.app === true,
+      // The command's name (no folder) for the wizard's sign-in line
+      cmd: typeof x.cmd === 'string' && /^[a-z][a-z0-9-]{0,30}$/.test(x.cmd) ? x.cmd : null,
     });
   }
   const node = d?.node && typeof d.node === 'object' ? { installed: d.node.installed === true, version: typeof d.node.version === 'string' && VERSION_RE.test(d.node.version) ? d.node.version : null } : null;
@@ -298,9 +302,10 @@ function seenLine(x, seen = []) {
   return `<p class="small ai-seen${any ? '' : ' muted'}">${esc(any ? t('tvSeesCounts', { projects: num(a.projects), skills: num(a.skills), agents: num(a.agents) }) : t('tvSeesNothing'))}</p>`;
 }
 
-function toolCardHtml(x, node, seen = []) {
+// chosen: the tool jobs start with (marked, and where to change it said)
+function toolCardHtml(x, node, seen = [], chosen = false) {
   const info = TOOL_INFO[x.id];
-  const head = `<div class="ai-card-head"><b translate="no">${esc(info.name)}</b>${
+  const head = `<div class="ai-card-head"><b translate="no">${esc(info.name)}</b>${chosen ? `<span class="ai-chip chosen">${esc(t('aiChosenChip'))}</span>` : ''}${
     x.installed
       ? `<span class="ai-chip ok">${esc(t('aiInstalled'))}${x.version ? ` · <span translate="no">${esc(x.version)}</span>` : ''} · ${esc(viaText(x.via))}</span><span class="ai-chip ready-${esc(x.ready)}">${esc(t(`aiReady_${x.ready}`))}</span>`
       : `<span class="ai-chip off">${esc(t('aiNotInstalled'))}</span>`
@@ -326,23 +331,56 @@ function toolCardHtml(x, node, seen = []) {
     if (npm) lines.push(`<p class="small muted">${esc(t('aiNeedsNode', { state: nodeState }))} ${esc(t('aiPolicyTip'))}</p>`);
     if (info.docs) lines.push(`<p class="small"><a href="${esc(info.docs)}" target="_blank" rel="noopener noreferrer">${esc(t('aiDocs'))}</a></p>`);
   }
-  return `<li class="ai-card${x.installed ? ' on' : ''}" data-ai-tool="${esc(x.id)}">${head}${lines.join('')}</li>`;
+  if (chosen) lines.push(`<p class="small muted">${esc(t('aiChosenWhere'))}</p>`);
+  return `<li class="ai-card${x.installed ? ' on' : ''}${chosen ? ' chosen' : ''}" data-ai-tool="${esc(x.id)}">${head}${lines.join('')}</li>`;
 }
 
-// The panel's content (pure): state -> HTML. Installed tools first, then the others, each in the fixed order.
-export function toolsPanelHtml(st = state, now = Date.now(), seen = store.tools, errText = '') {
+// The tool a job starts with (docs/simplify.md): the one chosen in the Settings when it is installed, else Claude Code,
+// else the first one found (pure). found: installedTools(...); stored: the chosen tool's id. The job box and the tools
+// panel ask this one function (views/job.js re-exports it).
+export const TOOL_KEY = 'sibersentez.aiTool';
+export function preferredTool(found, stored = readTool()) {
+  const list = Array.isArray(found) ? found : [];
+  return list.find((x) => x.id === stored) || list.find((x) => x.id === 'claude') || list[0] || null;
+}
+export function readTool() {
+  try {
+    return globalThis.localStorage?.getItem(TOOL_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+export function saveTool(id) {
+  try {
+    globalThis.localStorage?.setItem(TOOL_KEY, String(id || ''));
+  } catch {
+    /* not kept: this page only */
+  }
+}
+
+// The panel's content (pure): state -> HTML. The tool jobs start with comes first, marked (review U13: the one to use
+// in front, its sign-in state said); the other tools fold under "Other tools", installed ones first. With no tool
+// installed every card shows open: one of them is to be chosen and installed.
+export function toolsPanelHtml(st = state, now = Date.now(), seen = store.tools, errText = '', stored = readTool()) {
   let list = '';
   if (st.status === 'ready') {
     const known = TOOL_ORDER.map((id) => st.tools.find((x) => x.id === id) || { id, installed: false, installs: 0, others: [], ready: 'unknown', app: false, onPath: false });
     const sorted = [...known.filter((x) => x.installed), ...known.filter((x) => !x.installed)];
-    list = `<ul class="ai-cards">${sorted.map((x) => toolCardHtml(x, st.node, seen)).join('')}</ul>`;
+    const chosen = preferredTool(sorted.filter((x) => x.installed), stored);
+    if (!chosen) list = `<ul class="ai-cards">${sorted.map((x) => toolCardHtml(x, st.node, seen)).join('')}</ul>`;
+    else {
+      const rest = sorted.filter((x) => x !== chosen);
+      list = `<p class="small ai-chosen-h">${esc(t('aiChosenTitle'))}</p><ul class="ai-cards">${toolCardHtml(chosen, st.node, seen, true)}</ul>${
+        rest.length ? `<details class="ai-more"><summary>${esc(t('aiOtherTools', { count: rest.length }))}</summary><ul class="ai-cards">${rest.map((x) => toolCardHtml(x, st.node, seen)).join('')}</ul></details>` : ''
+      }`;
+    }
   } else if (st.status === 'error') list = `<p class="ai-status warn" role="status">${esc(t('aiLoadFailed'))}</p>`;
   else list = `<p class="ai-status" role="status">${esc(t('aiLoading'))}</p>`;
   const checked = st.status === 'ready' && st.at ? `<span class="small muted">${esc(t('aiPanelChecked', { when: ago(st.at, now) }))}</span>` : '';
   const recheck = `<button type="button" class="act-btn" data-ai-act="recheck"${st.checking ? ' disabled' : ''}>${icon('replay')}<span>${esc(st.checking ? t('aiChecking') : t('aiRecheck'))}</span></button>`;
   return `<header class="ai-panel-head"><h2 id="aiPanelH">${icon('spark')} ${esc(t('aiPanelTitle'))}</h2><button type="button" class="icon-btn ai-panel-close" data-ai-act="close" aria-label="${esc(t('aiPanelClose'))}" title="${esc(t('aiPanelClose'))}">${icon('close')}</button></header>
     <p class="ai-panel-intro">${esc(t('aiPanelIntro'))}</p>
-    <div class="ai-panel-bar">${recheck}${checked}</div>
+    <div class="ai-panel-bar">${recheck}<button type="button" class="act-btn" data-wz="start">${icon('spark')}<span>${esc(t('wzStart'))}</span></button>${checked}</div>
     ${setupCheckHtml(st)}
     ${list}
     ${errorBoxHtml(errText)}
@@ -361,6 +399,23 @@ let setupTyper = null;
 export function setSetupTyper(fn) {
   setupTyper = typeof fn === 'function' ? fn : null;
 }
+// What the wizard's last button goes on to (main.js: the New project window); null: the panel only closes
+let wizardDone = null;
+export function setWizardDone(fn) {
+  wizardDone = typeof fn === 'function' ? fn : null;
+}
+// The wizard's frame (pure): the panel's own header (the dialog's name), the wizard, the live line
+export function wizardPanelHtml(st, pick, { canType = false, signedIn = false } = {}) {
+  const w = wizardState(st, pick, TOOL_INFO);
+  return `<header class="ai-panel-head"><h2 id="aiPanelH">${icon('spark')} ${esc(t('wzTitle'))}</h2><button type="button" class="icon-btn ai-panel-close" data-ai-act="close" aria-label="${esc(t('aiPanelClose'))}" title="${esc(t('aiPanelClose'))}">${icon('close')}</button></header>
+    ${st.status === 'ready' ? wizardHtml(w, { info: TOOL_INFO, st, canType, signedIn }) : `<p class="ai-status" role="status">${esc(st.status === 'error' ? t('aiLoadFailed') : t('aiLoading'))}</p>`}
+    <p class="sr-only" role="status" data-ai-live></p>`;
+}
+// The wizard opens by itself while no tool is installed; "Step by step" opens it, "All tools" leaves it
+export const wizardFirst = (st) => st.status === 'ready' && !st.tools.some((x) => x.installed);
+// While the person installs or signs in, the tools are asked again every WIZARD_POLL_MS (the terminal is theirs; the
+// wizard follows when it is done)
+export const WIZARD_POLL_MS = 15 * 1000;
 function addTypeButtons(root) {
   if (!setupTyper || !root) return;
   for (const li of root.querySelectorAll('li.ai-cmd')) {
@@ -398,7 +453,32 @@ function createPanel() {
   document.body.appendChild(scrim);
   let back = null;
   let off = null;
+  // The wizard: view null = by itself (open while no tool is installed), 'wizard' or 'list' when chosen; pick: the
+  // tool being set up; signed: tools the person said they signed in to (their state cannot be read)
+  let view = null;
+  let pick = null;
+  const signed = new Set();
+  let poll = 0;
+  const inWizard = () => view === 'wizard' || (view === null && wizardFirst(state));
+  const pollFor = (on) => {
+    if (on && !poll) poll = setInterval(() => loadTools({ refresh: true }), WIZARD_POLL_MS);
+    if (!on && poll) {
+      clearInterval(poll);
+      poll = 0;
+    }
+  };
   const draw = () => {
+    if (inWizard()) {
+      const focusWz = document.activeElement && box.contains(document.activeElement) ? document.activeElement.dataset?.wz || document.activeElement.dataset?.aiAct : null;
+      const canType = !!setupTyper && actionsState().mode === 'live';
+      box.innerHTML = wizardPanelHtml(state, pick, { canType, signedIn: signed.has(pick) });
+      if (canType) addTypeButtons(box);
+      const step = wizardState(state, pick, TOOL_INFO).step;
+      pollFor(step === 'needs' || step === 'install' || step === 'signin');
+      if (focusWz) (box.querySelector(`[data-wz="${focusWz}"]`) || box.querySelector(`[data-ai-act="${focusWz}"]`))?.focus({ preventScroll: true });
+      return;
+    }
+    pollFor(false);
     const focusAct = document.activeElement && box.contains(document.activeElement) ? document.activeElement.dataset?.aiAct : null;
     // The pasted error survives a redraw (the tools answering while the panel is open); it is never stored
     const ta = box.querySelector('[data-sc-text]');
@@ -436,6 +516,8 @@ function createPanel() {
     box.innerHTML = ''; // the pasted error goes with the panel
     off?.();
     off = null;
+    pollFor(false);
+    view = null;
     if (back?.isConnected) back.focus({ preventScroll: true });
     back = null;
   }
@@ -457,6 +539,25 @@ function createPanel() {
     if (e.target === scrim) return close();
     const act = e.target.closest('[data-ai-act]')?.dataset.aiAct;
     if (act === 'close') return close();
+    // The wizard's buttons: the first focusable element of the new step takes the keyboard
+    const wz = e.target.closest('[data-wz]')?.dataset.wz;
+    if (wz) {
+      if (wz === 'start') view = 'wizard';
+      else if (wz === 'list') view = 'list';
+      else if (wz === 'repick') pick = null;
+      else if (wz.startsWith('pick:')) pick = wz.slice(5);
+      else if (wz === 'signed') signed.add(pick);
+      else if (wz === 'use') {
+        saveTool(pick);
+        const then = wizardDone;
+        close();
+        then?.();
+        return;
+      }
+      draw();
+      (box.querySelector('.wz-h') ? box.querySelector('.wz button:not([data-wz="repick"]), .wz [data-ai-type], .wz [data-ai-copy]') : box.querySelector('[data-wz="start"]'))?.focus({ preventScroll: true });
+      return;
+    }
     if (act === 'recheck') return loadTools({ refresh: true });
     const tb = e.target.closest('[data-ai-type]');
     if (tb && setupTyper) {
@@ -490,10 +591,15 @@ function createPanel() {
       e.preventDefault();
       close();
     } else if (e.key === 'Tab') {
-      const f = [...box.querySelectorAll('button:not([disabled]), a[href], summary, textarea, [tabindex="0"]')];
+      // Only what can take focus now: the fields and buttons inside a closed fold are not (they made the last item
+      // never the last, and Tab left the dialog for the page behind: found by an accessibility pass, 2026-10-08)
+      const f = [...box.querySelectorAll('button:not([disabled]), a[href], summary, textarea, input, select, [tabindex="0"]')].filter((el) => el.getClientRects().length > 0 && !el.closest('[hidden], details:not([open]) > :not(summary)'));
       if (f.length) {
         const i = f.indexOf(document.activeElement);
-        if (e.shiftKey && i <= 0) {
+        if (i < 0) {
+          e.preventDefault();
+          f[e.shiftKey ? f.length - 1 : 0].focus();
+        } else if (e.shiftKey && i <= 0) {
           e.preventDefault();
           f[f.length - 1].focus();
         } else if (!e.shiftKey && i === f.length - 1) {

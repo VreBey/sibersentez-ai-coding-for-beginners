@@ -363,6 +363,29 @@ export function readProjectItems(dir, { claudeDir = null, frontmatter = readFron
 const IDEA_CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/g;
 const IDEA_INVISIBLE_RE = /[​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 
+// A job the person wrote (review U06, 2026-10-07): several lines in the drawer's and the Building's box, at most
+// JOB_MAX characters. It goes into the job's file (launch.mjs jobMessageText quotes each line), never onto a command
+// line. Cleaned like an idea, but its line breaks are kept: controls other than the line break and invisible marks
+// out, spaces collapsed within a line, at most one empty line in a row, trimmed. '' when nothing is left.
+export const JOB_MAX = 2000;
+const JOB_CONTROL_RE = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g;
+export function normalizeJob(raw) {
+  if (typeof raw !== 'string' || !raw) return '';
+  let s = raw.slice(0, JOB_MAX * 4);
+  if (typeof s.toWellFormed === 'function') s = s.toWellFormed();
+  s = s
+    .normalize('NFC')
+    .replace(/\r\n?/g, '\n')
+    .replace(JOB_CONTROL_RE, ' ')
+    .replace(IDEA_INVISIBLE_RE, '')
+    .split('\n')
+    .map((l) => l.replace(/[^\S\n]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return Array.from(s).slice(0, JOB_MAX).join('').trim();
+}
+
 // The idea as the fit reads it: a string, controls and invisible marks out, spaces collapsed, at most IDEA_MAX
 // characters (code points), trimmed. Anything else (not a string, only spaces) is ''. The idea is never written to a
 // file or a log line; it is kept in memory as a cache key only (MAX_IDEA_FITS).

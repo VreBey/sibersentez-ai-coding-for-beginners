@@ -633,7 +633,7 @@ describe('shell: the restart that applies the mode', () => {
     assert.equal((src.match(/writeHubActionsSetting\(/g) || []).length, 0);
     assert.doesNotMatch(src, /settings\.json['"`]\s*\)\s*,\s*JSON/);
     // The bridge's three handlers (the actions mode, and the new project's folder picker and idea: docs/start-flow.md)
-    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'the bridge handlers (actions, project folder, library folder, language, idea, attention) and five for the terminal (open, list, close; write and resize as sends: test/terminal.test.mjs), nothing else');
+    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'the bridge handlers (actions, project folder, library folder, language, idea, a project made from an idea, attention) and five for the terminal (open, list, close; write and resize as sends: test/terminal.test.mjs), nothing else');
     assert.doesNotMatch(src, /contextBridge|ipcRenderer/);
     // The one send into the page: the embedded terminals' output, only while the window shows the app
     assert.equal((src.match(/webContents\.send\(/g) || []).length, 1);

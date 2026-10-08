@@ -91,6 +91,37 @@ its own tabs: the building shows such a tool as "open in the terminal", never as
 a tab that ends offers to resume only a Claude Code session. Not seen: a tool typed into a plain shell, or started in
 Windows Terminal.
 
+**The tool ended, the shell stays (2026-10-07).** The launcher runs in `cmd /k`, so its shell stays open in the
+project folder after the tool ends, and an open tab alone is no proof that an AI still works. The launcher keeps the
+path of a mark next to itself before any `cd` (`@set "SIBERSENTEZ_ENDED=%~f0.ended"`) and leaves the mark once the
+tool's line returns (`@type nul>"%SIBERSENTEZ_ENDED%" 2>nul`, `server/launch.mjs`). The shell looks for it every
+1.5 s while an AI tab waits (`electron/terminals.mjs`, `TOOL_CHECK_MS`); then the tab's session says `running: false`
+to the server, which no longer refuses a restore for it, and the page gets `sibersentez:term-tool-end`: the building
+stops showing the tool as open in the terminal, and a Claude Code tab offers to resume its session as after an exit.
+A reloaded page reads `toolEnded` from the list. Ctrl+C answered with "Y" at "Terminate batch job" skips the mark:
+the tab then still counts as running, the safe side for a restore. So does a tab open for more than a day, whose
+launcher another start removed meanwhile (cmd cannot read the line that leaves the mark). Marks go with their launcher
+after a day (`cleanupLaunchers`). The tab then says so in a note above its screen (not in the live shell's output, where a
+redraw would lose it; shown again after a reload): a tool the person starts in that shell is not followed (no state
+is guessed from its text); jobs go through the job box.
+
+The dock's decisions live in `public/js/dockState.js` (2026-10-07, the review's Y1 and Y2), tested without a window
+(`test/dock-state.test.mjs`): "show the terminal" brings forward the newest tab of the project whose AI still runs,
+never one whose tool ended (`pickRunningTab`), so an answer never goes to an empty shell; a tool-ended event that
+comes before its tab exists is kept (at most 16) and applied when the tab is added, a late one for a closed tab is
+dropped; a Claude tab's resume bar (after its tool ended or its shell closed) offers a session of the last two
+minutes that names the tab's job first, never one of another job, and a tab of no job never one whose job still runs
+in another tab (`tabResumeSession`; the tab knows its job from the shell; one job-id rule for the page,
+`public/js/jobId.js`). `test/launcher-cmd.test.mjs` runs a real launcher in `cmd.exe` (Windows only): a tool that returns and
+one that cannot start both leave the mark, never in the project. Tests: `test/terminal.test.mjs` (the tool ended), `test/ai-start.test.mjs` (the launcher).
+
+**Who may go on with a job (2026-10-07, `public/js/views/job.js` `resumeCandidate`).** The Building, its next step
+and the drawer ask one function. An AI tool of the project still running in the terminal means nothing stopped; a job
+the app started with another tool (its marker's `tool`) never offers a Claude session; a Claude session whose first
+prompt names this job's file (`job-J….md`) is the one, and one naming another job never is; a session naming no job
+(started by hand, or a job from before job ids) is offered only around the job's last change (the 15-minute rule).
+Tests: `test/resume.test.mjs`.
+
 ## What the AI asks (`public/js/promptHelp.js`)
 
 When an AI tool in an embedded terminal asks the person for something, a note appears over the terminal's top right
@@ -155,3 +186,16 @@ own notice says why, and the command can still be copied.
 When the person pressed Enter in the setup terminal and its shell is back at an empty prompt, the dock calls
 `onSetupDone` and main.js checks the tools again (`loadTools({ refresh: true })`, throttled by the server): a tool
 just installed shows up without "Check again". Only the setup terminal is watched this way.
+
+## Errors of your program (roadmap F2, 2026-10-08)
+
+A plain terminal of a project (not an AI tool's own tab, where the AI reads the same error) that prints an error of the
+person's own program gets the help box with that line, what it means in plain words and **Ask the AI to fix it**
+(`promptHelp.js` `CODE_ERRORS`, `detectCodeError`): a missing module or package, a port already in use (not Vite's
+"trying another one", which goes on by itself), a missing npm script, a syntax error, a runtime error (TypeError,
+NameError, …), a failed build. The newest error on the screen wins; the line is cleaned and shortened to 160
+characters. The button sends one sentence ("When I run the project this error appears: “…”. Find the cause, fix it and
+tell me what you changed.") to `main.js` `onFix`: the project's running AI tab gets it typed without Enter
+(`askAi`, which types nothing while the tool's screen asks something); with no AI tab the project's drawer opens with
+the sentence in its job box. Nothing is ever sent by itself. A setup error (scripts disabled, Git, Node.js, sign-in,
+limits, network) keeps the setup check's box with its fixes, and neither kind marks the tab as asking.

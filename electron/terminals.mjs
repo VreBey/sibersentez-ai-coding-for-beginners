@@ -2,6 +2,7 @@
 // dock. The page reaches them only through the preload bridge of the SiberSentez window (never over HTTP), sends ids and
 // keystrokes, never a path or a command line: the folder comes from the server's own checks (terminal-target), the
 // program is fixed here. Pure over its parts (spawn, send, log) so the tests run it with a fake pty.
+import fs from 'node:fs';
 import path from 'node:path';
 
 export const TERMINAL_IPC = Object.freeze({
@@ -12,7 +13,12 @@ export const TERMINAL_IPC = Object.freeze({
   list: 'sibersentez:term-list',
   data: 'sibersentez:term-data',
   exit: 'sibersentez:term-exit',
+  toolEnd: 'sibersentez:term-tool-end',
 });
+// The mark a launcher leaves next to itself when its tool ended (server/launch.mjs ENDED_SUFFIX): the tab's shell stays
+// open, the AI does not run any more. Looked for this often while an AI tab waits for it.
+export const ENDED_SUFFIX = '.ended';
+export const TOOL_CHECK_MS = 1500;
 export const MAX_TERMINALS = 8;
 export const MAX_WRITE = 64 * 1024; // one write from the page (a paste included)
 export const MAX_BUFFER = 256 * 1024; // kept per terminal, so a reloaded page shows what was there
@@ -221,8 +227,9 @@ const intIn = (v, [lo, hi]) => Number.isInteger(v) && v >= lo && v <= hi;
 // send(channel, ...args): to the window (the caller sends only while the window shows the app)
 // onChange(ended): after a terminal opened or ended (ended: { id, projectId, tool, jobId, exitCode } of the one that
 // ended, else null); the shell tells the server what runs (sessions()) so a restore sees AI tools of every kind
-export function createTerminals({ spawn, send = () => {}, onChange = () => {}, log = () => {}, env = {}, program = terminalProgram(), now = Date.now, clock = Date.now, max = MAX_TERMINALS, setTimer = setTimeout, clearTimer = clearTimeout, batchMs = BATCH_MS, highWater = HIGH_WATER } = {}) {
-  const terms = new Map(); // id -> { pty, title, projectId, startedAt, buffer, ai, tool, jobId }
+// exists/every/stopEvery: the ended-mark check (fs.existsSync, setInterval, clearInterval; fakes in tests)
+export function createTerminals({ spawn, send = () => {}, onChange = () => {}, log = () => {}, env = {}, program = terminalProgram(), now = Date.now, clock = Date.now, max = MAX_TERMINALS, setTimer = setTimeout, clearTimer = clearTimeout, batchMs = BATCH_MS, highWater = HIGH_WATER, exists = (p) => fs.existsSync(p), every = setInterval, stopEvery = clearInterval, checkMs = TOOL_CHECK_MS } = {}) {
+  const terms = new Map(); // id -> { pty, title, projectId, startedAt, buffer, ai, tool, jobId, endedMark, toolEnded }
   const changed = (ended = null) => {
     try {
       onChange(ended);
@@ -231,6 +238,37 @@ export function createTerminals({ spawn, send = () => {}, onChange = () => {}, l
     }
   };
   let seq = 0;
+
+  // The AI tabs whose tool has not ended yet are checked for their launcher's mark; the check stops when none waits
+  let checker = null;
+  const waiting = () => [...terms].filter(([, t]) => t.endedMark && !t.toolEnded);
+  function checkEnded() {
+    const list = waiting();
+    let ended = false;
+    for (const [id, t] of list) {
+      let there = false;
+      try {
+        there = exists(t.endedMark);
+      } catch {
+        // not readable just now: asked again next time
+      }
+      if (!there) continue;
+      t.toolEnded = true;
+      ended = true;
+      send(TERMINAL_IPC.toolEnd, id);
+      log(`terminal ${id}: the tool ended, the shell stays`);
+    }
+    if (!waiting().length && checker) {
+      stopEvery(checker);
+      checker = null;
+    }
+    if (ended) changed();
+  }
+  function watchEnded() {
+    if (checker || !waiting().length) return;
+    checker = every(checkEnded, checkMs);
+    checker?.unref?.();
+  }
 
   // launch: the server's program for a start-ai in the dock (its launcher in a Command Prompt); else the fixed shell
   // tool, jobId: the AI tool and the app job of a start-ai (the server's launch record); a plain shell has neither
@@ -248,7 +286,10 @@ export function createTerminals({ spawn, send = () => {}, onChange = () => {}, l
     }
     // ai: an AI tool runs in it (the page tells a plain shell apart, docs/embedded-terminal.md)
     const ai = prog !== program;
-    const t = { pty, title: String(title || '').slice(0, 60), projectId, startedAt: now(), buffer: createChunkBuffer(MAX_BUFFER), ai, tool: ai && TOOL_ID.test(tool || '') ? tool : null, jobId: ai && JOB_ID.test(jobId || '') ? jobId : null };
+    // The launcher's ended mark (an AI start: the last argument is its .cmd, absolute or relative to the folder)
+    const last = ai ? prog.args.at(-1) : null;
+    const endedMark = typeof last === 'string' && /\.cmd$/i.test(last) ? path.win32.resolve(dir, last) + ENDED_SUFFIX : null;
+    const t = { pty, title: String(title || '').slice(0, 60), projectId, startedAt: now(), buffer: createChunkBuffer(MAX_BUFFER), ai, tool: ai && TOOL_ID.test(tool || '') ? tool : null, jobId: ai && JOB_ID.test(jobId || '') ? jobId : null, endedMark, toolEnded: false };
     // a pty without pause/resume (or one that throws) just goes unthrottled
     const safe = (name) => () => {
       try {
@@ -275,7 +316,8 @@ export function createTerminals({ spawn, send = () => {}, onChange = () => {}, l
     });
     log(`terminal ${id} opened (${terms.size} running)`);
     changed();
-    return { ok: true, id, title: t.title, projectId, ai: t.ai, tool: t.tool };
+    watchEnded();
+    return { ok: true, id, title: t.title, projectId, ai: t.ai, tool: t.tool, jobId: t.jobId };
   }
 
   const get = (id) => (typeof id === 'string' && TERM_ID.test(id) ? terms.get(id) : undefined);
@@ -319,9 +361,10 @@ export function createTerminals({ spawn, send = () => {}, onChange = () => {}, l
   }
 
   // A (re)loaded page asks what runs, with what each one showed so far
-  const list = () => [...terms].map(([id, t]) => ({ id, title: t.title, projectId: t.projectId, startedAt: t.startedAt, buffer: t.buffer.toString(), ai: t.ai, tool: t.tool }));
-  // What runs, for the server (no buffer, no title): the terminals of AI starts and plain shells, with their project
-  const sessions = () => [...terms].map(([id, t]) => ({ id, projectId: t.projectId, ai: t.ai, tool: t.tool, jobId: t.jobId, startedAt: t.startedAt }));
+  const list = () => [...terms].map(([id, t]) => ({ id, title: t.title, projectId: t.projectId, startedAt: t.startedAt, buffer: t.buffer.toString(), ai: t.ai, tool: t.tool, jobId: t.jobId, toolEnded: t.toolEnded }));
+  // What runs, for the server (no buffer, no title): the terminals of AI starts and plain shells, with their project;
+  // running: false once an AI tab's tool ended (its shell may stay open for a long time)
+  const sessions = () => [...terms].map(([id, t]) => ({ id, projectId: t.projectId, ai: t.ai, tool: t.tool, jobId: t.jobId, startedAt: t.startedAt, running: !t.toolEnded }));
 
   return { open, write, resize, close, closeAll, list, sessions, count: () => terms.size };
 }

@@ -4,7 +4,7 @@ description: "Plan step of a team job: clarifies the goal, writes .sibersentez/P
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.6"
+  version: "0.1.7"
   sibersentez-tags: "workflow, planning"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "ekip işini planla, ekip için plan, planı onayla, plan onayı, ekip planı, işi görevlere böl"
@@ -40,6 +40,10 @@ Ask the user **one question at a time**, only about what the files and the code 
 questions: the goal in one sentence, what is out of scope, how they will know it is done, and any limit (time,
 cost, data that must not be touched). If the answer is "I don't know", pick a sensible default and record it as an
 assumption in the plan.
+
+Ask only about this job. Do not offer extras while planning (an instruction file such as AGENTS.md, a test framework,
+CI, a new library, a rewrite): each question costs a beginner attention and time. If one would really help, name it
+once at the end, in the wrap-up's "what next", where the user can say yes later.
 
 ## 3. Write the plan
 

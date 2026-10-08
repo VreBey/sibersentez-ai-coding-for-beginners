@@ -63,9 +63,10 @@ or `{ problem }` (null when there is no project or no hub).
 ## 4. In the drawer
 
 **Restore points**, under "What changed": one line on what the points are; the points with a plain reason ("Before
-the AI started", "Before going back"), the time to the second and the file count; **Go back to this** asks for the
-preview (nothing changes), which shows three short lists (put back, brought back, removed) and, in live mode, **Yes,
-go back**. Preview mode shows the plan only; off disables the buttons (they open the actions chooser). The result
+the AI started", "Before going back"), the time to the second and the file count; **Review going back** asks for the
+preview (nothing changes), which shows three short lists (put back, brought back, removed), what it never touches
+(node_modules, .git, build folders, and a lean point's big files and logs) and, in live mode, **Go back to this
+point** (2026-10-07, review U17: the review first, no "one click" promise). Preview mode shows the plan only; off disables the buttons (they open the actions chooser). The result
 line says how to undo it.
 
 ## 5. Tests
@@ -123,3 +124,66 @@ answers it as `jobs` (only known fields of known shapes are read back). The job 
 asks the server once for the shown job (`askJobPoint`: again after 30 s, at most four times, since a job started
 outside the app or before this version has no record) and says it next to the job. A start without an app job (an
 idea, a session resumed) records nothing. Tests: `test/restore-coverage.test.mjs`.
+
+**Present, not only past (2026-10-07, docs/development-plan-2026-10-07.md F2).** A start record is history: only the
+newest `RESTORE_KEEP` points are kept, so a newer point (a resume, going back) could push a job's start copy out while
+the job box still promised it. Now:
+
+- The `/restore` answer marks each job record with `available`: whether its point is among the points listed now (a
+  pushed-out point, or one whose manifest cannot be read, is not).
+- The page keeps the project's points as last listed (by the job box's own check, at most every 30 s while it shows a
+  copy, or by the drawer's restore section) and forgets them after a start or going back, so the next frame asks
+  again. A copy that is no longer there (pushed out, or its manifest unreadable) says so (`rstStartGone`): "a copy
+  was kept, but it is no longer there", with the way to the points that remain; it never promises a return.
+- The current job's start copy (the project's marker names the job; its record names the point) is kept past
+  `RESTORE_KEEP` while that job is the current one: one point more at most. Every point taken (a start, going back)
+  prunes with it protected.
+
+Tests: `test/restore-coverage.test.mjs` (F2 reproduced, the same open page).
+
+## 9. What a job changed (2026-10-07, review package 3)
+
+`GET /api/projects/<id>/job-changes?job=<Job-ID>` (read-only, no action mode; `projectJobChanges`) compares the project
+with that job's start copy (its record, §8): the files changed, added and deleted since the job started, at most 200
+names per list (`more` says when there are more), the team's own notes under `.sibersentez/` counted apart (`notes`).
+A file of the same size is read and its digest decides (review Z1: a file rewritten with its size and time kept is a
+change; the size and time only pick what to read); a file that cannot be read now is listed apart (`unknown`), never
+counted as unchanged or changed; a name whose case alone changed is a change. The comparison is async (one file after
+the other; measured 2026-10-07 on this repository, 856 files, 80 MB lean: about 0.4 s). `counts` are the whole lists' (the names
+are cut). A lean copy's limits do not turn sizes into deletions: a file in the copy that grew past them is still there,
+so it changed; a file left out then (born before the job started) that shrank under them changed too, it is not new.
+One comparison per project and job is kept 10 s on the server (`createJobChangesCache`); a broad folder is not read.
+Nothing is written. `basis` says how far it holds: `start` (compared; changes the
+person made meanwhile are in it too, no file is attributed to the AI for certain; a lean copy's left-out files are
+never listed, `leftOut`), `no-record` (started outside the app or before records), `no-copy`, `gone`, `unreadable`.
+
+The drawer's "This job's result" (`public/js/jobResult.js`) shows it once the job reached its result or was accepted:
+what was asked (the plan's title), these changes, the checks apart (the AI reviewer's own report; SiberSentez itself
+ran no test; whether the person accepted), how to open it ("How to run it" right below, now also at the result step)
+and going back (the job box's sentence, never a copy that is gone). Without a start copy of its own it says so and
+points to "What changed" further down, which shows the recent changes, earlier work included. Tests:
+`test/job-changes.test.mjs`, `test/job-result.test.mjs`. Checked in a window on a job at its result (Turkish and
+English): the strip's "Open the result" opens the drawer at it.
+
+**The result first (2026-10-07, review U07, U08).** While the result waits (`finish`) it is the drawer's first section
+and carries the job's steps; the job box comes after "How to run it" and the restore points as a plain "New job"
+without the steps and with a secondary Start, so it never reads as the way to answer the job. "Tell the lead in its
+terminal" became one button, "Go to this job's AI session": an AI tab of the project in SiberSentez's terminal comes
+forward, else the job's own Claude Code session (`job.js jobSession`: the one that names the job, else an unnamed one
+at work around the job's last change) goes on where it stopped, else its drawer opens and says where it runs: the
+Building's result card's own path (`main.js` `open-ai-terminal`). With neither a tab nor a session the section says
+so and points to a new job instead of a button that leads nowhere. When the job's AI no longer runs (no tab, its
+session closed) the section says so above the button, as the job box did. Known limits: an AI tab of the project that
+runs another job is brought forward too (the Building's card does the same; the tab knows its job id, a later step
+can pick by it), and going on with the job's closed session does not look for another Claude Code session of the
+project running outside SiberSentez, so a click then starts a second one in the same folder. Accepting stays the person's word to the AI; there
+is no accept button in the app (the owner's choice, 2026-10-07).
+
+**Reusing the newest point (2026-10-07, review Z1).** A start answers the newest point again when nothing changed.
+The same paths, sizes and times only make it a candidate: every file's bytes are compared with its digest (SHA-256,
+or SHA-1 for older points) before it is answered again; one that differs, or cannot be read, makes a new copy. The
+start's own way reads them without holding the server (`createPointAsync`; about 0.45 s on the repository above).
+A file another program keeps locked (an IDE's open database) can no longer hide behind a reused point: its bytes cannot
+be read, so a new copy is tried, and while the lock lasts that copy fails (`copy-failed`) and the job box says no copy
+was kept. That is the honest answer: no copy of that file could be made.
+Tests: `test/job-changes.test.mjs` (Z1 reproduced).

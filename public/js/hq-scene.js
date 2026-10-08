@@ -85,8 +85,9 @@ export function roomKindFor(actor, mainKind) {
   return mainKind;
 }
 
-// Other tools (Codex, Gemini CLI, Copilot, Cursor, Antigravity, Qwen Code, OpenCode): SiberSentez reads no session of
-// theirs, so it never claims one works. What is known: the tool runs in SiberSentez's own terminal for this project
+// Other tools (Codex, Gemini CLI, Copilot, Cursor, Antigravity, Qwen Code, OpenCode): no live state of theirs is known
+// (Codex's and Gemini CLI's logs are read, server/toolLogs.mjs, but say nothing of an open session), so it never claims
+// one works. What is known: the tool runs in SiberSentez's own terminal for this project
 // ('running': open there, what it does is not known), or it left a trace in the project's folder (the catalog's
 // toolSeen, from the tools' file times): in the last three minutes 'seen' (active recently, state not known), in the
 // last 45 'left'; older traces get no actor. dock: the terminal tabs that still run [{ projectId, tool }] (tool: the

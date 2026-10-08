@@ -8,7 +8,7 @@ const SHORT = Object.freeze({ 'claude-code': 'Claude', codex: 'Codex', 'gemini-c
 // One fixed hue per adapter (no logos): the tags and the filter keep the same color everywhere
 const HUE = Object.freeze({ 'claude-code': '#e08a5e', codex: '#5fbf9a', 'gemini-cli': '#6f9cf0', copilot: '#b38cf0', cursor: '#c8ccd6', antigravity: '#e6c35c' });
 // The start-with-AI tools (views/tools.js TOOL_INFO) and the adapter that reads the same tool's traces
-export const ADAPTER_OF_TOOL = Object.freeze({ claude: 'claude-code', codex: 'codex', gemini: 'gemini-cli', copilot: 'copilot', cursor: 'cursor' });
+export const ADAPTER_OF_TOOL = Object.freeze({ claude: 'claude-code', codex: 'codex', gemini: 'gemini-cli', copilot: 'copilot', cursor: 'cursor', qwen: 'qwen', opencode: 'opencode' });
 
 export const toolIdsOf = (x) => (Array.isArray(x?.via) ? x.via : Array.isArray(x?.tools) ? x.tools : []);
 export const toolShort = (id, tools = []) => SHORT[id] || tools.find((x) => x.id === id)?.name || id;

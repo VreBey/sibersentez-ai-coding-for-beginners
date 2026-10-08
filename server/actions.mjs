@@ -29,10 +29,10 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import { isLegacyHub, listLibrary, findLibraryItem, scanSource, publicScanItems, planImport, executeImport, writeCatalog, publicPlan, validName, normRel, lstat, treeHash, sameHash, CATEGORY_RE, MAX_REL_PATH } from './library.mjs';
 import { TARGETS, defaultTargets, resolveProject, readInstalls, planInstall, executeInstall, planRemove, executeRemove, planTrial, makeTrial } from './install.mjs';
 import { createPointAsync, planRestore, applyRestore, recordJobPoint, POINT_ID_RE } from './restore.mjs';
-import { createFit, planApplyImports, KEY_RE, normalizeIdea } from './fit.mjs';
+import { createFit, planApplyImports, KEY_RE, normalizeIdea, normalizeJob } from './fit.mjs';
 // "Start with AI" (docs/ai-start.md)
 import { sharedToolDetector, toolById, TOOL_IDS, envValue } from './tools.mjs';
-import { firstMessageText, jobMessageText, planFirstMessage, writeFirstMessage, launchPrompt, toolArgs, jobArgs, launcherText, pickLaunchDir, buildAiArgv, buildAiFallbackArgv, newLauncherName, cleanupLaunchers, SAFE_LAUNCH_RE, FIRST_DIR } from './launch.mjs';
+import { firstMessageText, jobMessageText, planFirstMessage, writeFirstMessage, launchPrompt, toolArgs, jobArgs, versionAtLeast, resumeArgs, launcherText, pickLaunchDir, buildAiArgv, buildAiFallbackArgv, newLauncherName, cleanupLaunchers, SAFE_LAUNCH_RE, FIRST_DIR } from './launch.mjs';
 import { newJobId, readCurrentJob, writeCurrentJob, markerError, CURRENT_JOB_FILE } from './job-id.mjs';
 import { createGitHub, cleanupIncoming, parseGitHubUrl, parseRepoName, describeDownload, planDownloadImport, readSources, findSource, updateSources, sourceRow, diffItems, FETCH_ID_RE } from './github.mjs';
 import { reviewItem } from './review.mjs';
@@ -75,7 +75,9 @@ export function realWorkDir(dir) {
   return /^[A-Za-z]:$/.test(parent) ? `${parent}\\` : parent;
 }
 
-const MAX_BODY = 4096;
+// A request's body, at most: a job of JOB_MAX characters (fit.mjs, up to 3 bytes each in UTF-8) and the other fields
+// fit with room (it was 4096 when a job was 300 characters)
+const MAX_BODY = 16384;
 const REPEAT_MS = 3000;
 const MAX_PACKAGES = 10;
 const MAX_TITLE = 40;
@@ -371,6 +373,8 @@ export function createActions({
       session = ingest?.sessions?.get(body.sessionId) || null;
       if (!session) return reject(404, 'session-not-found');
       if (action === 'resume' && session.live) return reject(409, 'session-live', { hint: 'fork' });
+      // Continue and copy run Claude Code's --resume: another tool's session (server/toolLogs.mjs) is not Claude's
+      if ((action === 'resume' || action === 'fork') && (session.tool || 'claude') !== 'claude') return reject(400, 'resume-claude-only');
     }
 
     // Project: must be in the catalog and must not be a broad folder
@@ -846,8 +850,13 @@ export function createActions({
     if (action === 'restore-apply' && execute && aiActiveIn(ctx.project.id)) return failed(409, 'ai-working', 'restore');
     const plan = planRestore(args);
     if (!plan.ok) return failed(plan.problem === 'point-missing' ? 404 : 409, plan.problem, 'restore');
-    const cut = (list) => list.slice(0, RESTORE_LIST_MAX);
-    const summary = { point: plan.point, planId: plan.planId, changed: cut(plan.changed), missing: cut(plan.missing), added: cut(plan.added), counts: { changed: plan.changed.length, missing: plan.missing.length, added: plan.added.length } };
+    // The project's own files first, the team's notes (.sibersentez/) after them, counted apart: the page names the
+    // files the person made and folds the notes (seen when using the app, 2026-10-08: style.css was one line among
+    // eleven notes, and a long list of notes could push the project's files past the cut)
+    const isNote = (rel) => rel.toLowerCase().startsWith(`${FIRST_DIR}/`);
+    const cut = (list) => [...list.filter((r) => !isNote(r)), ...list.filter(isNote)].slice(0, RESTORE_LIST_MAX);
+    const notes = (list) => list.filter(isNote).length;
+    const summary = { point: plan.point, planId: plan.planId, changed: cut(plan.changed), missing: cut(plan.missing), added: cut(plan.added), counts: { changed: plan.changed.length, missing: plan.missing.length, added: plan.added.length }, notes: { changed: notes(plan.changed), missing: notes(plan.missing), added: notes(plan.added) } };
     if (action === 'restore-preview' || !execute) return { status: 200, body: { ...base, ...summary, result: { executed: false } }, note: action === 'restore-preview' ? 'plan' : 'dry' };
     const r = applyRestore({ ...args, planId: ctx.planId });
     if (!r.ok) return failed(r.problem === 'point-missing' ? 404 : 409, r.problem, 'restore', summary);
@@ -1082,8 +1091,9 @@ export function createActions({
 
   // ---------------- start-ai: an AI tool in a terminal (docs/ai-start.md) ----------------
   // Body: projectId or sessionId, tool (an id of server/tools.mjs), withIdea (boolean, optional; absent = false),
-  // resume (boolean, optional): continue a closed Claude Code session (claude --resume <its id>) through the same
-  // launcher, so it can run in the dock too; only with tool claude and a sessionId, never with an idea.
+  // resume (boolean, optional): continue a closed session of that tool (its resume arguments, server/tools.mjs: claude
+  // --resume <id>, codex resume <id>...) through the same launcher, so it can run in the dock too; only a tool that
+  // can, with a session of that very tool and a sessionId, never with an idea.
   // The folder, the tab title and the ids pass exactly the terminal action's checks. No text of the request reaches
   // any command line: the tool comes from detection (an absolute path), the prompt is a fixed ASCII sentence naming
   // the first-message file, and wt.exe only ever gets cmd.exe and the launcher (server/launch.mjs).
@@ -1110,12 +1120,12 @@ export function createActions({
     if (body.inDock !== undefined && typeof body.inDock !== 'boolean') return reject(400, 'bad-field');
     if (body.resume !== undefined && typeof body.resume !== 'boolean') return reject(400, 'bad-field');
     const resume = body.resume === true;
-    if (resume && body.tool !== 'claude') return reject(400, 'resume-claude-only');
+    if (resume && !toolById(body.tool)?.resume) return reject(400, 'resume-not-supported');
     if (resume && (typeof body.sessionId !== 'string' || body.withIdea === true)) return reject(400, 'bad-field');
     let job = '';
     if (body.job !== undefined) {
       if (typeof body.job !== 'string' || resume || body.withIdea === true) return reject(400, 'bad-field');
-      job = normalizeIdea(body.job);
+      job = normalizeJob(body.job);
       if (!job) return reject(400, 'bad-field');
     }
     const target = {};
@@ -1125,6 +1135,8 @@ export function createActions({
     if (!t.ok) return t;
     // A session that is open cannot be continued a second time (its copy, fork, can)
     if (resume && ingest?.sessions?.get(t.ctx.sessionId)?.live) return reject(409, 'session-live', { hint: 'fork' });
+    // The session must be one of the tool that continues it (another tool's log is read too: server/toolLogs.mjs)
+    if (resume && (ingest?.sessions?.get(t.ctx.sessionId)?.tool || 'claude') !== body.tool) return reject(400, 'resume-other-tool');
     // The idea saved with the project (docs/start-flow.md); a session uses its project's idea
     const pid = t.ctx.projectId ?? (t.ctx.sessionId ? ingest?.sessions?.get(t.ctx.sessionId)?.projectId : undefined);
     const project = pid ? catalog?.getProject?.(pid) || null : null;
@@ -1151,6 +1163,10 @@ export function createActions({
       return fail(500, 'detection-failed', 'detection');
     }
     if (!rec?.installed || !rec.chosen || !present(rec.chosen.file)) return fail(409, 'tool-missing', 'tool-missing');
+    // Its resume arguments were checked from a version on (server/tools.mjs resumeMin): an older one may not know them
+    if (ctx.resume && tool.resumeMin && !versionAtLeast(rec.version, tool.resumeMin)) return fail(409, 'resume-version', 'resume-version');
+    // A record without resume arguments would quietly start a new session instead: refused (review 2026-10-07)
+    if (ctx.resume && !resumeArgs(tool, ctx.sessionId).length) return fail(409, 'resume-not-supported', 'resume-not-supported');
 
     // 2. Where the launcher goes, and whether wt can take its path as it is (server/launch.mjs)
     const env = aiEnv();
@@ -1180,7 +1196,7 @@ export function createActions({
     // with Turkish letters starts too (docs/ai-start.md). A launcher path cmd would expand stays on the old way.
     const direct = ctx.inDock && DOCK_LAUNCHER_RE.test(path.join(where.dir, launcher));
     const makeLauncher = (file) =>
-      launcherText({ toolName: tool.name, file: rec.chosen.file, ext: rec.chosen.ext, args: ctx.resume ? ['--resume', ctx.sessionId] : [...(ctx.job ? jobArgs(tool) : []), ...toolArgs(tool, file ? launchPrompt(file) : null)], cdDir: where.mode === 'relative' && !direct ? ctx.dir : null, env });
+      launcherText({ toolName: tool.name, file: rec.chosen.file, ext: rec.chosen.ext, args: ctx.resume ? resumeArgs(tool, ctx.sessionId) : [...(ctx.job ? jobArgs(tool, rec.version) : []), ...toolArgs(tool, file ? launchPrompt(file) : null)], cdDir: where.mode === 'relative' && !direct ? ctx.dir : null, env });
     let lt = makeLauncher(first?.file);
     if (!lt.ok) return fail(409, lt.error, 'launcher');
     const argv = buildAiArgv({ mode: where.mode, dir: ctx.dir, launchDir: where.dir, launcher, title: ctx.title, cmdExe });
@@ -1207,7 +1223,7 @@ export function createActions({
       first = w;
     }
     if (jobId) {
-      const active = writeCurrentJob(path.join(ctx.dir, FIRST_DIR), jobId);
+      const active = writeCurrentJob(path.join(ctx.dir, FIRST_DIR), jobId, fs, { tool: tool.id });
       if (!active.ok) return fail(active.error === 'first-message-failed' ? 500 : 409, active.error, 'job-identity', { written });
       written.push(`.sibersentez/${CURRENT_JOB_FILE}`);
     }
@@ -1414,7 +1430,9 @@ export function createActions({
   const dockItem = (x) => {
     if (!x || typeof x !== 'object' || !DOCK_ID.test(x.id || '')) return null;
     const projectId = typeof x.projectId === 'string' && x.projectId.length <= 200 ? x.projectId : null;
-    return { id: x.id, projectId, ai: x.ai === true, tool: DOCK_TOOL.test(x.tool || '') ? x.tool : null, jobId: DOCK_JOB.test(x.jobId || '') ? x.jobId : null, startedAt: Number.isFinite(x.startedAt) ? x.startedAt : null };
+    // running: false once the tab's AI tool ended and only its shell stays (a shell of an older version says nothing:
+    // still running, the safe side)
+    return { id: x.id, projectId, ai: x.ai === true, tool: DOCK_TOOL.test(x.tool || '') ? x.tool : null, jobId: DOCK_JOB.test(x.jobId || '') ? x.jobId : null, startedAt: Number.isFinite(x.startedAt) ? x.startedAt : null, running: x.running !== false };
   };
   function terminalState({ sessions } = {}) {
     if (!Array.isArray(sessions) || sessions.length > 100) return { ok: false, reason: 'invalid' };
@@ -1422,8 +1440,9 @@ export function createActions({
     return { ok: true, reason: 'saved' };
   }
   const dockSessions = () => dockRunning.map((x) => ({ ...x }));
-  // An AI tool works in the project: a live Claude session (its logs) or an AI start still running in the dock
-  const aiActiveIn = (projectId) => [...(ingest?.sessions?.values?.() || [])].some((s) => s?.live && s.projectId === projectId) || dockRunning.some((x) => x.ai && x.projectId === projectId);
+  // An AI tool works in the project: a live Claude session (its logs) or an AI start still running in the dock (its
+  // tool not ended: a shell left open after the tool does not block going back)
+  const aiActiveIn = (projectId) => [...(ingest?.sessions?.values?.() || [])].some((s) => s?.live && s.projectId === projectId) || dockRunning.some((x) => x.ai && x.running && x.projectId === projectId);
 
   function terminalTarget(req) {
     if (mode !== 'live') return { ok: false, reason: mode === 'dry' ? 'preview' : 'off' };

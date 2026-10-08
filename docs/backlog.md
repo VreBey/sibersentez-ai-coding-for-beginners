@@ -140,6 +140,8 @@ spreads a patch into a call. Still open:
 
 ## Business
 
+- **Confirmed 2026-10-08: the GPL stays.** The owner: "stay on GPL 3". A move back to the SiberSentez License 1.0
+  made the same morning on a misread answer was reverted the same day; nothing of it was published.
 - **Decided 2026-10-06: open source, free app, donations.** From the next version the app is under the GNU GPL
   version 3 or later (`LICENSE`) and the kit under the MIT License (`kit/LICENSE.md`); the name and the logo are kept by
   the project (`TRADEMARKS.md`). The source goes to the public GitHub repository. Why: donations go mostly to open
@@ -161,9 +163,10 @@ spreads a patch into a call. Still open:
 
 ## Installer
 
-- **Installer never executed end to end** (round 2, B1). Install, shortcuts, first launch, open at login,
-  uninstall with the hub kept: only static and build-level evidence so far. Needs a manual run by the user on
-  their machine or a throwaway VM.
+- **Installer not executed end to end for a current version** (round 2, B1). Install, shortcuts, first launch, open
+  at login, upgrade, uninstall with the hub kept. The only recorded run is 0.9.0: a silent install over 0.8.1 and a
+  smoke test (docs/direction.md, 2026-09-30); every version since has build-level and packaged-QA evidence only.
+  Needs a manual run on a throwaway Windows (Windows Sandbox or a VM), not on the owner's working install.
 - **Update from 0.2.0 to the next version, by hand** (usage, GitHub and Start with AI round, 2026-09-29). The next
   installer run over an installed 0.2.0: the old version moved aside and removed, the hub kept (with the new
   `usage\`, `incoming\`, `launch\` and `registry\sources.json` appearing next to the old files), the actions mode and

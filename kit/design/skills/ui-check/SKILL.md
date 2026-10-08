@@ -4,7 +4,7 @@ description: "Checks a screen for the basics that make it usable by everyone: ph
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
   sibersentez-tags: "design, ui, web"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "telefonda düzgün görün*, mobil uyum*, responsive, erişilebilir*, kontrast*, klavye ile, odak sırası, küçük ekran, ekran okuyucu"
@@ -41,7 +41,9 @@ Work through these in order and record pass or fail with a note:
 | Keyboard | Tab through the whole screen | every button, link and field is reachable, in a sensible order, with no trap |
 | Focus | same | the focused item is clearly visible (an outline), never removed without a replacement |
 | Keyboard actions | Enter and Space on buttons, Escape on dialogs | they do what a click does; a dialog closes and returns focus |
-| Contrast | developer tools color picker or a contrast checker | text 4.5 to 1 against its background (3 to 1 for large text and for icons or borders that carry meaning) |
+| Dialogs | open each one, Tab past its last item | focus goes round inside it and never reaches the page behind (a closed fold's hidden fields must not count as items) |
+| Contrast | developer tools color picker or a contrast checker | text 4.5 to 1 against its background (3 to 1 for large text and for icons or borders that carry meaning); measure dimmed or semi-transparent rows as they are shown |
+| Empty states | the screen before its data arrives | no blank button or empty labelled box is shown or read out |
 | Color alone | look at errors, status, charts | meaning is also in words or icons, not only red against green |
 | Labels | click a label; read the form | each field has a visible label tied to it; no field with only a placeholder |
 | Names | read buttons and links | a button says what it does ("Save note"), an icon button has a text label for tools that read the screen |

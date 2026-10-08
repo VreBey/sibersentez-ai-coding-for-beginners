@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setLanguage, STRINGS } from '../public/js/i18n.js';
-import { nextFor, NEXT_KEYS, jobSectionHtml, teamSectionHtml, jobNowText, teamInstalled, teamUpdates, createJob, preferredTool, jobKeys, giveJob, TEAM_KEYS, TEAM_ITEMS, JOB_MAX, KEYS_MAX } from '../public/js/views/job.js';
+import { nextFor, NEXT_KEYS, jobSectionHtml, teamSectionHtml, jobNowText, stepsHtml, aiIdleIn, teamInstalled, teamUpdates, createJob, preferredTool, jobKeys, giveJob, TEAM_KEYS, TEAM_ITEMS, JOB_MAX, KEYS_MAX } from '../public/js/views/job.js';
+import { jobOf } from '../public/js/hq-live.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 after(() => setLanguage('en'));
@@ -21,7 +22,9 @@ test('section: one question, one box, one Start with the chosen tool; disabled w
   assert.ok(live.includes('data-job-tool="claude"'), 'Claude Code when nothing was chosen');
   assert.ok(live.includes(S.jobAsk) && live.includes(S.jobGoWith.replace('{tool}', 'Claude Code')));
   assert.ok(!live.includes('aria-disabled'), 'live: enabled');
-  assert.ok(live.includes('value="&lt;b&gt;giriş&lt;/b&gt; &quot;sayfası&quot;"'), 'the text is escaped');
+  // A textarea now (several lines, review U06): the text inside it, escaped
+  assert.ok(live.includes('>&lt;b&gt;giriş&lt;/b&gt; &quot;sayfası&quot;</textarea>'), 'the text is escaped');
+  assert.ok(live.includes('<textarea') && live.includes('rows="3"'));
   assert.ok(live.includes(`maxlength="${JOB_MAX}"`));
   assert.ok(!live.includes('data-job-act="team'), 'no team step in the section: Start sets it up');
   const off = jobSectionHtml(P, null, { mode: 'off', tools: TOOLS });
@@ -88,6 +91,10 @@ test('giving a job: helpers set up first (live only), then the AI starts with th
   assert.equal(calls.find((c) => c[0] === 'fit')[2], 'giriş sayfası ekle');
   assert.ok(calls.some((c) => c[0] === 'toast' && c[1] === S.jobPrepared.replace('{count}', '4')));
   calls.length = 0;
+  // Nothing to copy (the team is there from the last job): said as ready, not "0 helpers set up"
+  await giveJob(P, 'renkleri değiştir', { ...deps('live'), runAction: async () => ({ ok: true, mode: 'live', result: { copied: 0, updated: 0 } }) });
+  assert.ok(calls.some((c) => c[0] === 'toast' && c[1] === S.jobPreparedAlready));
+  calls.length = 0;
   await giveJob(P, 'x', deps('dry'));
   assert.deepEqual(calls.map((c) => c[0]), ['start'], 'Preview: nothing is set up, the start shows what it would do');
   assert.deepEqual(await giveJob(P, '   ', deps('live')), { ok: false, error: 'empty' });
@@ -136,6 +143,22 @@ test('progress: the four steps with the current one marked, and one plain senten
   assert.equal(jobNowText({ step: 'check', tasks: d.tasks, review: { verdict: 'REVISE', blockers: 2 } }), 'The check found 2 problems; they are being fixed.');
   assert.equal(jobNowText({ step: 'finish', tasks: d.tasks, review: { verdict: 'APPROVE', blockers: 0 } }), S.jobNowFinish);
   assert.equal(jobNowText({ step: 'none' }), '');
+  // The plan step says what is really there (seen when using the app: "waiting for your approval" before any plan)
+  assert.equal(jobNowText({ step: 'plan', plan: null }), S.jobNowPlanWriting, 'no plan yet: being written');
+  assert.equal(jobNowText({ step: 'plan', plan: { approved: false } }), S.jobNowPlan, 'a plan: waits for the person');
+  assert.equal(jobNowText({ step: 'plan', plan: { approved: true } }), S.jobNowPlanSlicing, 'approved, no tasks yet');
+  assert.equal(jobNowText(jobOf({ step: 'plan', plan: { approved: false, title: 'x' } })), S.jobNowPlan, 'the building says the same');
+  assert.equal(jobNowText(jobOf({ step: 'plan', plan: null })), S.jobNowPlanWriting);
+  // The tool closed before writing a plan (its trust question cancelled) and nothing runs: said so, with what to do
+  assert.equal(jobNowText({ step: 'plan', plan: null }, { idle: true }), S.jobNowPlanIdle);
+  assert.equal(jobNowText({ step: 'plan', plan: { approved: false } }, { idle: true }), S.jobNowPlan, 'a written plan still waits for the person');
+  assert.ok(stepsHtml({ step: 'plan', plan: null }, { idle: true }).includes(S.jobNowPlanIdle));
+  assert.ok(jobSectionHtml(P, { step: 'plan', plan: null }, { mode: 'live', tools: TOOLS, idle: true }).includes(S.jobNowPlanIdle), 'the drawer passes it on');
+  assert.equal(aiIdleIn({ sessions: [], projectId: 'p', dock: [] }), true);
+  assert.equal(aiIdleIn({ sessions: [{ projectId: 'p', live: true }], projectId: 'p', dock: [] }), false, 'a live session works there');
+  assert.equal(aiIdleIn({ sessions: [{ projectId: 'q', live: true }, { projectId: 'p', live: false }], projectId: 'p', dock: [{ projectId: 'q' }] }), true, 'others work elsewhere');
+  assert.equal(aiIdleIn({ sessions: [], projectId: 'p', dock: [{ projectId: 'p', tool: 'claude' }] }), false, 'an AI tab runs in the terminal');
+  assert.equal(aiIdleIn({ sessions: [], projectId: null }), false);
   // The person accepted the result: every step ticked, none current
   const doneData = { step: 'done', plan: { title: 'x', approved: true, accepted: true }, tasks: d.tasks, current: null, review: { verdict: 'APPROVE', blockers: 0, nits: 0 } };
   assert.equal(jobNowText(doneData), S.jobNowDone);
@@ -169,15 +192,17 @@ test('every team key names an item of the SiberSentez kit; the drawer leads with
   const names = new Set(kit.items.map((i) => `${i.kind}:${i.name}`));
   for (const k of TEAM_KEYS) assert.ok(names.has(k), `${k} is in the kit`);
   const drawer = fs.readFileSync(path.join(ROOT, 'public', 'js', 'views', 'drawer.js'), 'utf8');
-  const job = drawer.indexOf('${job.html(p,');
+  const job = drawer.indexOf("${resultFirst ? '' : jobBox}");
   const rest = drawer.indexOf('${restore.html(p,');
+  const late = drawer.indexOf("${resultFirst ? jobBox : ''}");
   const more = drawer.indexOf('<details class="dr-more"');
   const fit = drawer.indexOf('${fitSection(p)}');
-  assert.ok(job > 0 && rest > job && more > rest && fit > more, 'the job, the restore points, then Details with the skills inside');
+  assert.ok(job > 0 && rest > job && late > rest && more > late && fit > more, 'the job (after the result while it waits), the restore points, then Details with the skills inside');
+  assert.ok(drawer.includes("const resultFirst = job.get(p.id).data?.step === 'finish';") && drawer.includes('asNew: resultFirst, idle: aiIdleIn('), 'the result first only while it waits (review U07)');
   assert.ok(drawer.includes('giveJob(p, text, { mode, tools: toolsState(), fetchFit: fetchFitFor, runAction, runMenuItem, openDrawer: open, toast })'), 'Start: the shared path');
   const jobSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'views', 'job.js'), 'utf8');
   assert.ok(jobSrc.includes("payload: { projectId: p.id, tool: tool.id, job }"), 'the job rides in the request');
-  assert.ok(jobSrc.includes("runAction({ action: 'skills-apply', projectId: p.id, keys })"), 'the team and helpers through the fit install');
+  assert.ok(jobSrc.includes("runAction({ action: 'skills-apply', projectId: p.id, keys, targets: jobTargets(tool.id, p.via) })"), 'the team and helpers through the fit install, where the job’s own tool reads them');
   // The team's update stays: a preview of the team (writes nothing), then an install of exactly what it found newer
   assert.ok(drawer.includes("runAction({ action: 'skills-preview', projectId: p.id, items: [...TEAM_ITEMS] })"));
   assert.ok(drawer.includes("runAction({ action: 'skills-install', projectId: p.id, items })"));
@@ -214,7 +239,7 @@ test('a job whose AI no longer runs: the drawer says where it stopped and offers
   assert.doesNotMatch(jobSectionHtml(p, d, { mode: 'off', tools, stopped: { id: 'sess-1' } }), /data-job-act="resume"/, 'not while actions are off');
   assert.doesNotMatch(jobSectionHtml(p, d, { mode: 'live', tools, stopped: null }), /data-job-act="resume"/);
   const drawer = fs.readFileSync(new URL('../public/js/views/drawer.js', import.meta.url), 'utf8');
-  assert.ok(drawer.includes("stopped: stoppedSession(store.sessions.values(), p.id, Date.now(), job.get(p.id).data?.updatedAt)"));
+  assert.ok(drawer.includes('stopped: drawerResume(p.id)') && drawer.includes('return resumeCandidate({ sessions: store.sessions.values(), projectId, job: shown, dock: store.dockRunning?.() || [] });'), "the Building's own rule");
   assert.ok(drawer.includes("action: 'resume-session', sessionId: btn.dataset.jobSession"));
 });
 
@@ -229,7 +254,9 @@ test('a finished job offers its follow-ups: only when done; a web project gets t
   assert.ok(!jobSectionHtml(P, { step: 'done' }, { mode: 'live', tools: TOOLS, next: ['rm -rf'] }).includes('data-job-next'), 'known keys only');
   for (const lang of ['en', 'tr']) for (const k of NEXT_KEYS) assert.ok(STRINGS[lang][`jobNextText_${k}`], `${lang} ${k}`);
   const drawer = fs.readFileSync(path.join(ROOT, 'public', 'js', 'views', 'drawer.js'), 'utf8');
-  assert.ok(drawer.includes('next: nextFor({ web: isWebRun(runHint.get(p.id).data) })') && drawer.includes("job.setText(current.id, t(`jobNextText_${jn.dataset.jobNext}`));"), 'the drawer fills the box, never starts');
+  assert.ok(drawer.includes('next: nextFor({ web: isWebRun(runHint.get(p.id).data) })') && drawer.includes("return fillJob(current.id, t(`jobNextText_${jn.dataset.jobNext}`));"), 'the drawer fills the box');
+  const fill = drawer.slice(drawer.indexOf('const fillJob = '), drawer.indexOf('bindRunHint(body,'));
+  assert.ok(fill.includes('job.setText(projectId, text);') && !/startJob|data-job-act|dispatch/.test(fill), 'never starts');
 });
 
 test('jobNowText: no empty task name in the sentence (the Building\'s example said "Working on . 0 of 4 tasks done.")', () => {
@@ -240,4 +267,36 @@ test('jobNowText: no empty task name in the sentence (the Building\'s example sa
   setLanguage('tr');
   assert.equal(jobNowText({ step: 'build', current: null, tasks: { done: 0, total: 4 } }), '4 görevden 0 tanesi bitti.');
   setLanguage('en');
+});
+
+test("a job's team goes where its own tool reads it: Claude Code .claude, every other tool .agents, both where Claude Code worked too", async () => {
+  const { jobTargets } = await import('../public/js/views/job.js');
+  assert.deepEqual(jobTargets('claude', ['codex']), ['claude']);
+  assert.deepEqual(jobTargets('codex', []), ['agents', 'codex'], 'a new project: Codex sees its team and its agents (before: .claude only)');
+  assert.deepEqual(jobTargets('gemini', ['claude-code']), ['claude', 'agents', 'gemini']);
+  for (const id of ['qwen', 'opencode']) assert.deepEqual(jobTargets(id, undefined), ['agents', id], id);
+  // Copilot CLI and Cursor CLI read .claude/agents, where an agent always goes
+  for (const id of ['copilot', 'cursor']) assert.deepEqual(jobTargets(id, undefined), ['agents'], id);
+  assert.deepEqual(jobTargets(null), ['claude']);
+});
+
+test('a job of several lines (review U06): the server keeps its lines and cuts at JOB_MAX; the count shows near the limit only; Ctrl+Enter starts', async () => {
+  const { normalizeJob, JOB_MAX: SERVER_MAX } = await import('../server/fit.mjs');
+  const { JOB_MAX: PAGE_MAX, jobCountText } = await import('../public/js/views/job.js');
+  assert.equal(SERVER_MAX, PAGE_MAX, 'the page and the server agree');
+  assert.equal(normalizeJob('  Menü sayfası ekle  \r\n\r\n\r\n\r\n- fiyatlar   olsun\n\t- fotoğraflar '), 'Menü sayfası ekle\n\n- fiyatlar olsun\n- fotoğraflar');
+  assert.equal(Array.from(normalizeJob('ş'.repeat(SERVER_MAX + 50))).length, SERVER_MAX);
+  assert.equal(normalizeJob(String.fromCharCode(0, 7, 27) + 'x'), 'x');
+  assert.equal(normalizeJob(42), '');
+  assert.equal(jobCountText('kısa'), '');
+  assert.ok(jobCountText('a'.repeat(PAGE_MAX - 10)).includes(String(PAGE_MAX)));
+  const { jobMessageText } = await import('../server/launch.mjs');
+  const msg = jobMessageText('Menü sayfası\n- fiyatlar', 'J' + '0123456789abcdef'.repeat(2));
+  assert.ok(msg.includes('> Menü sayfası\n> - fiyatlar'), 'each line quoted in the job file');
+  const actions = fs.readFileSync(path.join(ROOT, 'server', 'actions.mjs'), 'utf8');
+  assert.ok(actions.includes('job = normalizeJob(body.job);'));
+  const drawer = fs.readFileSync(path.join(ROOT, 'public', 'js', 'views', 'drawer.js'), 'utf8');
+  assert.ok(drawer.includes("if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;"));
+  const ws = fs.readFileSync(path.join(ROOT, 'public', 'js', 'views', 'workshop.js'), 'utf8');
+  assert.ok(ws.includes('<textarea id="wsGiveText"') && ws.includes("$('give').requestSubmit();"));
 });

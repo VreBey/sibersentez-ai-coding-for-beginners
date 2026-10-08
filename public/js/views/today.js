@@ -10,7 +10,7 @@ export const RECENT_COUNT = 3;
 
 // projects: store.sortedProjects(now) (most urgent, then most recent first); byProject: groupSessions(...)
 export function todayRecentHtml(projects, byProject, now = Date.now()) {
-  const list = projects.filter((p) => !isOtherFolder(p) && (p.lastActivity || projectState(p, byProject, now) !== 'closed')).slice(0, RECENT_COUNT);
+  const list = projects.filter((p) => !isOtherFolder(p) && (p.lastActivity || projectState(p, byProject, now, store.dockAsking?.() || []) !== 'closed')).slice(0, RECENT_COUNT);
   if (!list.length) {
     // Projects there, none worked in yet: point at the job box, not at "New project"
     const any = projects.some((p) => !isOtherFolder(p));
@@ -18,7 +18,7 @@ export function todayRecentHtml(projects, byProject, now = Date.now()) {
   }
   const cards = list
     .map((p) => {
-      const st = projectState(p, byProject, now);
+      const st = projectState(p, byProject, now, store.dockAsking?.() || []);
       return `<button type="button" class="tr-card st-${st}" data-today-open="${esc(p.id)}" style="--c:${projectColor(p.id)}">
         <span class="tr-name"><i></i>${esc(p.name || p.id)}</span>
         <span class="tr-meta">${esc(t(`attnState_${st}`))}${p.lastActivity ? ` · ${esc(ago(p.lastActivity, now))}` : ''}</span>

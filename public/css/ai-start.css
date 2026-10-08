@@ -119,6 +119,10 @@
 .job-label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
 .job-text { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-2); background: rgba(var(--accent-rgb), 0.04); color: var(--text); font: inherit; }
 .job-text:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Several lines (review U06): taller, grows by hand; the hint and the count under it */
+textarea.job-text { resize: vertical; min-height: 4.6em; max-height: 20em; line-height: 1.45; }
+.job-keys { margin: 4px 0 0; flex-basis: 100%; }
+.job-count:empty { display: none; }
 .job-team { margin: 6px 0; }
 .job-team.ok { color: var(--busy); }
 
@@ -131,3 +135,50 @@
 .rst-l { margin: 6px 0 2px; }
 .rst-names { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .rst-names code { font: 12px/1.4 var(--mono); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+/* "This job's result" (jobResult.js): the files the job changed, marked by kind; the three kinds of evidence apart */
+.jr-files { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.jr-files code { font: 12px/1.4 var(--mono); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.jr-files li { padding-left: 14px; position: relative; }
+.jr-files li::before { position: absolute; left: 0; color: var(--muted); }
+.jr-files .jr-changed::before { content: '~'; }
+.jr-files .jr-added::before { content: '+'; color: var(--ok, #4fd18b); }
+.jr-files .jr-deleted::before { content: '−'; color: var(--warn, #e0a050); }
+.jr-checks { margin: 0 0 8px; padding-left: 18px; font-size: 13px; color: var(--text-2); }
+.jr-checks li { margin: 2px 0; }
+.jr-go { margin: 4px 0 10px; }
+
+/* The tool jobs start with first, the others folded (review U13) */
+.ai-chosen-h { margin: 10px 0 4px; font-weight: 600; }
+.ai-card.chosen { border-color: var(--accent); }
+.ai-chip.chosen { background: rgba(var(--accent-rgb), 0.14); color: var(--accent); }
+.ai-more { margin-top: 10px; }
+.ai-more > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+
+/* The setup wizard (views/setupWizard.js, roadmap F2): one step at a time inside the AI tools panel */
+.wz { display: grid; gap: 12px; margin-top: 4px; }
+.wz-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.wz-steps li { display: inline-flex; align-items: center; gap: 6px; }
+.wz-steps .wz-n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line-2); font-size: 11px; }
+.wz-steps li.done { color: var(--text-2); }
+.wz-steps li.done .wz-n { background: rgba(var(--accent-rgb), 0.2); border-color: var(--accent); }
+.wz-steps li.now { color: var(--text); font-weight: 600; }
+.wz-steps li.now .wz-n { background: var(--accent); border-color: var(--accent); color: #0b0e18; }
+.wz-h { margin: 0; font: 650 17px var(--display); color: var(--text); display: flex; align-items: center; gap: 8px; }
+.wz p { margin: 0; }
+.wz-for { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.wz-tools { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.wz-tool { width: 100%; text-align: left; display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel-solid); color: var(--text); font: inherit; cursor: pointer; }
+.wz-tool:hover { border-color: var(--accent); }
+.wz-tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wz-tool-h { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.wz-needs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.wz-ok { display: flex; gap: 6px; align-items: center; color: var(--text-2); font-size: 13.5px; }
+.wz-need p { font-size: 13.5px; margin-bottom: 6px; }
+.wz-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.wz-nav { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding-top: 8px; border-top: 1px dashed var(--line); }
+.wz .linkish { padding: 2px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.wz .linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+/* A command without its "how" label (the sign-in line): no empty first column */
+.wz .ai-cmd.no-how { grid-template-columns: minmax(0, 1fr) auto; }
+.wz .ai-cmd.no-how.can-type { grid-template-columns: minmax(0, 1fr) auto auto; }
+.wz > .act-btn, .wz [data-wz="signed"] { justify-self: start; }

@@ -135,19 +135,22 @@ export function projectBridge(win) {
 // Reasons whose text says the folder itself cannot be a project (the rest are errors of the request)
 const FOLDER_REASONS = new Set(['network', 'not-local', 'invalid', 'drive-root', 'home', 'broad', 'hub', 'program', 'personal', 'link', 'missing', 'not-folder', 'holds-projects']);
 
-// What the page does with the shell's answer to pickProjectFolder (pure). nameOf(id): the project's name.
+// What the page does with the shell's answer to pickProjectFolder or createIdeaProject (pure). nameOf(id): the
+// project's name. made: the project was made from an idea (review U05); withIdea: its idea waits in the job box.
 // Returns { projectId: string | null, toast: { tone, title, body } | null }: the project to open (its drawer, at the idea
-// box) and the notice. Cancel says nothing.
-export function newProjectOutcome(reply, nameOf = (id) => id) {
+// box, or with the idea in its job box) and the notice. Cancel says nothing.
+export function newProjectOutcome(reply, nameOf = (id) => id, { made = false, withIdea = false } = {}) {
   const r = reply && typeof reply === 'object' ? reply : {};
   if (r.ok === true && typeof r.projectId === 'string' && r.projectId) {
     const name = nameOf(r.projectId) || r.projectId;
+    if (made) return { projectId: r.projectId, toast: { tone: 'ok', title: t('npCreated', { name }), body: t(withIdea ? 'npCreatedNext' : 'npNextIdea') } };
     return { projectId: r.projectId, toast: { tone: 'ok', title: t(r.existed ? 'npExisting' : 'npAdded', { name }), body: t('npNextIdea') } };
   }
   const reason = typeof r.reason === 'string' ? r.reason : 'error';
   if (reason === 'cancelled') return { projectId: null, toast: null };
   const known = t(`npErr_${reason}`) !== `npErr_${reason}`;
-  return { projectId: null, toast: { tone: 'err', title: t(FOLDER_REASONS.has(reason) ? 'npFailTitle' : 'npErrorTitle'), body: known ? t(`npErr_${reason}`) : t('npErr_error') } };
+  const title = made ? 'npCreateFailTitle' : FOLDER_REASONS.has(reason) ? 'npFailTitle' : 'npErrorTitle';
+  return { projectId: null, toast: { tone: 'err', title: t(title), body: known ? t(`npErr_${reason}`) : t('npErr_error') } };
 }
 
 // The flow behind the header button, the start card and the tray's "New project…". Parts are injected (tests):
@@ -155,10 +158,14 @@ export function newProjectOutcome(reply, nameOf = (id) => id) {
 //   toast(o)        a notice                          openProject(id)   the project's drawer at the idea box
 //   hasProject(id)  the page lists it already         refresh()         load the project list again (a snapshot)
 //   nameOf(id)      a project's name                  wait(ms)          a pause (tests pass a fast one)
+//   ask(prev)       the "New project" window (views/newIdea.js createIdeaDialog().ask; prev: what the last try had and
+//                   why it did not work); without it, or with a bridge that cannot make a folder, the folder picker
+//                   opens at once (the old way)
+// openProject(id, idea) gets the idea of a project made from one (its job box is filled, Start stays the person's).
 // One picker at a time. The server lists the new project before it answers; the page may still be a moment behind, so
 // it waits up to waitMs for the project, then loads the list again once. Resolves 'opened' | 'cancelled' | 'failed' |
 // 'busy' | 'unavailable'.
-export function createNewProjectFlow({ bridge, toast = () => {}, openProject = () => {}, hasProject = () => true, refresh = async () => {}, nameOf = (id) => id, wait = (ms) => new Promise((r) => setTimeout(r, ms)), waitMs = 4000, stepMs = 150 } = {}) {
+export function createNewProjectFlow({ bridge, toast = () => {}, openProject = () => {}, hasProject = () => true, refresh = async () => {}, nameOf = (id) => id, ask = null, wait = (ms) => new Promise((r) => setTimeout(r, ms)), waitMs = 4000, stepMs = 150 } = {}) {
   let busy = false;
   async function until(id, ms) {
     for (let waited = 0; !hasProject(id) && waited < ms; waited += stepMs) await wait(stepMs);
@@ -172,11 +179,35 @@ export function createNewProjectFlow({ bridge, toast = () => {}, openProject = (
     if (busy) return 'busy';
     busy = true;
     try {
+      // The window first (a name and an idea); "Already have a project folder?" and an older shell take the picker. A
+      // try that did not work (refused, or "Somewhere else" cancelled) brings the window back with what was typed and
+      // the reason in it, until it works or the person leaves it.
+      const windowed = typeof ask === 'function' && typeof bridge.createIdeaProject === 'function';
+      let prev = null;
+      let choice;
+      let made;
+      let idea;
       let reply;
-      try {
-        reply = await bridge.pickProjectFolder();
-      } catch {
-        reply = { ok: false, reason: 'error' };
+      for (;;) {
+        choice = { action: 'existing' };
+        if (windowed) {
+          try {
+            choice = (await ask(prev)) || { action: 'cancel' };
+          } catch {
+            choice = { action: 'cancel' };
+          }
+        }
+        if (choice.action !== 'existing' && choice.action !== 'create' && choice.action !== 'elsewhere') return 'cancelled';
+        made = choice.action !== 'existing';
+        idea = made && typeof choice.idea === 'string' ? choice.idea : '';
+        try {
+          reply = made ? await bridge.createIdeaProject(String(choice.name || ''), idea, choice.action === 'elsewhere') : await bridge.pickProjectFolder();
+        } catch {
+          reply = { ok: false, reason: 'error' };
+        }
+        if (!made || reply?.ok === true) break;
+        const failed = newProjectOutcome(reply, nameOf, { made: true });
+        prev = { name: String(choice.name || ''), idea, error: failed.toast ? failed.toast.body : '' };
       }
       const pid = reply?.ok === true && typeof reply.projectId === 'string' ? reply.projectId : null;
       if (pid && !(await until(pid, waitMs))) {
@@ -187,10 +218,10 @@ export function createNewProjectFlow({ bridge, toast = () => {}, openProject = (
         }
         await until(pid, 2000);
       }
-      const out = newProjectOutcome(reply, nameOf);
+      const out = newProjectOutcome(reply, nameOf, { made, withIdea: !!idea });
       if (out.toast) toast(out.toast);
       if (!out.projectId) return out.toast ? 'failed' : 'cancelled';
-      openProject(out.projectId);
+      openProject(out.projectId, idea);
       return 'opened';
     } finally {
       busy = false;
@@ -200,13 +231,16 @@ export function createNewProjectFlow({ bridge, toast = () => {}, openProject = (
 }
 
 // A QA stand-in for the bridge (?qa=1&newproject=<answer>): 'pick' answers with the first project that can take skills
-// (as if its folder was chosen), any other value is the reason of a refusal; nothing reaches the shell or the server
+// (as if its folder was chosen, or made from an idea), any other value is the reason of a refusal; nothing reaches the
+// shell or the server
 export function qaProjectBridge(answer, firstProject = () => null) {
+  const reply = () => {
+    const id = answer === 'pick' ? firstProject() : null;
+    return id ? { ok: true, projectId: id, existed: false, reason: 'added' } : { ok: false, reason: answer === 'pick' ? 'missing' : String(answer || 'error') };
+  };
   return Object.freeze({
-    pickProjectFolder: async () => {
-      const id = answer === 'pick' ? firstProject() : null;
-      return id ? { ok: true, projectId: id, existed: false, reason: 'added' } : { ok: false, reason: answer === 'pick' ? 'missing' : String(answer || 'error') };
-    },
+    pickProjectFolder: async () => reply(),
+    createIdeaProject: async () => reply(),
     saveProjectIdea: async (projectId) => ({ ok: true, projectId, reason: 'saved' }),
   });
 }
@@ -511,7 +545,7 @@ function focusSelector(el, root) {
 
 // The card's state: the four states of attention.js; a closed project shows its last activity instead of "Closed"
 function stateOf(p, byProject) {
-  const st = projectState(p, byProject);
+  const st = projectState(p, byProject, Date.now(), store.dockAsking?.() || []);
   if (st !== 'closed') return [st, t('attnState_' + st)];
   return ['rest', p.lastActivity ? ago(p.lastActivity) : t('prjNoActivity')];
 }

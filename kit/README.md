@@ -4,7 +4,7 @@ SiberSentez's own set of skills and agents, written for SiberSentez from scratch
 empty folder to a running, tested, documented and released project, with any AI coding tool that reads the
 [Agent Skills](https://agentskills.io/specification) format.
 
-- 57 skills and 16 agents, each a plain Markdown file.
+- 59 skills and 16 agents, each a plain Markdown file.
 - Written for beginners: every step is explained, and the AI asks before deleting or overwriting files, installing
   anything, changing system settings or pushing to a remote.
 - The files are in English; every skill tells the AI to talk to the user in the user's own language.
@@ -20,8 +20,8 @@ empty folder to a running, tested, documented and released project, with any AI 
 | Security (`security`) | `secrets-cleanup`, `security-check` | `security-auditor` |
 | Docs (`docs`) | `agent-rules`, `api-docs`, `architecture-notes`, `docs-writer`, `explain-codebase` | `doc-builder` |
 | Release (`release`) | `deploy-web`, `docker-basics`, `domain-email`, `env-and-secrets`, `finish-branch`, `git-basics`, `github-actions-setup`, `launch-checklist`, `move-to-new-host`, `release-prep` | `devops-helper`, `launch-checker` |
-| Design and UI (`design`) | `ui-check`, `ui-polish` | `frontend-builder` |
-| Backend and data (`backend`) | `auth-flow`, `database-schema` | `backend-builder`, `data-analyst` |
+| Design and UI (`design`) | `ui-check`, `ui-polish`, `multi-language` | `frontend-builder` |
+| Backend and data (`backend`) | `auth-flow`, `contact-form`, `database-schema` | `backend-builder`, `data-analyst` |
 | AI apps (`ai-apps`) | `llm-app-basics` | – |
 | Games (`game`) | – | `game-builder` |
 

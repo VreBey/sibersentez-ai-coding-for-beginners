@@ -16,6 +16,8 @@ import { geminiCli } from '../server/adapters/gemini-cli.mjs';
 import { copilot, workspaceYamlCwd, yamlScalar } from '../server/adapters/copilot.mjs';
 import { cursor } from '../server/adapters/cursor.mjs';
 import { antigravity } from '../server/adapters/antigravity.mjs';
+import { qwen } from '../server/adapters/qwen.mjs';
+import { opencode } from '../server/adapters/opencode.mjs';
 import { cleanPath, folderFromUri, onDiskCase, vscodeWorkspaces } from '../server/adapters/shared.mjs';
 import { ProjectMemory } from '../server/memory.mjs';
 import { normPath } from '../server/util.mjs';
@@ -90,6 +92,8 @@ function allTools(w) {
   mkdir(w.home, '.copilot');
   mkdir(w.home, '.cursor');
   mkdir(w.appData, 'Antigravity IDE', 'User');
+  write(path.join(w.home, '.qwen', 'settings.json'), '{}');
+  mkdir(w.home, '.config', 'opencode');
 }
 
 // ---------------- detect ----------------
@@ -555,7 +559,7 @@ test('cross-tool: ~/.agents/skills/x reported by four adapters is one roster ite
   assert.deepEqual(r.roster.get('skill:x').tools, ['cursor', 'copilot', 'gemini-cli', 'codex']);
 });
 
-test('cross-tool: a project .claude/skills/y is counted once for the project with tools claude-code, copilot, cursor; .agents/skills/z has five tools', () => {
+test('cross-tool: a project .claude/skills/y is counted once for the project with tools claude-code, copilot, cursor; .agents/skills/z has six tools', () => {
   const w = world('cross-project');
   allTools(w);
   const proj = mkdir(w.work, 'shared proj');
@@ -569,10 +573,10 @@ test('cross-tool: a project .claude/skills/y is counted once for the project wit
   const p = c.getProject(y.installedIn[0]);
   assert.ok(normPath(p.path) === normPath(proj));
   assert.deepEqual(p.via, ['codex']);
-  assert.deepEqual(y.tools, ['claude-code', 'copilot', 'cursor']);
+  assert.deepEqual(y.tools, ['claude-code', 'copilot', 'cursor', 'opencode'], 'OpenCode reads a project .claude/skills too');
   assert.deepEqual(y.sources, ['project']);
   assert.deepEqual(c.roster.get('agent:r-agent').tools, ['claude-code', 'copilot', 'cursor']);
-  assert.deepEqual(c.roster.get('skill:z').tools, ['codex', 'gemini-cli', 'copilot', 'cursor', 'antigravity']);
+  assert.deepEqual(c.roster.get('skill:z').tools, ['codex', 'gemini-cli', 'copilot', 'cursor', 'antigravity', 'opencode']);
   assert.deepEqual(p.installed, { skills: 2, agents: 1 }, 'one file is counted once, however many tools read it');
 });
 
@@ -948,7 +952,7 @@ test('cross-tool (finding 6a): roster tools follow the adapter order even when a
   const c = w.catalog();
   c.load();
   const z = c.roster.get('skill:z');
-  assert.deepEqual(z.tools, ['codex', 'gemini-cli', 'copilot', 'cursor', 'antigravity'], 'cursor answered first (global items), the order is still the adapter order');
+  assert.deepEqual(z.tools, ['codex', 'gemini-cli', 'copilot', 'cursor', 'antigravity', 'opencode'], 'cursor answered first (global items), the order is still the adapter order');
   assert.deepEqual(z.sources, ['personal', 'project']);
 });
 
@@ -1039,12 +1043,12 @@ test('shared listing (finding 9): one pass lists a folder once however many adap
   for (const d of [agentsSkills, claudeSkills, homeAgents, claudeAgents]) assert.equal(callsOn(calls, 'readdirSync', d), 1, d);
   assert.equal(callsOn(calls, 'statSync', zFile), 1, 'five tools read the SKILL.md, it is looked at once');
   assert.equal(callsOn(calls, 'openSync', zFile), 1);
-  assert.deepEqual(c.roster.get('skill:z').tools, ['codex', 'gemini-cli', 'copilot', 'cursor', 'antigravity']);
+  assert.deepEqual(c.roster.get('skill:z').tools, ['codex', 'gemini-cli', 'copilot', 'cursor', 'antigravity', 'opencode']);
   skill(agentsSkills, 'z2');
   calls = spyFs(() => c.load());
   assert.equal(callsOn(calls, 'readdirSync', agentsSkills), 1, 'listed again on the next pass');
   assert.equal(callsOn(calls, 'openSync', zFile), 0, 'unchanged SKILL.md: not reopened');
-  assert.deepEqual(c.roster.get('skill:z2')?.tools, ['codex', 'gemini-cli', 'copilot', 'cursor', 'antigravity'], 'the new skill is seen');
+  assert.deepEqual(c.roster.get('skill:z2')?.tools, ['codex', 'gemini-cli', 'copilot', 'cursor', 'antigravity', 'opencode'], 'the new skill is seen');
   // loadRoster alone runs as a pass of its own
   skill(agentsSkills, 'z3');
   calls = spyFs(() => c.loadRoster());
@@ -1113,4 +1117,52 @@ test('codex plugins (finding 11): the version folder is chosen in semantic versi
   const g = codex.findGlobalItems(w.ctx(codex));
   const inner = g.filter((i) => i.kind === 'skill').map((i) => i.name).sort();
   assert.deepEqual(inner, ['plug:s-1.0.0', 'pre:s-1.0.0-beta.11']);
+});
+
+// ---------------- Qwen Code and OpenCode (roadmap F4, 2026-10-08) ----------------
+test('Qwen Code: found by its folder; projects from the head of each project folder’s newest chat (the cwd only); its own skill, agent and extension folders', () => {
+  const w = world('qwen');
+  assert.equal(qwen.detect(w.ctx(qwen)), false);
+  write(path.join(w.home, '.qwen', 'settings.json'), '{}');
+  assert.equal(qwen.detect(w.ctx(qwen)), true);
+  const proj = mkdir(w.work, 'tarif sitem');
+  const chats = mkdir(w.home, '.qwen', 'projects', 'c--x-tarif-sitem', 'chats');
+  const line = (cwd, text) => JSON.stringify({ uuid: 'u', sessionId: 's', timestamp: '2026-10-08T10:00:00.000Z', type: 'user', cwd, message: { parts: [{ text }] } });
+  write(path.join(chats, 'old.jsonl'), line(path.join(w.work, 'elsewhere'), 'old') + '\n');
+  age(path.join(chats, 'old.jsonl'), 3);
+  write(path.join(chats, 'new.jsonl'), line(proj, 'a secret prompt') + '\n' + line(proj, 'later') + '\n');
+  const found = qwen.findProjects(w.ctx(qwen));
+  assert.deepEqual(pathsOf(found), norm([proj]), 'the newest chat names the folder');
+  assert.doesNotMatch(JSON.stringify(found), /secret/, 'nothing of the chat but its folder');
+  skill(path.join(proj, '.qwen', 'skills'), 'q-skill');
+  mdAgent(path.join(proj, '.qwen', 'agents', 'q-agent.md'), 'q-agent');
+  assert.deepEqual(names(qwen.findItems(proj, w.ctx(qwen))), ['q-agent', 'q-skill']);
+  skill(path.join(w.home, '.qwen', 'skills'), 'g-skill');
+  const ext = mkdir(w.home, '.qwen', 'extensions', 'myext');
+  write(path.join(ext, 'qwen-extension.json'), JSON.stringify({ name: 'My Ext', description: 'an extension' }));
+  skill(path.join(ext, 'skills'), 'ext-skill');
+  const global = qwen.findGlobalItems(w.ctx(qwen));
+  assert.ok(global.some((i) => i.name === 'g-skill' && i.source === 'personal'));
+  assert.ok(global.some((i) => i.kind === 'plugin'));
+});
+
+test('OpenCode: no projects from its database (never opened); its project and personal folders, both spellings; XDG_CONFIG_HOME honoured', () => {
+  const w = world('opencode');
+  assert.equal(opencode.detect(w.ctx(opencode)), false);
+  mkdir(w.home, '.config', 'opencode');
+  assert.equal(opencode.detect(w.ctx(opencode)), true);
+  assert.deepEqual(opencode.findProjects(w.ctx(opencode)), []);
+  const proj = mkdir(w.work, 'oc proj');
+  skill(path.join(proj, '.opencode', 'skill'), 's1');
+  skill(path.join(proj, '.opencode', 'skills'), 's2');
+  mdAgent(path.join(proj, '.opencode', 'agent', 'a1.md'), 'a1');
+  mdAgent(path.join(proj, '.opencode', 'agents', 'a2.md'), 'a2');
+  assert.deepEqual(names(opencode.findItems(proj, w.ctx(opencode))), ['a1', 'a2', 's1', 's2']);
+  skill(path.join(w.home, '.config', 'opencode', 'skills'), 'p1');
+  assert.deepEqual(names(opencode.findGlobalItems(w.ctx(opencode))), ['p1']);
+  const x = world('opencode-xdg');
+  x.env.XDG_CONFIG_HOME = mkdir(x.base, 'cfg');
+  skill(path.join(x.env.XDG_CONFIG_HOME, 'opencode', 'skill'), 'xdg-skill');
+  assert.deepEqual(names(opencode.findGlobalItems(x.ctx(opencode))), ['xdg-skill']);
+  assert.ok(!fs.readFileSync(path.join(REPO, 'server', 'adapters', 'opencode.mjs'), 'utf8').includes('node:sqlite'), 'the database is the session reader’s, never an adapter’s');
 });

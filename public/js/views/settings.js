@@ -8,6 +8,7 @@ import { actionsState, onActionsChange } from '../actions.js';
 import { costShown, setCostShown, advancedShown, setAdvancedShown, onPrefs } from '../usage.js';
 import { installedTools, toolsState, onToolsChange, needTools } from './tools.js';
 import { preferredTool, readTool, saveTool } from './job.js';
+import { updatesOn, setUpdatesOn, updatesState, updateRowHtml, onUpdates } from '../updates.js';
 
 const LANG_NAMES = { tr: 'Türkçe', en: 'English' };
 
@@ -45,7 +46,7 @@ function toolRow(tools, tool, looking = false) {
   return row(t('setToolTitle'), t('setToolText'), `<select data-set-tool data-fk="set:tool" aria-label="${esc(t('setToolLabel'))}">${opts}</select>`);
 }
 
-export function settingsHtml({ mode = 'off', lang = 'en', cost = false, advanced = false, canSwitch = false, langChoice = 'auto', canLang = false, tools = [], tool = '', toolsLooking = false } = {}) {
+export function settingsHtml({ mode = 'off', lang = 'en', cost = false, advanced = false, canSwitch = false, langChoice = 'auto', canLang = false, tools = [], tool = '', toolsLooking = false, updates = updatesState(), updatesChecked = updatesOn() } = {}) {
   const modeText = t(`setMode_${['off', 'dry', 'live'].includes(mode) ? mode : 'off'}`);
   return [
     group('actions', 'action', t('setActions'), [
@@ -55,7 +56,7 @@ export function settingsHtml({ mode = 'off', lang = 'en', cost = false, advanced
     group('usage', 'cpu', t('setUsage'), [
       row(t('setCostTitle'), t('setCostText'), toggle('data-set-cost', 'set:cost', cost, t('setCostTitle'))),
     ]),
-    group('general', 'globe', t('setGeneral'), [languageRow(lang, langChoice, canLang), row(t('setAdvancedTitle'), t('setAdvancedText'), toggle('data-set-advanced', 'set:advanced', advanced, t('setAdvancedTitle')))]),
+    group('general', 'globe', t('setGeneral'), [languageRow(lang, langChoice, canLang), row(t('setAdvancedTitle'), t('setAdvancedText'), toggle('data-set-advanced', 'set:advanced', advanced, t('setAdvancedTitle'))), row(t('updTitle'), t('updText'), `${toggle('data-set-updates', 'set:updates', updatesChecked, t('updTitle'))}<div class="upd-state" aria-live="polite">${updateRowHtml(updates)}</div>`)]),
     group('help', 'prompt', t('setHelp'), [row(t('setGuideTitle'), t('setGuideText'), btn('guide', t('setGuideOpen'))), row(t('setDiagTitle'), t('setDiagText'), btn('diag', t('setDiagCopy'))), row(t('setLicenseTitle'), t('setLicenseText', { url: SOURCE_URL })), row(t('setSupportTitle'), t('setSupportText'), `<a class="act-btn" href="${SPONSOR_URL}" target="_blank" rel="noopener noreferrer" data-fk="set:support">${icon('heart')}<span>${esc(t('setSupportOpen'))}</span></a>`)]),
   ].join('');
 }
@@ -91,6 +92,8 @@ export function createSettingsView(root, { openTools = () => {}, openGuide = () 
   root.addEventListener('change', (e) => {
     if (e.target.matches?.('[data-set-cost]')) setCostShown(e.target.checked);
     if (e.target.matches?.('[data-set-advanced]')) setAdvancedShown(e.target.checked);
+    // "A new version is out" (roadmap F3a): on, the page asks its own server now and at every start; off, never
+    if (e.target.matches?.('[data-set-updates]')) Promise.resolve(setUpdatesOn(e.target.checked)).finally(render);
     if (e.target.matches?.('[data-set-tool]')) {
       saveTool(e.target.value);
       render();
@@ -115,5 +118,6 @@ export function createSettingsView(root, { openTools = () => {}, openGuide = () 
   onActionsChange(() => !root.closest('[hidden]') && render());
   onPrefs(() => !root.closest('[hidden]') && render());
   onToolsChange(() => !root.closest('[hidden]') && render());
+  onUpdates(() => !root.closest('[hidden]') && render());
   return { render };
 }

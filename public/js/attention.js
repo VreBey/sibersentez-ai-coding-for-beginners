@@ -21,11 +21,21 @@ export function sessionState(s, now = Date.now()) {
   return since && now - since <= WAIT_FRESH_MS ? 'waiting' : 'left';
 }
 
-// The sessions waiting for the person, the one that finished last first
-export function waitingSessions(sessions, now = Date.now()) {
-  return [...sessions]
-    .filter((s) => sessionState(s, now) === 'waiting')
-    .sort((a, b) => (Number(b.live.since) || 0) - (Number(a.live.since) || 0));
+// Every AI tool, not only Claude Code (2026-10-07): an AI tab in SiberSentez's terminal whose screen asks the person
+// something (terminalDock asking(): a permission, a menu, a plan to approve) waits for the person too. Codex's and
+// Gemini CLI's logs are read (server/toolLogs.mjs) but say nothing of an open session or a question on screen, so the
+// tab stands for it. A Claude Code tab is left out: its
+// session already says it waits (~/.claude/sessions), and counting both would count it twice.
+// asks: [{ tabId, projectId, tool, title, kind, since }] -> rows shaped like a waiting session ({ dock: true })
+export function dockWaiting(asks) {
+  return (Array.isArray(asks) ? asks : [])
+    .filter((a) => a && typeof a.tabId === 'string' && a.tool && a.tool !== 'claude')
+    .map((a) => ({ id: `dock:${a.tabId}`, dock: true, tabId: a.tabId, projectId: a.projectId || null, tool: a.tool, title: a.title || '', kind: a.kind || '', live: { status: 'waiting', since: Number(a.since) || 0 } }));
+}
+
+// The sessions waiting for the person, the one that finished last first; asks: the terminal's asking AI tabs (above)
+export function waitingSessions(sessions, now = Date.now(), asks = []) {
+  return [...[...sessions].filter((s) => sessionState(s, now) === 'waiting'), ...dockWaiting(asks)].sort((a, b) => (Number(b.live.since) || 0) - (Number(a.live.since) || 0));
 }
 
 // Counts of the open sessions by state: { waiting, busy, left }
@@ -40,8 +50,10 @@ export function sessionCounts(sessions, now = Date.now()) {
 
 // A project's state from its open sessions and running agents: waiting when any session waits (the person is needed
 // even while another session works), busy when a session or an agent works, left when a session is open and quiet,
-// closed otherwise. byProject: Map(projectId -> sessions) (see groupSessions).
-export function projectState(p, byProject, now = Date.now()) {
+// closed otherwise. byProject: Map(projectId -> sessions) (see groupSessions). asks: the terminal's asking AI tabs
+// (dockWaiting): an asking tab of another tool makes its project wait too.
+export function projectState(p, byProject, now = Date.now(), asks = []) {
+  if (p?.id && dockWaiting(asks).some((a) => a.projectId === p.id)) return 'waiting';
   let busy = (p?.runningAgents || 0) > 0;
   let left = false;
   for (const s of byProject?.get(p?.id) || []) {

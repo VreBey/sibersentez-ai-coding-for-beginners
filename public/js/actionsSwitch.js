@@ -9,7 +9,7 @@
 // nor the network.
 
 import { esc } from './format.js';
-import { t, modeName } from './i18n.js';
+import { t, modeName, stateName, indicatorMode } from './i18n.js';
 
 export const SWITCH_MODES = Object.freeze(['off', 'dry', 'live']);
 const modeOf = (m) => (SWITCH_MODES.includes(m) ? m : 'off');
@@ -155,10 +155,20 @@ export function switchKey(key, step) {
 // The indicator's texts: its visible text, its accessible name and its tooltip. With the bridge the indicator opens the
 // panel; without it (a plain browser) the tooltip says where the mode is changed.
 export function indicatorModel(mode, canChange) {
-  const text = t('actionsIndicator', { mode: modeName(modeOf(mode)) });
+  const text = t('actionsIndicator', { mode: indicatorMode(modeOf(mode)) });
   if (canChange) return { text, label: text, title: `${text}. ${t('actionsSwitchTip')}` };
   const title = `${text}. ${t('actionsHowTo')}`;
   return { text, label: title, title };
+}
+
+// The indicator's visible text in parts (review U15): "Actions: " · the mode's name · " · only watches". A narrow window
+// keeps the name only; the whole text stays the button's accessible name and tooltip.
+export function indicatorPartsHtml(mode) {
+  const m = modeOf(mode);
+  const parts = t('actionsIndicator', { mode: '%%MODE%%' }).split('%%MODE%%');
+  // A translation that names the mode once or never: its words before and after it (never one dropped)
+  const [pre = '', post = ''] = parts.length === 2 ? parts : [parts.join(''), ''];
+  return `<span class="asw-pre">${esc(pre)}</span><span class="asw-mode">${esc(modeName(m))}</span><span class="asw-state"> · ${esc(stateName(m))}</span>${post ? `<span class="asw-pre">${esc(post)}</span>` : ''}`;
 }
 
 const busyAttr = (on) => (on ? ' aria-disabled="true"' : '');
@@ -261,7 +271,7 @@ export function createActionsSwitch({ button, panel, bridge = null, getMode = ()
     if (!button) return;
     const m = indicatorModel(state.current, Boolean(bridge));
     button.dataset.mode = state.current;
-    button.innerHTML = `<i aria-hidden="true"></i><span>${esc(m.text)}</span>`;
+    button.innerHTML = `<i aria-hidden="true"></i><span>${indicatorPartsHtml(state.current)}</span>`;
     button.title = m.title;
     button.setAttribute('aria-label', m.label);
     if (bridge && panel) {

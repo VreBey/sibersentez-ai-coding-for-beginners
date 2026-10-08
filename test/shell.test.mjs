@@ -22,6 +22,7 @@ function inLanguages(fn) {
   }
 }
 
+const main0 = () => read('public', 'js', 'main.js');
 test('the menu: Building, Projects, then Skills & agents and Feed under "Advanced" (Timeline shares the Feed), then AI tools, Guide, Settings at its foot; one screen per menu item', () => {
   const html = read('public', 'index.html');
   const nav = html.slice(html.indexOf('<nav class="side"'), html.indexOf('</nav>'));
@@ -29,7 +30,12 @@ test('the menu: Building, Projects, then Skills & agents and Feed under "Advance
   assert.ok(nav.indexOf('data-i18n="navAdvanced"') > nav.indexOf('data-tab="projects"') && nav.indexOf('data-i18n="navAdvanced"') < nav.indexOf('data-tab="roster"'), 'the advanced label');
   assert.match(nav, /data-tab="feed" data-tab-also="timeline"/);
   assert.ok(nav.indexOf('id="toolsBtn"') < nav.indexOf('id="guideBtn"') && nav.indexOf('id="guideBtn"') < nav.indexOf('data-tab="settings"'));
-  for (const k of ['today', 'projects', 'roster', 'feed', 'timeline', 'settings']) assert.match(html, new RegExp(`<section id="tab-${k}" class="panel[^"]*" role="tabpanel"`), k);
+  for (const k of ['today', 'projects', 'roster', 'feed', 'timeline', 'settings']) assert.match(html, new RegExp(`<section id="tab-${k}" class="panel[^"]*"`), k);
+  // The menu moves between screens: navigation (the <nav> landmark), the shown screen marked aria-current, never a
+  // half tab pattern (review U03: tab roles without arrow keys or panels)
+  assert.doesNotMatch(html, /role="tab(list|panel)?"/);
+  assert.ok(main0().includes("if (on) b.setAttribute('aria-current', 'page');"));
+  assert.ok(main0().includes("const NAV_BUTTONS = '.side-nav [data-tab], .side-foot [data-tab]';"), 'the arrows move in the menu');
   // Today holds the building, who waits, the recent projects, the numbers and the usage strip; the rest left the page
   const today = html.slice(html.indexOf('id="tab-today"'), html.indexOf('id="tab-projects"'));
   for (const id of ['todayChecklist', 'workshopBody', 'todayRecent', 'usageStrip']) assert.ok(today.includes(`id="${id}"`), id);

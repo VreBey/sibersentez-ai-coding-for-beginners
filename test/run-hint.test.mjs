@@ -164,8 +164,8 @@ test('"Open in the browser": only on a plain web page\'s index.html step, only w
   const read = (f) => fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
   assert.ok(read('public/js/main.js').includes("payload: { projectId, open: 'index.html' }"), 'the page asks for exactly that file');
   const drawer = read('public/js/views/drawer.js');
-  assert.ok(drawer.includes("const built = ['check', 'done'].includes(job.get(p.id).data?.step);") && drawer.includes("${built ? runHint.html(p) : ''}") && drawer.includes("${built ? '' : runHint.html(p)}"), 'one run section: under the job once built, else in the details');
+  assert.ok(drawer.includes("const built = ['check', 'finish', 'done'].includes(job.get(p.id).data?.step);") && drawer.includes("${built ? runHint.html(p) : ''}") && drawer.includes("${built ? '' : runHint.html(p)}"), 'one run section: under the job once built, else in the details');
   const ws = read('public/js/views/workshop.js');
-  assert.ok(ws.includes("button('resultRun', () => dispatch('open-run', a))") && ws.includes("if (job.step === 'done') body.append(button('resultRun'"));
+  assert.ok(ws.includes("button('resultRun', () => dispatch('open-run', a))") && ws.includes("if (job.step === 'done' || job.step === 'finish') body.append(button('resultRun'"));
   assert.ok(read('public/js/main.js').includes("d.action === 'open-run' && d.projectId) open({ type: 'project', id: d.projectId, section: 'run' })"));
 });

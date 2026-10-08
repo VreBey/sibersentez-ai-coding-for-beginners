@@ -104,13 +104,32 @@ write the idea → install what is suggested → open a terminal**.
 
 1. **Where it starts.** A **New project** button in the header, left of the Actions indicator. In the Projects tab a
    **Getting started** card (TR *Başlarken*) while two or fewer of the person's own projects are listed (a folder that
-   exists, not broad, not only a temp folder): "1 Choose or create your folder · 2 Write what you want to build;
+   exists, not broad, not only a temp folder): "1 Name your project; SiberSentez makes its folder · 2 Write what you want to build;
    SiberSentez picks the skills that fit · 3 Install them and open a terminal; start the AI tool you like there", the same
    button, a note that folders where an AI tool already ran appear by themselves, and **Don't show again**
    (`localStorage` `sibersentez.start.hidden`). The tray menu has **New project…** too.
-2. **The folder.** The system folder picker opens, modal to the window ("Choose or create the folder of your project",
-   button "Use this folder"). Windows' picker has **New folder**, so the folder can be created right there.
-3. **The idea.** The project's drawer opens at "Skills that fit this project" with the focus in the idea box (step 1).
+2. **The "New project" window** (review U05, 2026-10-07; `public/js/views/newIdea.js`). A small window asks for the
+   project's **name** and **what to build** (optional), and shows where its folder goes: **Documents › SiberSentez ›
+   <name>** (TR *Belgeler › SiberSentez › <ad>*, the owner's choice of default). **Create** (or Ctrl+Enter) makes it
+   there; **Create somewhere else…** asks for the folder it goes into ("Choose where the new project's folder goes",
+   button "Create it here"); **Cancel** or Esc closes it. A name Windows cannot use as a folder name says so in the
+   window; Enter in the name goes on to the idea. The idea takes at most 300 characters, as much as the server keeps
+   with the project. A taken name becomes "<name> (2)" … The shell (`electron/helpers.mjs` `createIdeaProject`) checks
+   the path before anything is made (`plannedFolderRefusal`), makes the base folder if needed and the project folder
+   never recursively (a folder that appeared meanwhile is never taken over: the next name), checks it in full as a
+   picked folder is checked, has the server remember it as a **new** project only (`project-add` with `fresh`: a folder
+   inside a listed project is refused, `inside-project`, before anything is remembered; the shell also refuses an
+   `existed` answer, so an idea never lands on another project) and keeps the idea with it. Refused after it was made:
+   the empty folder is removed again, and the base folder when this call made it. The page gets the project id only.
+   A try that did not work (refused, or "Somewhere else" cancelled) brings the window back with what was typed and the
+   reason in it. While the window is open the rest of the page is inert. The drawer then opens with the idea in
+   its job box and **Start** focused: nothing starts until the person presses it. "Project created: <name> · Your idea
+   is in its job box. Press Start when you are ready."
+   **Already have a project folder? Add it** at the bottom takes the old way: the system folder picker opens, modal to
+   the window ("Choose or create the folder of your project", button "Use this folder"); Windows' picker has **New
+   folder**, so the folder can be created right there. An older shell without the new call opens the picker at once.
+3. **The idea** (a folder added the old way). The project's drawer opens at "Skills that fit this project" with the
+   focus in the idea box (step 1).
    A notice says "Project added: <name> · Now write what you want to build in it; SiberSentez picks the skills that fit"
    (or "This folder is already listed: <name>" when it was: that project opens).
 4. **Install.** The list and buttons of step 1, unchanged.
@@ -203,8 +222,8 @@ the box: "This idea is kept only in this computer's browser storage." (`startIde
 
 ### QA
 
-`?qa=1&newproject=pick` runs the flow once with a stand-in bridge that answers with the first project that can take
-skills; `?qa=1&newproject=<reason>` shows that refusal; `?qa=1&newproject=browser` the page without a bridge. Nothing
+`?qa=1&newproject=pick` runs the flow once (the "New project" window first) with a stand-in bridge that answers with
+the first project that can take skills, for a made project and a picked folder alike; `?qa=1&newproject=<reason>` shows that refusal; `?qa=1&newproject=browser` the page without a bridge. Nothing
 reaches the shell or the server.
 
 ### Tests
@@ -213,7 +232,9 @@ reaches the shell or the server.
 real junctions; the picker flow; the reply; the calls to the server process; the wiring in `main.mjs` and
 `index.mjs`; the project memory with the idea; adding a folder and every refusal on the server; the channel; a forked
 server end to end (add, list, idea, `discovered.json`, the registry untouched, nothing logged); the page flow, the
-start card, the stored idea and "Then: open a terminal". Mutation evidence: dropping the top-frame rule, the link
+start card, the stored idea and "Then: open a terminal". `test/idea-project.test.mjs`: the folder name rule (the
+shell's and the page's preview are the same), the request check, a free folder name, the shell's steps with fakes
+(the empty folder removed after a refusal), the preload, `main.mjs`'s wiring, the window's flow and texts. Mutation evidence: dropping the top-frame rule, the link
 rule, the idea cleaning, the preload's checks or "only the asked process answers" turns tests red.
 
 ### Open

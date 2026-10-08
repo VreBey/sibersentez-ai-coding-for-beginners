@@ -100,7 +100,7 @@ describe('preload: the page gets exactly the bridge functions', () => {
     const p = loadPreload();
     assert.deepEqual(p.required, ['electron']);
     assert.deepEqual(Object.keys(p.exposed), ['sibersentezTerminal', 'sibersentezShell'], 'the terminal bridge is checked in test/terminal.test.mjs');
-    assert.deepEqual(Object.keys(p.exposed.sibersentezShell), ['setActionsMode', 'pickProjectFolder', 'pickLibraryFolder', 'setLanguage', 'saveProjectIdea', 'setAttention']);
+    assert.deepEqual(Object.keys(p.exposed.sibersentezShell), ['setActionsMode', 'pickProjectFolder', 'createIdeaProject', 'pickLibraryFolder', 'setLanguage', 'saveProjectIdea', 'setAttention']);
     assert.equal(typeof p.exposed.sibersentezShell.setActionsMode, 'function');
     // The library picker invokes its own channel with no argument, whatever the page passes
     await p.exposed.sibersentezShell.pickLibraryFolder('C:\\ignored', { path: 'x' });
@@ -627,15 +627,16 @@ describe('page: what the panel says and how it is marked up', () => {
   test('indicator: in the app its name is the mode and its tooltip says a click chooses; in a plain browser it says where the mode is changed', () => {
     setLanguage('tr');
     const app = indicatorModel('dry', true);
-    assert.equal(app.text, 'Eylemler: Önizleme');
-    assert.equal(app.label, 'Eylemler: Önizleme');
-    assert.equal(app.title, `Eylemler: Önizleme. ${PAGE_STRINGS.tr.actionsSwitchTip}`);
+    // The mode's name (the same word as the panel and the tray) and what it means (review U11)
+    assert.equal(app.text, 'Eylemler: Önizleme · yalnız gösterir');
+    assert.equal(app.label, 'Eylemler: Önizleme · yalnız gösterir');
+    assert.equal(app.title, `Eylemler: Önizleme · yalnız gösterir. ${PAGE_STRINGS.tr.actionsSwitchTip}`);
     const browser = indicatorModel('live', false);
-    assert.equal(browser.text, 'Eylemler: Açık');
-    assert.equal(browser.title, `Eylemler: Açık. ${PAGE_STRINGS.tr.actionsHowTo}`);
+    assert.equal(browser.text, 'Eylemler: Açık · iş yapar');
+    assert.equal(browser.title, `Eylemler: Açık · iş yapar. ${PAGE_STRINGS.tr.actionsHowTo}`);
     assert.equal(browser.label, browser.title);
     setLanguage('en');
-    assert.equal(indicatorModel('bogus', true).text, 'Actions: Off');
+    assert.equal(indicatorModel('bogus', true).text, 'Actions: Off · only watches');
   });
 
   test('index.html: the panel is a labelled, non-modal dialog next to the indicator; the style sheet keeps it above the drawer', () => {
@@ -726,7 +727,7 @@ describe('page: the switch wired to a page', () => {
     const sw = createActionsSwitch({ button: p.button, panel: p.panel, bridge: shellBridge({}), getMode: () => 'dry', onUnavailable: () => explained++, doc: p.doc });
     sw.setMode('dry');
     assert.equal(p.button.hidden, false);
-    assert.equal(p.button.title, `Actions: Preview. ${PAGE_STRINGS.en.actionsHowTo}`);
+    assert.equal(p.button.title, `Actions: Preview · only shows. ${PAGE_STRINGS.en.actionsHowTo}`);
     assert.equal(p.button.getAttribute('aria-haspopup'), null, 'nothing pops up');
     p.fire(p.button, 'click');
     p.fire(p.button, 'click');
@@ -757,7 +758,7 @@ describe('page: the switch wired to a page', () => {
     assert.equal(p.button.getAttribute('aria-haspopup'), 'dialog');
     assert.equal(p.button.getAttribute('aria-controls'), 'actPanel');
     assert.equal(p.button.getAttribute('aria-expanded'), 'false');
-    assert.equal(p.button.getAttribute('aria-label'), 'Actions: Off');
+    assert.equal(p.button.getAttribute('aria-label'), 'Actions: Off · only watches');
     p.fire(p.button, 'click');
     assert.equal(p.panel.hidden, false);
     assert.equal(p.button.getAttribute('aria-expanded'), 'true');

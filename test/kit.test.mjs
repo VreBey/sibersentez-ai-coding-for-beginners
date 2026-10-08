@@ -344,7 +344,7 @@ test('kit: layout is <category>/skills/<name>/SKILL.md and <category>/agents/<na
   };
   walk(KIT);
   // docs/kit-v2.md §4: waves 1, 1.5 and 2 of kit v2 are in, plus the launch items of 0.5.0 (the counts move with each wave)
-  assert.equal(SKILLS.length, 57);
+  assert.equal(SKILLS.length, 59);
   assert.equal(AGENTS.length, 16);
 });
 
@@ -788,8 +788,8 @@ const WAVE2_AGENTS = { security: ['security-auditor'], quality: ['qa-explorer'],
 const WAVE2_ITEM_NAMES = new Set([...Object.values(WAVE2_SKILLS).flat(), ...Object.values(WAVE2_AGENTS).flat()]);
 const STATUS_WORDS = ['DONE', 'DONE_WITH_CONCERNS', 'NEEDS_CONTEXT', 'BLOCKED'];
 
-test('kit wave 2: the new skills and agents are in their categories, and the catalog is 0.6.2 (job identity, jobs started outside the app)', () => {
-  assert.equal(CATALOG.version, '0.6.2');
+test('kit wave 2: the new skills and agents are in their categories (the catalog is 0.7.0 since the third wave)', () => {
+  assert.equal(CATALOG.version, '0.7.0');
   for (const [category, names] of Object.entries(WAVE2_SKILLS)) {
     for (const name of names) {
       const it = SKILLS.find((x) => x.name === name);
@@ -879,4 +879,15 @@ test('kit wave 2: the new topic tags (cli, extension) are in the dictionary and 
   for (const lang of ['en', 'tr']) for (const id of ['cli', 'extension']) assert.ok(strings[lang][`fitTag_${id}`], `${lang}: fitTag_${id}`);
   assert.ok(metaTags(ITEMS.find((it) => it.name === 'cli-tool-starter')).includes('cli'));
   assert.ok(metaTags(ITEMS.find((it) => it.name === 'browser-extension-starter')).includes('extension'));
+});
+
+test('kit 0.7.0 (2026-10-08): a contact form and a multi-language skill; the browser check never drives the person\'s own browser; the plan asks no extras', () => {
+  assert.equal(SKILLS.find((x) => x.name === 'contact-form')?.category, 'backend');
+  assert.equal(SKILLS.find((x) => x.name === 'multi-language')?.category, 'design');
+  const read = (rel) => fs.readFileSync(path.join(KIT, rel), 'utf8');
+  assert.match(read('quality/skills/try-it-in-browser/SKILL.md'), /A separate test browser, never the person's own\./);
+  assert.match(read('quality/agents/qa-explorer.md'), /never\s+the person's own browser through an extension/);
+  assert.match(read('team/skills/orchestrate-plan/SKILL.md'), /Do not offer extras while planning/);
+  assert.match(read('design/skills/ui-check/SKILL.md'), /\| Dialogs \|/);
+  assert.match(read('backend/skills/contact-form/SKILL.md'), /No secret in the page\./);
 });

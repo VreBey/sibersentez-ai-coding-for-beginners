@@ -189,3 +189,15 @@ session's `cost.mjs`):
 The one message of difference is a log line that holds the characters U+2028/U+2029 inside a text: Node's
 `readline` (used by the independent count) splits lines there and loses that line; the ledger splits only at `\n`
 and counts it. A second start from the saved ledger gave the same numbers.
+
+## Other AI tools (2026-10-07)
+
+Codex CLI's, Gemini CLI's and Qwen Code's requests go into the same ledger (`server/ingest.mjs foreignUsage`, from the
+logs `server/toolLogs.mjs` reads): Codex's `last_token_usage` per `token_count` event (keyed by the session's running
+total, so an event written again counts once), Gemini CLI's `tokens` per message id, Qwen Code's `usageMetadata` per
+record uuid. These tools count the cached input inside the input; it is taken out and booked as a cache read, as Claude
+Code's logs keep it. Output includes thinking (Gemini's thoughts, Qwen's thoughts; Codex's reasoning is already part
+of its output). The model is the tool's own (`gpt-6-astra`, `gemini-3-pro`...): `server/prices.mjs` knows Anthropic's
+prices only, so these are counted and listed among the models without a price, never given a made-up dollar amount.
+The ledger's older-log scan (`scanOlderLogs`) stays Claude Code's: another tool's history older than the log reader's
+window is not counted.

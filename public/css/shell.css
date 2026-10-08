@@ -125,3 +125,7 @@
 @media (max-width: 980px) { .side-label { display: none; } }
 /* The Building screen: the workshop's own head keeps only its project choice and "What is this?" */
 .ws-home .ws-head { justify-content: flex-end; margin-bottom: 14px; }
+
+/* "A new version is out" in Settings (roadmap F3a): its state under the switch */
+.upd-state { margin-top: 6px; max-width: 34ch; text-align: right; }
+.upd-state a { color: var(--accent); }

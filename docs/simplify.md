@@ -41,8 +41,9 @@ approval at the plan and the result instead of each step, notify when done, and 
 
 ## Phase 2: managing in the building (done 2026-10-01)
 
-- A job starts Claude Code in plan mode (`server/launch.mjs jobArgs`: `--permission-mode plan`, only for a job, never
-  a resume; other tools start as usual). The job's first message says the plan is approved in the tool's own prompt.
+- A job starts the tool in its own plan mode when it has one (`server/tools.mjs` `plan`, `server/launch.mjs jobArgs`:
+  Claude Code `--permission-mode plan`; Gemini CLI `--approval-mode plan`, whose exit_plan_mode asks "Ready to start
+  implementation?", added 2026-10-07; only for a job, never a resume; tools without a known plan mode start as usual). The job's first message says the plan is approved in the tool's own prompt.
 - The plan Claude shows for approval (its ExitPlanMode call) is kept on the session (`ingest.mjs`, at most `PLAN_MAX`
   characters, the newest one, a lead's only) and sent with it (`plan`). It waits while the session waits and its last
   action is that call (`hq-live.js` `planPending`).
@@ -108,7 +109,7 @@ the Building and the top bar said the job went on; a click on the lead found no 
 ## A job started in a moved project's old folder (2026-10-01, real use)
 
 The owner gave the game project a job from `C:\Users\…\Desktop\arena game`, the folder the game had moved away from
-(only `.claude` was left in it). The AI noticed and worked in `D:\Projeler\arena game`, where the team's files
+(only `.claude` was left in it). The AI noticed and worked in `D:\Work\arena game`, where the team's files
 went too; SiberSentez kept the session under the old folder (its restore point held 0 files) and the job under the new
 one, and "Go on" on the new one would have resumed an unrelated session of the morning.
 
@@ -146,3 +147,23 @@ Bolt and v0 offer suggestions under their input. Inside the Building's job box c
 "What is the next step?", "Make it look better", and first, while the project has no job yet and has an idea, "Start
 with my idea". Each fills the box with a sentence that reaches a kit skill by its Turkish keywords (debug-helper,
 next-step, ui-polish; test/kit.test.mjs IDEAS) and never starts anything.
+
+## One primary start on the first screen (2026-10-07, review B4)
+
+An outside review counted three "New project" calls on the empty first screen (the header, the "Got an idea?" card,
+the next-step strip) and a job box under them with no project to give a job to; the Building's own guide opened over
+all of it. Now `public/js/firstScreen.js` decides from two questions:
+
+- **A project of the person's own** (`checklist.js hasOwnProject`): without one, the card is the start. The strip,
+  whose step would only repeat it, steps back; the card has the one primary button (New project), a quiet "Watch the
+  example" (the Building's own example plays; its play button is quiet meanwhile, the same action) and the tour link.
+- **A project the Building shows** (`hq-live.js projectsInOrder`: registered, or found and active in the last days):
+  without one, the job row (job box, project picker, help) steps back. Folders other tools found long ago count as
+  the person's (no card), so the strip's "create a project" is the start then.
+- The header's New project is a quiet shortcut while either holds (`.new-proj.quiet`, also in the theme).
+- "What happens in the building?" waits until the Building shows something (a project, or the example).
+
+Checked in a window at 1366 x 768, Turkish and English, on an empty home and on one where only old folders of other
+tools were found: on the empty home the one visible primary is "Create a new project", the first control the
+keyboard reaches; nothing scrolls sideways; "Watch the example" starts the example and the strip says it is one.
+Tests: `test/start-card.test.mjs`. Not yet validated with people (review package 5).

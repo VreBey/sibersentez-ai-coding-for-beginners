@@ -10,7 +10,8 @@ import { icon } from '../icons.js';
 import { SOURCE_HINT, sourcesOf, sourceLabel, everywhere, matchesFilter, libraryState, isLibraryItem, libraryCounts, kitCounts, folderIndex, folderCounts, folderGroups, parseFolder, sourceFolder, githubRows, githubSelectable, githubPicks, installGroups, githubItems, originRepo, KIT_SOURCE } from '../rosterModel.js';
 import { actionsState, actionsReady, onActionsChange, runAction } from '../actions.js';
 import { importBatches, skillErrorText, categoryLabel, reasonText, planRows, LIBRARY_CATEGORIES, MAX_SKILL_ITEMS } from '../contextmenu.js';
-import { fitReasonsText } from './drawer.js';
+import { fitReasonsText, cleanIdea } from './drawer.js';
+import { fetchFitFor } from './job.js';
 import { t, language } from '../i18n.js';
 import { multiTool, toolOptions, toolTagsHtml, toolSelectHtml } from '../toolTags.js';
 import { ghTrustHtml } from '../githubTrust.js';
@@ -34,6 +35,7 @@ export function createRosterView(root, openDrawer) {
   root.innerHTML = `
     <div class="hub-note-wrap" data-k="hub"></div>
     <div class="imp-wrap" data-k="import"></div>
+    <div data-k="suggest"></div>
     <div class="roster-top">
       <div data-k="lib"></div>
       <div class="leaders adv-only" data-k="leaders"></div>
@@ -682,10 +684,23 @@ export function createRosterView(root, openDrawer) {
     return [...new Set([...LIBRARY_CATEGORIES, ...[...own].filter((c) => /^[a-z0-9][a-z0-9-]{0,40}$/.test(c)).sort()])];
   }
 
+  // "For your latest project" (review U14): what fits the person's most recent project leads the screen (the same
+  // fit answer the drawer and the badge use; see createSuggest)
+  const suggester = createSuggest({ fetchFit: (id, idea) => fetchFitFor(id, idea, { signal: timeoutSignal(SUGGEST_TIMEOUT_MS) }), onChange: () => renderSuggest() });
+  function renderSuggest() {
+    const p = store.loaded ? suggestProject(store.projects) : null;
+    setIf($('suggest'), p ? suggestHtml(p, suggester.itemsFor(p)) : '');
+  }
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-suggest-open]');
+    if (b) openDrawer({ type: 'project', id: b.dataset.suggestOpen, section: 'skills' });
+  });
+
   function render() {
     renderTools();
     renderHub();
     renderImport();
+    renderSuggest();
     renderTop();
     syncImportShown();
     renderFolders();
@@ -694,6 +709,74 @@ export function createRosterView(root, openDrawer) {
   }
 
   return { render, openImport };
+}
+
+// ---------- "For your latest project" (review U14) ----------
+export const SUGGEST_MAX = 4;
+// Asked again after a minute, as the drawer asks (an item installed meanwhile leaves the list); a request that does not
+// answer in time is dropped, so the list is never stuck
+export const SUGGEST_TTL_MS = 60 * 1000;
+const SUGGEST_TIMEOUT_MS = 15 * 1000;
+const timeoutSignal = (ms) => (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(ms) : undefined);
+
+// The suggestions of one project at a time (pure but for the injected fetchFit(projectId, idea)): itemsFor(p) answers
+// what is known for p and asks again when the project changed or ttl ms passed, one request at a time. An answer for a
+// project no longer shown is dropped; a failed request keeps the last list. onChange() runs when a request settles.
+export function createSuggest({ fetchFit, onChange = () => {}, now = () => Date.now(), ttl = SUGGEST_TTL_MS } = {}) {
+  const st = { id: null, at: 0, items: [], loading: false };
+  function itemsFor(p) {
+    if (!p?.id) return [];
+    if (!st.loading && (st.id !== p.id || now() - st.at > ttl)) {
+      const changed = st.id !== p.id;
+      Object.assign(st, { id: p.id, at: now(), items: changed ? [] : st.items, loading: true });
+      const asked = p.id;
+      Promise.resolve()
+        .then(() => fetchFit(asked, cleanIdea(p.idea)))
+        .then((fit) => {
+          if (st.id === asked) st.items = suggestItems(fit);
+        })
+        .catch(() => {
+          /* the last list stays; asked again after ttl */
+        })
+        .finally(() => {
+          st.loading = false;
+          onChange();
+        });
+    }
+    return st.id === p.id ? st.items : [];
+  }
+  return { itemsFor };
+}
+
+// The project the suggestions are for: the most recently active project of the person's own (a folder that exists,
+// not a broad or temporary folder, not a moved project's old folder)
+export function suggestProject(projects) {
+  const list = [...(projects instanceof Map ? projects.values() : Array.isArray(projects) ? projects : [])].filter((p) => p && p.path && p.exists !== false && !p.broad && !p.tmpOnly && !p.toolsOnly && p.kind !== 'hub');
+  list.sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));
+  return list[0] || null;
+}
+
+// The fits that can be installed and are not in the project yet, from the SiberSentez kit or the library: the strong
+// ones first (what the project card's badge counts), then the possible ones when room is left (a project with no idea
+// written rarely has strong fits); at most SUGGEST_MAX, best first within each band
+export function suggestItems(fit) {
+  if (!fit || typeof fit !== 'object' || fit.problem || !Array.isArray(fit.candidates)) return [];
+  const own = (c) => Array.isArray(c.sources) && (c.sources.includes(KIT_SOURCE) || c.sources.includes('library'));
+  const ok = fit.candidates.filter((c) => c && !c.installed && c.installable === true && own(c));
+  return [...ok.filter((c) => c.confidence === 'high'), ...ok.filter((c) => c.confidence === 'medium')].slice(0, SUGGEST_MAX);
+}
+
+// The section (pure): the project's name, what fits it in plain words (the kit's Turkish summary where there is one),
+// and one button to its drawer, where they are installed. Nothing when there is nothing to suggest.
+export function suggestHtml(p, items) {
+  if (!p || !Array.isArray(items) || !items.length) return '';
+  const rows = items
+    .map((c) => {
+      const summary = kitSummary(c.kind, c.name, itemDescription(c.description), Array.isArray(c.sources) && c.sources.includes(KIT_SOURCE));
+      return `<li><span class="rkind k-${esc(c.kind)}" aria-hidden="true">${icon(c.kind === 'agent' ? 'agent' : 'skill')}</span><span class="sg-main"><span class="sg-name"><span translate="no">${esc(c.name)}</span> <em class="rcat">${esc(t(c.kind === 'agent' ? 'rfSuggestAgent' : 'rfSuggestSkill'))}</em> <em class="sg-fit${c.confidence === 'high' ? ' strong' : ''}">${esc(t(c.confidence === 'high' ? 'rfSuggestStrong' : 'rfSuggestMaybe'))}</em></span><span class="sg-desc">${esc(summary || '')}</span></span></li>`;
+    })
+    .join('');
+  return `<section class="sg-card" aria-labelledby="sgT"><div class="sg-head"><div><h3 id="sgT">${esc(t('rfSuggestTitle', { name: p.name }))}</h3><p class="small muted">${esc(t('rfSuggestNote'))}</p></div><button type="button" class="act-btn primary" data-suggest-open="${esc(p.id)}">${icon('folder')}<span>${esc(t('rfSuggestOpen'))}</span></button></div><ul class="sg-list">${rows}</ul></section>`;
 }
 
 // ---------- counts in words ----------
@@ -789,6 +872,25 @@ function libraryCard(c, st, mode, kit = { total: 0 }) {
     empty && st.libraryPath
       ? `<p class="hn-path"><span class="muted">${esc(t('rfLibFolder'))}</span><code translate="no">${esc(st.libraryPath)}</code><button type="button" class="icon-btn hn-copy" data-copy-text="${esc(st.libraryPath)}" aria-label="${esc(t('rfCopyPathLabel'))}" title="${esc(t('rfCopyPath'))}">${icon('copy')}</button><span class="sr-only" role="status" aria-live="polite" data-copy-live></span></p>`
       : '';
+  // An empty library with the kit there (review U14): the good news first, the kit ready to use; adding one's own
+  // folder comes second
+  if (empty && kit.total) {
+    const add = st.state === 'none' ? '' : `<button type="button" class="act-btn lc-add" data-imp-open data-fk="lib:add">${icon('folder')}<span>${esc(t('rfLibAdd'))}</span></button>`;
+    return `<section class="lib-card kit-first" aria-labelledby="libCardT" data-copy-scope>
+    <span class="lc-ic" aria-hidden="true">${icon('skill')}</span>
+    <div class="lc-body">
+      <h3 id="libCardT">${esc(t('rfKitLeadTitle'))}</h3>
+      <p class="lc-nums"><span class="rsrc s-kit">${esc(t('rfKitName'))}</span><span>${countHtml(kit.skill, 'rfSkill1', 'rfSkillN')}</span><span class="lc-dot" aria-hidden="true">·</span><span>${countHtml(kit.agent, 'rfAgent1', 'rfAgentN')}</span></p>
+      <p class="lc-note">${esc(t('rfKitLeadNote'))}</p>
+      ${st.state === 'none' ? '' : `<p class="lc-how small muted">${esc(t('rfKitLeadOwn'))}</p>`}
+      ${path}
+    </div>
+    <div class="lc-acts">
+      <button type="button" class="act-btn primary lc-show" data-folder="group:kit">${esc(t('rfKitShow'))}</button>
+      ${add}
+    </div>
+  </section>`;
+  }
   return `<section class="lib-card${empty ? ' is-empty' : ''}" aria-labelledby="libCardT" data-copy-scope>
     <span class="lc-ic" aria-hidden="true">${icon('folder')}</span>
     <div class="lc-body">

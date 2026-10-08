@@ -1,7 +1,7 @@
 {
   "name": "sibersentez",
   "productName": "SiberSentez",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Build something with AI coding tools, even if you have never written code: start from an idea, with the AI tool you already have, and go back whenever you like. Runs only on this computer.",
   "author": "Samet Nazlım",
   "license": "GPL-3.0-or-later",

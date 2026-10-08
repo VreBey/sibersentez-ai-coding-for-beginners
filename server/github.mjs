@@ -1,7 +1,7 @@
 // Bringing skills and agents from a GitHub repository into the hub library (docs/github-import.md).
 //
-// The only place SiberSentez sends a request to the internet, and only when the person presses "Fetch" (or "Check for
-// update") with actions On. Only https://github.com, https://codeload.github.com and https://api.github.com are ever
+// One of the two places SiberSentez sends a request to the internet (the other: the optional new-version look,
+// server/update.mjs), and only when the person presses "Fetch" (or "Check for update") with actions On. Only https://github.com, https://codeload.github.com and https://api.github.com are ever
 // contacted; any other host, a redirect elsewhere, a URL with a user name or password and the ssh forms are refused.
 // Public repositories only: a repository that asks for credentials is "not public", no credential is ever asked for.
 //

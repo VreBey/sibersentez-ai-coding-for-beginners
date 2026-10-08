@@ -160,7 +160,7 @@ test('other tools: a tool that runs in SiberSentez\'s terminal for this project 
   const ws = fs.readFileSync(new URL('../public/js/views/workshop.js', import.meta.url), 'utf8');
   assert.ok(ws.includes("scene.actors.some((a) => a.state === 'busy'"));
   const dockSrc = fs.readFileSync(new URL('../public/js/terminalDock.js', import.meta.url), 'utf8');
-  assert.ok(dockSrc.includes('const running = () => [...tabs.values()].filter((x) => x.ai && !x.ended)'));
+  assert.ok(dockSrc.includes('const running = () => [...tabs.values()].filter(isRunningAi)'), 'a tab whose tool ended (its shell open) is not running (dockState.js; behavior in test/dock-state.test.mjs)');
   const live = fs.readFileSync(new URL('../public/js/hq-live.js', import.meta.url), 'utf8');
   assert.ok(live.includes('toolActors(p, now, store.dockRunning?.() || [])'));
 });
@@ -304,7 +304,7 @@ test('the job in the building: four lamps, the lead whose plan waits, the result
   assert.deepEqual(jobLamps({ step: 'build' }), ['done', 'now', 'off', 'off']);
   assert.deepEqual(jobLamps({ step: 'done' }), ['done', 'done', 'done', 'done']);
   assert.equal(jobOf({ step: 'none' }), null);
-  assert.deepEqual(jobOf({ step: 'check', tasks: { done: 2, total: 3 }, review: null, current: null, extra: 1 }), { step: 'check', tasks: { done: 2, total: 3 }, review: null, current: null, title: null, jobId: null, updatedAt: null });
+  assert.deepEqual(jobOf({ step: 'check', tasks: { done: 2, total: 3 }, review: null, current: null, extra: 1 }), { step: 'check', tasks: { done: 2, total: 3 }, review: null, current: null, title: null, jobId: null, tool: null, updatedAt: null, plan: null });
   assert.equal(jobOf({ step: 'build', plan: { title: 'Açılışı netleştir' } }).title, 'Açılışı netleştir', 'the plan title travels with the job');
   assert.equal(jobOf({ step: 'build', plan: { jobId: 'J' + 'a'.repeat(32) } }).jobId, 'J' + 'a'.repeat(32), 'and its job id (what the start\'s restore point is matched by)');
   const lead = (over) => ({ ...S('lead', 'waiting', 1000), ...over });
@@ -340,7 +340,9 @@ test('the Workshop: the sign opens the plan or the result, the card answers in t
   const main = read('public/js/main.js');
   assert.match(main, /d\.action === 'open-ai-terminal' && d\.projectId\) \{\n    if \(!termDock\.showProject\(d\.projectId\)\)/);
   const dock = read('public/js/terminalDock.js');
-  const fn = dock.slice(dock.indexOf('function showProject('), dock.indexOf('return { available: true'));
+  // showProject alone (askAi after it types a draft on purpose, review U09)
+  const fn = dock.slice(dock.indexOf('function showProject('), dock.indexOf('function askAi('));
+  assert.ok(fn.length > 0 && dock.indexOf('function askAi(') > dock.indexOf('function showProject('));
   assert.ok(fn.includes('select(id);') && fn.includes('.term.focus();'));
   assert.doesNotMatch(fn, /api\.write|typeInto|write\(/, 'nothing is typed: the person answers');
   for (const k of ['wsSignPlan', 'wsSignResult', 'wsPlanApprove', 'wsResultAnswer', 'wsInbox_plan', 'wsInbox_result', 'wsInbox_wait', 'wsNoTerminal']) assert.ok(STRINGS.tr[k] && STRINGS.en[k], k);
@@ -361,10 +363,10 @@ test('two projects with one name say where they are (a project moved to another 
   const { projectNames } = await import('../public/js/hq-live.js');
   const m = projectNames([
     { id: 'a', name: 'arena', path: 'C:\\Users\\me\\Desktop\\rena' },
-    { id: 'b', name: 'arena', path: 'D:\\Projeler\\rena' },
-    { id: 'c', name: 'webtoon', path: 'D:\\Projeler\\webtoon' },
+    { id: 'b', name: 'arena', path: 'D:\\Work\\rena' },
+    { id: 'c', name: 'webtoon', path: 'D:\\Work\\webtoon' },
   ]);
-  assert.deepEqual([...m.values()], ['arena (C:\\…\\Desktop)', 'arena (D:\\Projeler)', 'webtoon']);
+  assert.deepEqual([...m.values()], ['arena (C:\\…\\Desktop)', 'arena (D:\\Work)', 'webtoon']);
   const ws = fs.readFileSync(new URL('../public/js/views/workshop.js', import.meta.url), 'utf8');
   assert.ok(ws.includes('esc(names.get(x.p.id))'), 'the project list uses them');
 });
@@ -407,13 +409,13 @@ test('walking faces the way it goes: the walking frame faces left in both drawin
 
 test('a closed terminal (seen 2026-10-01): its job box says the job stopped and goes on where it stopped; the plan and result buttons resume a closed session; closing a running AI asks once', () => {
   const ws = fs.readFileSync(new URL('../public/js/views/workshop.js', import.meta.url), 'utf8');
-  for (const s of ["mode === 'live' && job.step !== 'done' ? stoppedLead(scene.project.id) : null", "word('jobStopped')", "button('jobResume', (el) => dispatch('resume-session', { sessionId: last.id }, el))", "const stoppedLead = (projectId) => stoppedSession(store.sessions.values(), projectId, Date.now(), scene?.job?.updatedAt);", "body.querySelector('.job-now')?.remove();"]) assert.ok(ws.includes(s), s);
+  for (const s of ["mode === 'live' && job.step !== 'done' ? stoppedLead(scene.project.id) : null", "word('jobStopped')", "button('jobResume', (el) => dispatch('resume-session', { sessionId: last.id }, el))", "const stoppedLead = (projectId) => resumeCandidate({ sessions: store.sessions.values(), projectId, job: scene?.job, dock: store.dockRunning?.() || [] });", "body.querySelector('.job-now')?.remove();"]) assert.ok(ws.includes(s), s);
   const main = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
-  assert.ok(main.includes("action: 'start-ai', payload: { sessionId, tool: 'claude', resume: true }"), 'the session menu\'s own resume (start-ai with resume)');
+  assert.ok(main.includes("action: 'start-ai', payload: { sessionId, tool, resume: true }") && main.includes('const tool = sessionTool(s);'), 'the session menu\'s own resume (start-ai with resume), with the session\'s own tool');
   assert.ok(main.includes("sessionState(store.sessions.get(d.sessionId)) === 'closed') resumeSession(d.sessionId)"));
   assert.ok(main.includes("d.action === 'resume-session' && d.sessionId) resumeSession(d.sessionId)"));
   const dock = fs.readFileSync(new URL('../public/js/terminalDock.js', import.meta.url), 'utf8');
-  assert.ok(dock.includes("if (!x.ai || x.ended || x.confirmUntil > Date.now()) return void closeTab(id);"), 'a plain shell or an ended AI closes at once');
+  assert.ok(dock.includes("if (!x.ai || x.ended || x.toolEnded || x.confirmUntil > Date.now()) return void closeTab(id);"), 'a plain shell or an ended AI closes at once');
   assert.ok(dock.includes("return void askClose(tab.dataset.term);") && dock.includes("e.key === 'Delete' && active) askClose(active);"), 'click and Delete both ask');
   for (const lang of ['en', 'tr']) for (const k of ['wsJobStopped', 'wsJobStoppedAt', 'wsJobResume', 'dockCloseAi']) assert.ok(STRINGS[lang][k], `${lang} ${k}`);
 });
@@ -455,11 +457,11 @@ test('the rewind before the app started is rebuilt from the logs: a session work
 
 test('an AI tab that ended by itself offers to go on where it stopped, only for a Claude Code session of its project that just acted', () => {
   const dock = fs.readFileSync(new URL('../public/js/terminalDock.js', import.meta.url), 'utf8');
-  assert.ok(dock.includes("const s = x.ai && x.tool === 'claude' ? resumeFor(x.projectId) : null;\n    if (s) showResume(x, s);"), 'only a Claude Code tab, only with a session: a Codex tab never offers a Claude session');
+  assert.ok(dock.includes("const s = x.ai && canContinueTool(x.tool) ? resumeFor(x.projectId, x.jobId, x.tool) : null;\n    if (s) showResume(x, s);"), 'only a tab of a tool that continues, only with a session of that tool');
   assert.ok(dock.includes('onResume(s);'));
   const main = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
-  assert.ok(main.includes("s.projectId === projectId && Date.now() - (s.lastAt || 0) < 2 * 60000"), 'a session of that project that acted in the last two minutes');
-  assert.ok(main.includes('resumeFor: recentSession, onResume: (s) => resumeSession(s.id)'));
+  assert.ok(main.includes("const recentSession = (projectId, jobId = null, tool = 'claude') => tabResumeSession(store.sessions.values(), { projectId, jobId, tool, busyJobs:"), 'a session of that project that acted in the last two minutes, its own job first (dockState.js)');
+  assert.ok(main.includes('resumeFor: recentSession,') && main.includes('onResume: (s) => resumeSession(s.id),'));
   for (const lang of ['en', 'tr']) for (const k of ['dockResumeText', 'dockResume']) assert.ok(STRINGS[lang][k], `${lang} ${k}`);
 });
 
@@ -477,4 +479,14 @@ test('the job box examples: each fills the box (never submits), the idea of the 
   const click = ws.slice(ws.indexOf("$('give-ex').addEventListener"), ws.indexOf("// What the job box's error card"));
   assert.ok(click.includes('input.value =') && !click.includes('requestSubmit') && !click.includes('giveJob'), 'fills only');
   assert.ok(ws.includes("const idea = !scene.job && p ? String(p.idea || '').trim() : '';"));
+});
+
+test('no project to show: the Building folds to one short card with New project and the example; a project or the example brings it all back (review U10)', () => {
+  const ws = fs.readFileSync(new URL('../public/js/views/workshop.js', import.meta.url), 'utf8');
+  assert.ok(ws.includes("const none = store.loaded && mode !== 'demo' && !scene.project.id;") && ws.includes("root.classList.toggle('ws-none', none);"));
+  assert.ok(ws.includes('data-ws-none="new"') && ws.includes('data-ws-none="example"'));
+  assert.ok(ws.includes("window.dispatchEvent(new CustomEvent('hq-action', { detail: { action: 'new-project' } }))"));
+  const css = fs.readFileSync(new URL('../public/css/workshop.css', import.meta.url), 'utf8');
+  for (const part of ['.ws-none .ws-toolbar', '.ws-none .ws-rooms', '.ws-none .ws-timeline', '.ws-none .ws-inspector', '.ws-none .ws-stats', '.ws-none .ws-stage canvas']) assert.ok(css.includes(part), part);
+  for (const lang of ['en', 'tr']) for (const k of ['wsNoneBody', 'wsNoneNew', 'wsNoneExample']) assert.ok(STRINGS[lang][k], `${lang} ${k}`);
 });

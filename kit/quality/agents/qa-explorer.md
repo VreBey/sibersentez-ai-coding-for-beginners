@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Bash
 license: "MIT (see the notice at the top of this file)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
   sibersentez-tags: "testing, web"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "uygulamayı dene*, kullanıcı gibi kullan*, sorun listesi, keşif testi, elle test*, kalite denetçisi, kullanıcı gözüyle"
@@ -36,7 +36,8 @@ Write your result in the language the request was written in.
 1. Learn what the program is for: `PLAN.md`, the README, the task's acceptance lines. Write the main flows as numbered
    steps with the expected result after each.
 2. Start it with the documented command. If it will not start, that is your first finding; stop there.
-3. Walk each flow. If your tool gives you a browser, use it, and watch the page and the console. If it does not, use what
+3. Walk each flow. If your tool gives you a separate test browser, use it, and watch the page and the console; never
+   the person's own browser through an extension (it has their sign-ins and tabs). If it does not, use what
    you have: request every page and route and read the answers, run the command line with real and wrong arguments.
    Say plainly which parts you could only check this way and which parts need a person with a screen.
 4. Then be difficult, on purpose: empty input, very long input, the wrong type, special characters, doing a step twice,

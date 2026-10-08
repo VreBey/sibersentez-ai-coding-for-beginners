@@ -70,6 +70,9 @@
 .new-proj { color: #0b0e18; font-weight: 650; border-color: var(--accent); background: var(--accent); box-shadow: 0 4px 18px rgba(var(--accent-rgb), 0.28); }
 .new-proj:hover { color: #0b0e18; background: #9bb4ff; border-color: #9bb4ff; }
 .new-proj .ic { width: 15px; height: 15px; }
+/* While the start card holds the one primary New project (firstScreen.js): a quiet shortcut */
+.new-proj.quiet { color: var(--text); font-weight: 600; background: transparent; border-color: var(--line-2); box-shadow: none; }
+.new-proj.quiet:hover { color: var(--text); background: var(--hover, rgba(255, 255, 255, 0.06)); border-color: var(--accent); }
 .new-proj:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* "Getting started" card at the top of the Projects tab */
@@ -134,3 +137,24 @@
 @media (forced-colors: active) {
   .dr-off { border: 1px solid CanvasText; }
 }
+
+/* The "New project" window (review U05): a name, where its folder goes, the idea; over the drawer and the page */
+.np-wrap { position: fixed; inset: 0; z-index: 52; background: rgba(3, 4, 8, 0.55); backdrop-filter: blur(3px); display: flex; justify-content: center; align-items: flex-start; padding: 10vh 16px 16px; overflow: auto; }
+.np-idea { width: min(520px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 22px 22px 16px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--panel-solid); color: var(--text); box-shadow: 0 20px 60px rgba(var(--shade-rgb), 0.6); }
+.np-idea h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.np-idea p { margin: 0; }
+.np-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.np-field input, .np-field textarea { font: inherit; font-weight: 400; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 11px; }
+.np-field textarea { resize: vertical; min-height: 84px; }
+.np-field input::placeholder, .np-field textarea::placeholder { color: var(--muted); }
+.np-field input:focus-visible, .np-field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.np-field input[aria-invalid="true"] { border-color: var(--stop); }
+.np-where { display: flex; align-items: center; gap: 6px; color: var(--text-2); overflow-wrap: anywhere; }
+.np-where .ic { flex: none; width: 15px; height: 15px; }
+.np-err { color: var(--stop); }
+.np-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.np-acts .np-cancel { margin-left: auto; }
+.np-existing { padding-top: 10px; border-top: 1px solid var(--line); }
+.np-link { background: none; border: 0; padding: 2px 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.np-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+@media (max-width: 480px) { .np-acts .np-cancel { margin-left: 0; } .np-acts .act-btn { flex: 1 1 100%; justify-content: center; } }

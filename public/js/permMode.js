@@ -1,5 +1,6 @@
 // The permission mode an AI session runs in, in plain words (docs/attention.md): Claude Code writes it on every line
-// the person writes (permissionMode: plan, default, acceptEdits, auto, dontAsk, bypassPermissions). SiberSentez
+// the person writes (permissionMode: plan, default, acceptEdits, auto, dontAsk, bypassPermissions); Codex's approval
+// and sandbox policies are said in the same words (server/toolLogs.mjs codexPermission). SiberSentez
 // changes nothing here; it only says how freely the AI acts, as the competitors show beside their send button.
 // Pure (tested in node).
 import { esc } from './format.js';

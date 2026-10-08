@@ -11,6 +11,14 @@ export function localProject(p) {
   return p && p.name === HOME_NAME ? { ...p, name: t('evHomeFolder') } : p;
 }
 
+// A session the app started for a job is named by the job as the person wrote it (server: jobText) when the tool's own
+// title carries the raw job id or there is none (seen when using the app, 2026-10-08: "Job J764b…8833 görevi")
+const RAW_JOB_ID = /\bJ[0-9a-f]{32}\b/;
+export function localSession(x) {
+  if (!x || typeof x.jobText !== 'string' || !x.jobText || (x.title && !RAW_JOB_ID.test(x.title))) return x;
+  return { ...x, title: x.jobText };
+}
+
 const MAX_EVENTS = 5000;
 const MAX_TICKS = 12000;
 
@@ -51,7 +59,7 @@ class Store {
 
   load(s) {
     this.projects = new Map(s.projects.map((p) => [p.id, localProject(p)]));
-    this.sessions = new Map(s.sessions.map((x) => [x.id, x]));
+    this.sessions = new Map(s.sessions.map((x) => [x.id, localSession(x)]));
     this.agents = new Map(s.agents.map((x) => [x.id, x]));
     this.workflows = new Map(s.workflows.map((x) => [x.id, x]));
     this.roster = s.roster;
@@ -74,7 +82,7 @@ class Store {
 
   // Applies the patch; returns only the events and ticks that are really new (the stage plays them)
   applyPatch(p) {
-    for (const x of p.sessions) this.sessions.set(x.id, x);
+    for (const x of p.sessions) this.sessions.set(x.id, localSession(x));
     for (const x of p.agents) this.agents.set(x.id, x);
     for (const x of p.workflows) this.workflows.set(x.id, x);
     for (const x of p.projects) this.projects.set(x.id, localProject(x));

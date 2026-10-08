@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
-import { createTerminals, createChunkBuffer, createOutputBatcher, termOpenRequest, terminalEnv, terminalProgram, confirmQuitWithTerminals, avoidForkOnKill, taskkillTree, TERMINAL_IPC, MAX_TERMINALS, MAX_BUFFER, MAX_WRITE, QUIT_CONFIRM_OK } from '../electron/terminals.mjs';
+import { createTerminals, createChunkBuffer, createOutputBatcher, termOpenRequest, terminalEnv, terminalProgram, confirmQuitWithTerminals, avoidForkOnKill, taskkillTree, TERMINAL_IPC, MAX_TERMINALS, MAX_BUFFER, MAX_WRITE, QUIT_CONFIRM_OK, ENDED_SUFFIX, TOOL_CHECK_MS } from '../electron/terminals.mjs';
 import { createActions } from '../server/actions.mjs';
 import { rendererReloadPlan } from '../electron/helpers.mjs';
 import { createProjectChannel } from '../server/memory.mjs';
@@ -40,7 +40,7 @@ describe('manager', () => {
     const sent = [];
     const m = createTerminals({ spawn: f.spawn, send: (...a) => sent.push(a), env: { PATH: 'p', ELECTRON_RUN_AS_NODE: '1', SIBERSENTEZ_PORT: '1', NODE_OPTIONS: '--x', Other: 'o' }, now: () => 5 });
     const r = m.open({ dir: 'C:\\p', title: 'Project', projectId: 'p1', cols: 120, rows: 40 });
-    assert.deepEqual(r, { ok: true, id: 't1', title: 'Project', projectId: 'p1', ai: false, tool: null });
+    assert.deepEqual(r, { ok: true, id: 't1', title: 'Project', projectId: 'p1', ai: false, tool: null, jobId: null });
     const call = f.calls[0];
     assert.equal(call.file, terminalProgram().file);
     assert.match(call.file, /WindowsPowerShell\\v1\.0\\powershell\.exe$/);
@@ -50,7 +50,7 @@ describe('manager', () => {
     assert.deepEqual(Object.keys(call.opts.env).sort(), ['COLORTERM', 'Other', 'PATH'], 'no ELECTRON_*, SIBERSENTEZ_* or NODE_OPTIONS');
     f.ptys[0].data('hello');
     assert.deepEqual(sent.at(-1), [TERMINAL_IPC.data, 't1', 'hello']);
-    assert.deepEqual(m.list(), [{ id: 't1', title: 'Project', projectId: 'p1', startedAt: 5, buffer: 'hello', ai: false, tool: null }]);
+    assert.deepEqual(m.list(), [{ id: 't1', title: 'Project', projectId: 'p1', startedAt: 5, buffer: 'hello', ai: false, tool: null, jobId: null, toolEnded: false }]);
     f.ptys[0].data('x'.repeat(MAX_BUFFER));
     assert.equal(m.list()[0].buffer.length, MAX_BUFFER, 'the buffer keeps the newest part');
   });
@@ -63,7 +63,7 @@ describe('manager', () => {
     const launch = { file: String.raw`C:\Windows\System32\cmd.exe`, args: ['/d', '/c', 'x.cmd'] };
     const a = m.open({ dir: String.raw`C:\p`, title: 'Codex', projectId: 'p1', launch, tool: 'codex', jobId: job });
     assert.equal(a.tool, 'codex');
-    assert.deepEqual(m.sessions(), [{ id: 't1', projectId: 'p1', ai: true, tool: 'codex', jobId: job, startedAt: 7 }]);
+    assert.deepEqual(m.sessions(), [{ id: 't1', projectId: 'p1', ai: true, tool: 'codex', jobId: job, startedAt: 7, running: true }]);
     assert.deepEqual(changes.at(-1), { ended: null, running: ['t1'] });
     // A plain shell never carries a tool or a job, whatever is passed; an unknown id shape is dropped
     const b = m.open({ dir: String.raw`C:\p`, title: 'Shell', projectId: 'p1', tool: 'codex', jobId: job });
@@ -180,7 +180,7 @@ describe('preload: window.sibersentezTerminal', () => {
 
   test('seven functions; the same channel names as the shell', () => {
     const p = loadPreload();
-    assert.deepEqual(Object.keys(p.api), ['open', 'write', 'resize', 'close', 'list', 'onData', 'onExit']);
+    assert.deepEqual(Object.keys(p.api), ['open', 'write', 'resize', 'close', 'list', 'onData', 'onExit', 'onToolEnd']);
     const code = read('electron', 'preload.cjs');
     for (const [k, v] of Object.entries(TERMINAL_IPC)) assert.ok(code.includes(`${k}: '${v}'`), k);
   });
@@ -241,6 +241,27 @@ describe('server: terminal-target', () => {
     for (const bad of [{ setup: 1 }, { setup: 'yes' }, { setup: true, projectId: 'alpha' }]) assert.equal(withHome('live', TMP).terminalTarget(bad).ok, false, JSON.stringify(bad));
     assert.equal(withHome('live', path.join(TMP, 'no-such-home')).terminalTarget({ setup: true }).ok, false, 'a home folder that is not there');
     assert.equal(withHome('live', '\\\\server\\share').terminalTarget({ setup: true }).ok, false, 'not a local drive');
+  });
+
+  test('the setup terminal through every layer: the page → the preload → the shell\'s check → the channel → the server (each layer passed alone, together they dropped { setup }: found by using the app 2026-10-08)', async () => {
+    const invokes = [];
+    const exposed = {};
+    vm.runInNewContext(read('electron', 'preload.cjs'), { require: (m) => (m === 'electron' ? { contextBridge: { exposeInMainWorld: (k, v) => (exposed[k] = v) }, ipcRenderer: { invoke: (...a) => (invokes.push(a), Promise.resolve({ ok: true })), send() {}, on() {} } } : null) });
+    await exposed.sibersentezTerminal.open({ setup: true }, 80, 24);
+    const sent = JSON.parse(JSON.stringify(invokes.at(-1)[1]));
+    assert.deepEqual(sent, { setup: true }, 'the preload passes it on');
+    for (const bad of [{ setup: 1 }, { setup: true, dir: 'C:\\' }]) assert.equal((await exposed.sibersentezTerminal.open(bad)).ok, false, JSON.stringify(bad));
+    const shell = termOpenRequest(sent);
+    assert.equal(shell.ok, true);
+    const through = (mode) => {
+      const actions = createActions({ catalog, ingest: { sessions: new Map() }, fit: { invalidate() {} }, mode, port: 1, workDir: TMP, log: () => {}, ai: { env: { USERPROFILE: TMP } } });
+      const ch = createProjectChannel({ catalog: {}, terminalTarget: actions.terminalTarget });
+      // As the shell's server call sends it: the target's fields next to the message's own
+      return ch.handle({ ...shell.target, sibersentez: 'shell-call', id: 1, type: 'terminal-target' });
+    };
+    assert.deepEqual([through('live').ok, through('live').dir, through('live').title], [true, TMP, 'Setup'], 'On: the home folder');
+    assert.deepEqual([through('off').ok, through('off').reason], [false, 'off'], 'Off: said as Off (the page tells to turn actions On), not "this folder cannot take a terminal"');
+    assert.equal(through('dry').reason, 'preview');
   });
 
   test('the channel passes only the ids and answers the folder to the shell', () => {
@@ -511,5 +532,65 @@ describe('output flow control', () => {
     // a pty without pause/resume is left unthrottled, without an error
     m.open({ dir: 'C:\p', title: 'Q' });
     assert.doesNotThrow(() => f.ptys[1].data('z'.repeat(5000)));
+  });
+});
+
+describe('the tool ended, the shell stays', () => {
+  test("an AI tab is checked for its launcher's mark: then it no longer runs (server and window told), the check stops", () => {
+    const f = fakePty();
+    const sent = [];
+    const changes = [];
+    const marks = new Set();
+    const timers = [];
+    const m = createTerminals({
+      spawn: f.spawn,
+      send: (...a) => sent.push(a),
+      onChange: (ended) => changes.push(ended),
+      exists: (p) => marks.has(p),
+      every: (fn, ms) => (timers.push({ fn, ms, stopped: false }), timers.at(-1)),
+      stopEvery: (t) => (t.stopped = true),
+    });
+    const launcher = path.win32.join(String.raw`C:\hub\launch`, 'abcdef012345.cmd');
+    m.open({ dir: String.raw`C:\p`, projectId: 'p1', launch: { file: String.raw`C:\Windows\System32\cmd.exe`, args: ['/d', '/v:off', '/k', launcher] }, tool: 'codex' });
+    // A relative launcher (the fallback way) is found from the folder it starts in
+    m.open({ dir: String.raw`C:\hub\launch`, projectId: 'p2', launch: { file: String.raw`C:\Windows\System32\cmd.exe`, args: ['/d', '/v:off', '/k', String.raw`.\bbbbbbbbbbbb.cmd`] }, tool: 'gemini' });
+    m.open({ dir: String.raw`C:\p`, projectId: 'p1' }); // a plain shell: nothing to wait for
+    assert.equal(timers.length, 1, 'one check for every tab');
+    assert.equal(timers[0].ms, TOOL_CHECK_MS);
+    timers[0].fn();
+    assert.deepEqual(m.sessions().map((x) => x.running), [true, true, true], 'no mark yet');
+    const before = changes.length;
+    marks.add(launcher + ENDED_SUFFIX);
+    timers[0].fn();
+    assert.deepEqual(m.sessions().map((x) => [x.id, x.running]), [['t1', false], ['t2', true], ['t3', true]]);
+    assert.deepEqual(sent.filter((x) => x[0] === TERMINAL_IPC.toolEnd), [[TERMINAL_IPC.toolEnd, 't1']]);
+    assert.equal(changes.length, before + 1, 'the server is told');
+    assert.equal(m.list().find((x) => x.id === 't1').toolEnded, true, 'a reloaded page knows it too');
+    assert.equal(timers[0].stopped, false, 't2 still waits');
+    timers[0].fn();
+    assert.equal(sent.filter((x) => x[0] === TERMINAL_IPC.toolEnd).length, 1, 'said once');
+    marks.add(String.raw`C:\hub\launch\bbbbbbbbbbbb.cmd` + ENDED_SUFFIX);
+    timers[0].fn();
+    assert.equal(m.sessions().find((x) => x.id === 't2').running, false);
+    assert.equal(timers[0].stopped, true, 'nothing waits: the check stops');
+    // The shell itself still runs: the tab stays, output still goes to the window
+    f.ptys[0].data('prompt>');
+    assert.deepEqual(sent.at(-1), [TERMINAL_IPC.data, 't1', 'prompt>']);
+    assert.ok(m.sessions().some((x) => x.id === 't1'));
+  });
+
+  test('the mark the launcher leaves is the one the shell looks for', async () => {
+    const { ENDED_SUFFIX: serverSuffix, ENDED_PATH_LINE, ENDED_MARK_LINE } = await import('../server/launch.mjs');
+    assert.equal(serverSuffix, ENDED_SUFFIX);
+    assert.ok(ENDED_PATH_LINE.includes('%~f0' + ENDED_SUFFIX));
+    assert.ok(ENDED_MARK_LINE.includes('%SIBERSENTEZ_ENDED%'));
+  });
+
+  test('the server: a tab whose tool ended no longer locks going back; an older shell that says nothing still does', async () => {
+    const a = createActions({ catalog: { getProject: () => null, projects: [], allProjects: () => [] }, mode: 'off' });
+    a.terminalState({ sessions: [{ id: 't1', projectId: 'p', ai: true, tool: 'codex', running: false }, { id: 't2', projectId: 'q', ai: true, tool: 'codex' }] });
+    assert.deepEqual(a.dockSessions().map((x) => [x.id, x.running]), [['t1', false], ['t2', true]]);
+    const src = fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8');
+    assert.ok(src.includes('dockRunning.some((x) => x.ai && x.running && x.projectId === projectId)'), 'the restore guard counts running tools only');
   });
 });

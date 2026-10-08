@@ -66,6 +66,28 @@ function listen(server, port = 0) {
   });
 }
 const close = (server) => new Promise((resolve) => server.close(() => resolve()));
+// A run of n ports that are free now, outside Windows' automatic range (49152 and up): the other test files that
+// listen on port 0 get neighbouring automatic ports, so a range next to one of them was sometimes taken meanwhile
+// (an EADDRINUSE red run, seen 2026-10-08)
+async function freeRange(n) {
+  for (let tries = 0; tries < 40; tries++) {
+    const start = 20000 + Math.floor(Math.random() * 9000);
+    const held = [];
+    try {
+      for (let p = start; p < start + n; p++) {
+        const s = net.createServer();
+        await listen(s, p);
+        held.push(s);
+      }
+      return start;
+    } catch {
+      /* one of them is in use: another range */
+    } finally {
+      await Promise.all(held.map(close));
+    }
+  }
+  throw new Error('no free range');
+}
 
 // ------------------------------------------------------------------ ports
 describe('free port lookup', () => {
@@ -88,9 +110,7 @@ describe('free port lookup', () => {
   });
 
   test('tries the preferred port first, falls back to the range when it is busy', async () => {
-    const tmp = net.createServer();
-    const start = await listen(tmp);
-    await close(tmp);
+    const start = await freeRange(6);
     assert.equal(await findFreePort({ start, end: start + 5, preferred: start + 3 }), start + 3);
     const busy = net.createServer();
     await listen(busy, start + 3);
@@ -722,7 +742,7 @@ describe('main.mjs wiring', () => {
     assert.equal((src.match(/preload\s*:/g) || []).length, 1, 'one preload, on the main window');
     assert.ok(src.includes('preload: PRELOAD_PATH,'));
     assert.ok(src.includes("const PRELOAD_PATH = path.join(here, 'preload.cjs');"));
-    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'six bridge handlers and five for the terminal (test/terminal.test.mjs), nothing else');
+    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'seven bridge handlers and five for the terminal (test/terminal.test.mjs), nothing else');
     assert.ok(src.includes('ipcMain.handle(LIBRARY_PICK_IPC_CHANNEL, onPickLibraryFolderRequest);'));
     const lib = src.slice(src.indexOf('async function onPickLibraryFolderRequest'), src.indexOf('// window.sibersentezShell.saveProjectIdea'));
     assert.ok(lib.indexOf('bridgeSender(senderFacts(event))') < lib.indexOf('showOpenDialog'), 'the library picker checks the sender first');
@@ -731,6 +751,7 @@ describe('main.mjs wiring', () => {
     assert.ok(src.includes('ipcMain.handle(PROJECT_PICK_IPC_CHANNEL, onPickProjectFolderRequest);'));
     assert.ok(src.includes('ipcMain.handle(PROJECT_IDEA_IPC_CHANNEL, onSaveProjectIdeaRequest);'));
     assert.ok(src.includes('ipcMain.handle(ATTENTION_IPC_CHANNEL, onAttention);'));
+    assert.ok(src.includes('ipcMain.handle(IDEA_PROJECT_IPC_CHANNEL, onCreateIdeaProjectRequest);'));
     assert.doesNotMatch(src, /contextBridge|ipcRenderer/);
     assert.equal((src.match(/webContents\.send\(/g) || []).length, 1, 'the shell sends into the page only the terminals’ output (test/terminal.test.mjs)');
     assert.doesNotMatch(src, /nodeIntegration: true|contextIsolation: false|sandbox: false|webSecurity: false/);
@@ -1914,6 +1935,7 @@ import {
   QA_LAPTOP_SIZE,
   QA_VIEWPORT_SCRIPT,
   QA_LAPTOP_DEMO_SCRIPT,
+  QA_KEYS_SCRIPTS,
   createsTray,
   guardDialogs,
   readQaShellOptions,
@@ -2018,7 +2040,7 @@ describe('the hidden QA run', () => {
   });
 
   test('the probes run fixed scripts only; live is never among them as a switch that could succeed in QA', () => {
-    for (const s of [QA_BRIDGE_PROBE_SCRIPT, QA_KIT_PROBE_SCRIPT, QA_ABOUT_PROBE_SCRIPT, QA_PANEL_PROBE_SCRIPT, QA_LAPTOP_PROBE_SCRIPT, QA_VIEWPORT_SCRIPT, QA_LAPTOP_DEMO_SCRIPT, QA_SERVED_MODE_SCRIPT, ...Object.values(QA_ACTIONS_SCRIPTS)]) {
+    for (const s of [QA_BRIDGE_PROBE_SCRIPT, QA_KIT_PROBE_SCRIPT, QA_ABOUT_PROBE_SCRIPT, QA_PANEL_PROBE_SCRIPT, QA_LAPTOP_PROBE_SCRIPT, QA_VIEWPORT_SCRIPT, QA_LAPTOP_DEMO_SCRIPT, ...Object.values(QA_KEYS_SCRIPTS), QA_SERVED_MODE_SCRIPT, ...Object.values(QA_ACTIONS_SCRIPTS)]) {
       assert.equal(typeof s, 'string');
       assert.doesNotMatch(s, /\$\{/, 'no template');
     }
@@ -2064,7 +2086,9 @@ describe('the hidden QA run', () => {
     // the probes: fixed scripts through one function; the project probe only in a hidden run with its folder
     assert.equal((src.match(/executeJavaScript\(/g) || []).length, 3, 'the hand-over, the tray\'s new project and qaRun');
     const runArgs = [...src.matchAll(/qaRun\(([^)]*)\)/g)].map((m) => m[1]).filter((a) => a !== 'script');
-    assert.deepEqual([...new Set(runArgs)].sort(), ['QA_ABOUT_PROBE_SCRIPT', 'QA_ACTIONS_SCRIPTS.live', 'QA_ACTIONS_SCRIPTS[mode]', 'QA_SERVED_MODE_SCRIPT', 'QA_BRIDGE_PROBE_SCRIPT', 'QA_KIT_PROBE_SCRIPT', 'QA_PANEL_PROBE_SCRIPT', 'QA_LAPTOP_PROBE_SCRIPT', 'QA_VIEWPORT_SCRIPT', 'QA_LAPTOP_DEMO_SCRIPT', 'QA_PERMISSION_PROBE'].sort());
+    assert.deepEqual([...new Set(runArgs)].sort(), ['QA_ABOUT_PROBE_SCRIPT', 'QA_ACTIONS_SCRIPTS.live', 'QA_ACTIONS_SCRIPTS[mode]', 'QA_SERVED_MODE_SCRIPT', 'QA_BRIDGE_PROBE_SCRIPT', 'QA_KIT_PROBE_SCRIPT', 'QA_PANEL_PROBE_SCRIPT', 'QA_LAPTOP_PROBE_SCRIPT', 'QA_VIEWPORT_SCRIPT', 'QA_LAPTOP_DEMO_SCRIPT', 'QA_KEYS_SCRIPTS.focusSearch', 'QA_KEYS_SCRIPTS.searchState', 'QA_KEYS_SCRIPTS.focusMenu', 'QA_KEYS_SCRIPTS.menuState', 'QA_PERMISSION_PROBE'].sort());
+    assert.ok(Object.isFrozen(QA_KEYS_SCRIPTS));
+    for (const s of Object.values(QA_KEYS_SCRIPTS)) assert.doesNotMatch(s, /fetch|sibersentezShell|localStorage|location|click\(/, 'reads and focus only');
     assert.ok(bodyOf(src, 'runQaProbes').includes('if (QA_SHELL.hidden && QA_SHELL.projectDir) await qaProjectProbe();'));
     assert.ok(bodyOf(src, 'qaProjectProbe').includes('showOpenDialog: async () => ({ canceled: false, filePaths: [QA_SHELL.projectDir] }),'), 'no picker');
     assert.ok(bodyOf(src, 'qaProjectProbe').includes("add: (folder) => serverCalls.call(state.server, 'project-add', { path: folder }),"), 'the picker\'s own server call');

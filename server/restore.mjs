@@ -10,8 +10,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { redact } from './util.mjs';
-import { validJobId } from './job-id.mjs';
+import { redact, normPath } from './util.mjs';
+import { validJobId, readCurrentJob } from './job-id.mjs';
+import { FIRST_DIR } from './launch.mjs';
+import { isLocalPath } from './fsutil.mjs';
+import { hasStreamColon } from './library.mjs';
 
 export const RESTORE_DIR = 'restore';
 export const RESTORE_LIMITS = Object.freeze({ files: 3000, bytes: 50 * 1024 * 1024, fileBytes: 16 * 1024 * 1024, depth: 16 });
@@ -32,8 +35,10 @@ export const RESTORE_SKIP = Object.freeze(new Set(['.git', '.hg', '.svn', 'node_
 // both Assets and ProjectSettings.
 export const UNITY_SKIP = Object.freeze(new Set(['library', 'temp', 'logs', 'obj', 'usersettings', 'build', 'builds']));
 // Folders never copied at the project's top only: build output, the AI tools' own set-up and Unity's generated
-// folders (a folder of the same name deeper down, say assets/out, is the person's content and is kept)
-export const RESTORE_SKIP_TOP = Object.freeze(new Set(['.claude', '.agents', 'dist', 'build', 'builds', 'out', 'coverage', 'obj', 'bin', 'target', '.gradle', 'library', 'temp', 'logs', 'usersettings']));
+// folders (a folder of the same name deeper down, say assets/out, is the person's content and is kept). The other AI
+// tools' folders too (2026-10-07): SiberSentez installs their agents there, and going back must not roll a record's
+// copy back to an older text it would then take for the person's own
+export const RESTORE_SKIP_TOP = Object.freeze(new Set(['.claude', '.agents', '.gemini', '.qwen', '.opencode', '.codex', 'dist', 'build', 'builds', 'out', 'coverage', 'obj', 'bin', 'target', '.gradle', 'library', 'temp', 'logs', 'usersettings']));
 export const POINT_ID_RE = /^R\d{14}[0-9a-f]{4}$/;
 export const POINT_REASONS = Object.freeze(['ai-start', 'before-restore', 'manual']);
 // The longest job text a point keeps as its label
@@ -149,8 +154,12 @@ function readManifest(pointDir) {
     const m = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (m?.version !== 1 || !POINT_ID_RE.test(m.id) || !Array.isArray(m.files)) return null;
     if (m.scope !== undefined && !RESTORE_SCOPES.includes(m.scope)) return null;
-    if (!m.files.every((f) => f && safeRel(f.rel) && !skippedRel(f.rel) && Number.isInteger(f.size) && f.size >= 0 && hasDigest(f))) return null;
-    return m;
+    if (!m.files.every((f) => f && safeRel(f.rel) && Number.isInteger(f.size) && f.size >= 0 && hasDigest(f))) return null;
+    // A file in a folder points leave out is never read back or written: such entries are dropped, not the point.
+    // 0.17 leaves out more tools' folders (.gemini, .qwen, .opencode, .codex); a point taken before still names their
+    // files and must stay listed and usable (review 2026-10-08: it vanished from the list after the update)
+    const files = m.files.filter((f) => !skippedRel(f.rel));
+    return files.length === m.files.length ? m : { ...m, files };
   } catch {
     return null;
   }
@@ -230,6 +239,20 @@ export function recordJobPoint({ hubDir, projectId, jobId, point, now = Date.now
   }
 }
 
+// The current job's start copy (its record, recordJobPoint): kept past RESTORE_KEEP while that job is the project's
+// current one (its marker), so a long job, whose resumes take points too, never loses the copy its job box names
+// (docs/development-plan-2026-10-07.md F2). One point at most; never throws.
+function currentJobPoint(hubDir, projectId, dir) {
+  try {
+    const cur = readCurrentJob(path.join(dir, FIRST_DIR));
+    if (!cur.jobId) return [];
+    const rec = listJobPoints({ hubDir, projectId }).find((r) => r.jobId === cur.jobId && r.id);
+    return rec ? [rec.id] : [];
+  } catch {
+    return [];
+  }
+}
+
 const sameFiles = (a, b) => a.length === b.length && a.every((f, i) => f.rel === b[i].rel && f.size === b[i].size && f.mtimeMs === b[i].mtimeMs);
 
 const stampOf = (at) => {
@@ -273,16 +296,43 @@ function preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope }) {
   if (!scan.ok) return { answer: scan };
   const base = pointsDir(hubDir, projectId);
   const latest = listPoints({ hubDir, projectId })[0];
+  // The newest point may be answered again when nothing changed: the same paths, sizes and times make it a candidate
+  // only; its files' bytes decide (review Z1: a file rewritten with its size and time kept is a change). The caller
+  // checks them (sameContent, sync or async)
+  let candidate = null;
   if (latest && reuse) {
     const m = readManifest(path.join(base, latest.id));
-    if (m && (m.scope || 'full') === scan.scope && sameFiles(m.files, scan.files)) return { answer: { ok: true, id: latest.id, reused: true, files: scan.files.length, bytes: scan.bytes, scope: scan.scope, leftOut: scan.leftOut } };
+    if (m && (m.scope || 'full') === scan.scope && sameFiles(m.files, scan.files)) candidate = { id: latest.id, files: m.files, answer: { ok: true, id: latest.id, reused: true, files: scan.files.length, bytes: scan.bytes, scope: scan.scope, leftOut: scan.leftOut } };
   }
   const at = now();
   let stamp = stampOf(at);
   if (latest && stamp <= latest.id.slice(1, 15)) stamp = stampOf(Date.UTC(+latest.id.slice(1, 5), +latest.id.slice(5, 7) - 1, +latest.id.slice(7, 9), +latest.id.slice(9, 11), +latest.id.slice(11, 13), +latest.id.slice(13, 15)) + 1000);
   const id = `R${stamp}${crypto.randomBytes(2).toString('hex')}`;
   const tmp = path.join(base, `${id}.tmp-${crypto.randomBytes(4).toString('hex')}`);
-  return { scan, base, id, tmp, at };
+  return { scan, base, id, tmp, at, candidate };
+}
+
+// Every file of a point holds the same bytes in the project now (its digest); false at the first that does not, or
+// cannot be read
+function sameContent(dir, files) {
+  for (const f of files) {
+    try {
+      if (!sameBytes(readRel(dir, f.rel), f)) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+async function sameContentAsync(dir, files) {
+  for (const f of files) {
+    try {
+      if (!sameBytes(await fs.promises.readFile(path.join(dir, ...f.rel.split('/'))), f)) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 // label: the job the point was taken for (its first words, one line), so the list says what going back undoes
@@ -294,14 +344,16 @@ const manifestOf = ({ scan, id, at }, projectId, reason, files, label) => ({ ver
 const copied = (f, buf) => ({ rel: f.rel, size: buf.length, mtimeMs: f.size === buf.length ? f.mtimeMs : 0, sha256: digestOf(buf) });
 const pointAnswer = ({ scan, id }, files) => ({ ok: true, id, reused: false, files: files.length, bytes: files.reduce((n, x) => n + x.size, 0), scope: scan.scope, leftOut: scan.leftOut });
 
-// Take a point of the project's files. When nothing changed since the newest point (same paths, sizes and times),
-// that point is answered again (reused: true) instead of a second copy, unless reuse is false (a restore's point of the
+// Take a point of the project's files. When nothing changed since the newest point (same paths, sizes and times pick
+// it, every file's bytes against its digest decide: review Z1), that point is answered again (reused: true) instead
+// of a second copy, unless reuse is false (a restore's point of the
 // present is always new). The id grows: a clock that went back, or two points in one second, still sort in the order
 // they were taken. Over the full limits a lean point is taken (§7); scope forces one. Returns { ok: true, id, reused,
 // files, bytes, scope, leftOut } or { ok: false, problem }.
 export function createPoint({ hubDir, projectId, dir, reason = 'manual', now = Date.now, limits = RESTORE_LIMITS, protect = [], reuse = true, scope = null, label = '' }) {
   const p = preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope });
   if (p.answer) return p.answer;
+  if (p.candidate && sameContent(dir, p.candidate.files)) return p.candidate.answer;
   const files = [];
   try {
     fs.mkdirSync(path.join(p.tmp, 'files'), { recursive: true });
@@ -318,7 +370,7 @@ export function createPoint({ hubDir, projectId, dir, reason = 'manual', now = D
     fs.rmSync(p.tmp, { recursive: true, force: true });
     return fail('copy-failed');
   }
-  prune(p.base, [p.id, ...protect]);
+  prune(p.base, [p.id, ...protect, ...currentJobPoint(hubDir, projectId, dir)]);
   return pointAnswer(p, files);
 }
 
@@ -328,6 +380,7 @@ export function createPoint({ hubDir, projectId, dir, reason = 'manual', now = D
 export async function createPointAsync({ hubDir, projectId, dir, reason = 'manual', now = Date.now, limits = RESTORE_LIMITS, protect = [], reuse = true, scope = null, label = '' }) {
   const p = preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope });
   if (p.answer) return p.answer;
+  if (p.candidate && (await sameContentAsync(dir, p.candidate.files))) return p.candidate.answer;
   const files = [];
   try {
     await fs.promises.mkdir(path.join(p.tmp, 'files'), { recursive: true });
@@ -344,7 +397,7 @@ export async function createPointAsync({ hubDir, projectId, dir, reason = 'manua
     await fs.promises.rm(p.tmp, { recursive: true, force: true });
     return fail('copy-failed');
   }
-  prune(p.base, [p.id, ...protect]);
+  prune(p.base, [p.id, ...protect, ...currentJobPoint(hubDir, projectId, dir)]);
   return pointAnswer(p, files);
 }
 
@@ -518,6 +571,138 @@ export function projectRestore({ catalog, projectId }) {
   if (!p) return { status: 404, body: { error: 'not-a-project' } };
   const hubDir = catalog.hubDir || null;
   const points = hubDir ? listPoints({ hubDir, projectId }) : [];
-  // jobs: what each recent app job's start kept (recordJobPoint), so the job box says it after a reload too
-  return { status: 200, body: { project: projectId, points, keep: RESTORE_KEEP, jobs: listJobPoints({ hubDir, projectId }) } };
+  // jobs: what each recent app job's start kept (recordJobPoint), so the job box says it after a reload too, and
+  // whether that copy is still there now (available: among the points above); a record is history, not a promise
+  const there = new Set(points.map((x) => x.id));
+  const jobs = listJobPoints({ hubDir, projectId }).map((r) => (r.id ? { ...r, available: there.has(r.id) } : r));
+  return { status: 200, body: { project: projectId, points, keep: RESTORE_KEEP, jobs } };
+}
+
+// GET /api/projects/<id>/job-changes?job=<Job-ID> (read-only, no action mode needed; docs/restore.md §9): what changed
+// in the project since that job's start copy, so a result shows this job's changes and not the last 24 hours'. The
+// basis says how far it holds:
+//   start      compared with the job's start copy (files the person changed meanwhile are in it too: no file is
+//              attributed to the AI for certain); a lean copy left big files and logs out (leftOut), never listed
+//   no-record  the job has no start record (started outside the app, or before records were kept)
+//   no-copy    no copy could be made at the start (problem)
+//   gone       the copy is no longer kept (or its manifest cannot be read)
+//   unreadable the project could not be read the way the copy was taken (problem)
+// The team's own notes (.sibersentez/: plan, tasks, review) are counted apart (notes), not listed as the result.
+// A file of the same size is read and its digest decides (the size and time only pick what to read, review Z1); a
+// file that cannot be read now is unknown, never unchanged. Async: a file deleted after the look reads as unknown, and
+// a restore running meanwhile can mix the answer (kept 10 s): both rare, both on the side of saying less.
+export const JOB_CHANGES_MAX = 200;
+// One comparison per project and job is kept JOB_CHANGES_TTL_MS: every open drawer asks again every 20 s, and a big
+// project's comparison reads files (the review measured about 0.4 s on 821 files). A request while one runs waits
+// for that one.
+export const JOB_CHANGES_TTL_MS = 10000;
+export function createJobChangesCache({ ttl = JOB_CHANGES_TTL_MS, now = Date.now, run = projectJobChanges } = {}) {
+  const cache = new Map();
+  return (args) => {
+    const k = `${args.projectId}|${args.jobId}`;
+    const e = cache.get(k);
+    if (e && (e.pending || now() - e.at < ttl)) return e.promise;
+    const entry = { at: now(), pending: true, promise: null };
+    entry.promise = Promise.resolve()
+      .then(() => run(args))
+      .then((answer) => {
+        // Only answers worth keeping are kept (a refused request is answered again at once)
+        if (answer.status === 200) Object.assign(entry, { at: now(), pending: false });
+        else if (cache.get(k) === entry) cache.delete(k);
+        return answer;
+      }, (err) => {
+        if (cache.get(k) === entry) cache.delete(k);
+        throw err;
+      });
+    cache.delete(k);
+    if (cache.size >= 64) cache.delete(cache.keys().next().value);
+    cache.set(k, entry);
+    return entry.promise;
+  };
+}
+// The bytes of a project file against a copy's digest: true (the same), false (changed) or null (cannot be read now)
+async function bytesMatch(dir, f, readFile = fs.promises.readFile) {
+  try {
+    return sameBytes(await readFile(path.join(dir, ...f.rel.split('/'))), f);
+  } catch {
+    return null;
+  }
+}
+// A file of the copy this look did not find: deleted; still there with the same bytes (a folder this look skips
+// now): unchanged; else changed (grown past the copy's limits), or unknown when it cannot be read
+async function stillThere(dir, f) {
+  const st = lstat(path.join(dir, ...f.rel.split('/')));
+  if (!st || !st.isFile()) return 'deleted';
+  if (st.size !== f.size) return 'changed';
+  const same = await bytesMatch(dir, f);
+  return same === true ? null : same === false ? 'changed' : 'unknown';
+}
+// Made before at (with a second's slack); unknown when the file system keeps no birth time
+function bornBefore(dir, rel, at) {
+  const st = lstat(path.join(dir, ...rel.split('/')));
+  return !!st && Number.isFinite(at) && st.birthtimeMs > 0 && st.birthtimeMs < at - 1000;
+}
+// readFile: how a file's bytes are read (a test makes one unreadable)
+export async function projectJobChanges({ catalog, projectId, jobId, limits = RESTORE_LIMITS, max = JOB_CHANGES_MAX, readFile = fs.promises.readFile }) {
+  const p = catalog?.getProject?.(projectId) || null;
+  if (!p) return { status: 404, body: { error: 'not-a-project' } };
+  if (!validJobId(jobId)) return { status: 400, body: { error: 'bad-job' } };
+  const hubDir = catalog.hubDir || null;
+  const body = { project: projectId, jobId };
+  const rec = hubDir ? listJobPoints({ hubDir, projectId }).find((r) => r.jobId === jobId) : null;
+  if (!rec) return { status: 200, body: { ...body, basis: 'no-record' } };
+  if (rec.problem) return { status: 200, body: { ...body, basis: 'no-copy', problem: rec.problem } };
+  const pt = readPoint(hubDir, projectId, rec.id);
+  if (!pt) return { status: 200, body: { ...body, basis: 'gone' } };
+  const dir = typeof p.path === 'string' ? p.path : '';
+  const broad = typeof catalog.isBroad === 'function' && !!catalog.isBroad(normPath(dir));
+  if (!dir || p.broad || p.tmpOnly || broad || !isLocalPath(dir) || hasStreamColon(dir)) return { status: 200, body: { ...body, basis: 'unreadable', problem: 'folder' } };
+  const scope = pt.manifest.scope === 'lean' ? 'lean' : 'full';
+  const scan = scanProject(dir, limitsFor(scope, limits), [hubDir], scope);
+  if (!scan.ok) return { status: 200, body: { ...body, basis: 'unreadable', problem: scan.problem } };
+  const isNote = (rel) => rel.toLowerCase().startsWith(`${FIRST_DIR}/`);
+  const leftOut = Number.isInteger(pt.manifest.leftOut) ? pt.manifest.leftOut : 0;
+  const now = new Map(scan.files.map((f) => [key(f.rel), f]));
+  const inCopy = new Set();
+  const changed = [];
+  const deleted = [];
+  // Files whose bytes could not be read now (locked, no access): neither changed nor unchanged, said apart
+  const unknown = [];
+  let notes = 0;
+  // The same size is no proof of the same content, nor is the same time (review Z1): a file of the same size is
+  // read and its digest decides. Read without holding the server (one file after the other)
+  for (const f of pt.manifest.files) {
+    inCopy.add(key(f.rel));
+    const cur = now.get(key(f.rel));
+    let kind = null;
+    // Not in this look at the project: gone, or still there but now past what a copy of this scope takes (a lean
+    // copy's size limits): that file changed, it was not deleted
+    if (!cur) kind = await stillThere(dir, f);
+    else if (cur.rel !== f.rel || cur.size !== f.size) kind = 'changed';
+    else {
+      const same = await bytesMatch(dir, f, readFile);
+      kind = same === true ? null : same === false ? 'changed' : 'unknown';
+    }
+    if (!kind) continue;
+    if (isNote(f.rel)) notes++;
+    else (kind === 'deleted' ? deleted : kind === 'unknown' ? unknown : changed).push(f.rel);
+  }
+  const added = [];
+  for (const f of scan.files) {
+    if (inCopy.has(key(f.rel))) continue;
+    if (isNote(f.rel)) notes++;
+    // A lean copy that left files out: one not in it but made before the job started was left out then, changed since
+    // (a copy that left nothing out: a file not in it is new)
+    // (the job's own start: its record's time; a reused copy may be days older)
+    else if (leftOut > 0 && bornBefore(dir, f.rel, rec.at)) changed.push(f.rel);
+    else added.push(f.rel);
+  }
+  // The counts are the whole lists' (the names shown are cut at max)
+  const counts = { changed: changed.length, added: added.length, deleted: deleted.length, unknown: unknown.length };
+  const total = counts.changed + counts.added + counts.deleted;
+  const cut = (list) => list.sort().slice(0, max);
+  return {
+    status: 200,
+    body: { ...body, basis: 'start', at: pt.manifest.at, scope, leftOut, changed: cut(changed), added: cut(added), deleted: cut(deleted), unknown: cut(unknown), counts, total, more: [changed, added, deleted, unknown].some((l) => l.length > max), notes },
+  };
 }

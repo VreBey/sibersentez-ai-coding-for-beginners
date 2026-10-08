@@ -13,19 +13,22 @@ export const lower = (s) => String(s || '').toLocaleLowerCase(language() === 'tr
 export const wordStart = (label, w) => label.startsWith(w) || label.split(/[\s\-_.·/]+/).some((x) => x.startsWith(w));
 
 // commands: [{ id, label, sub, hay, run }] — things to do (the guide) found by their words; Enter runs them
-export function createPalette({ open, commands = [] }) {
+// beforeRun: before a command acts on the page (main.js: the drawer, a dialog over it, closes first)
+export function createPalette({ open, commands = [], beforeRun = () => {} }) {
   const root = document.createElement('div');
   root.className = 'palette-wrap';
   root.hidden = true;
   root.innerHTML = `
-    <div class="palette" role="dialog" aria-label="${esc(t('palAria'))}">
-      <label class="pal-input">${icon('search')}<input type="search" placeholder="${esc(t('palPlaceholder'))}" aria-label="${esc(t('palInputAria'))}"><kbd>Esc</kbd></label>
-      <ol class="pal-list" role="listbox"></ol>
+    <div class="palette" role="dialog" aria-modal="true" aria-label="${esc(t('palAria'))}">
+      <label class="pal-input">${icon('search')}<input type="search" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="palList" placeholder="${esc(t('palPlaceholder'))}" aria-label="${esc(t('palInputAria'))}"><kbd>Esc</kbd></label>
+      <ol class="pal-list" id="palList" role="listbox" aria-label="${esc(t('palInputAria'))}"></ol>
+      <p class="sr-only" data-pal="count" aria-live="polite"></p>
       <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> ${esc(t('palSelect'))}</span><span><kbd>Enter</kbd> ${esc(t('palOpen'))}</span><span><kbd>Ctrl</kbd>+<kbd>K</kbd> ${esc(t('palToggle'))}</span></div>
     </div>`;
   document.body.appendChild(root);
   const input = root.querySelector('input');
   const list = root.querySelector('.pal-list');
+  const count = root.querySelector('[data-pal="count"]');
   let results = [];
   let sel = 0;
   // The element focused before the palette opened: focus returns to it on close; a drawer opened from the
@@ -80,18 +83,26 @@ export function createPalette({ open, commands = [] }) {
     list.innerHTML = results.length
       ? results
           .map(
-            (r, i) => `<li role="option" class="${i === sel ? 'on' : ''}" data-i="${i}" style="--c:${r.color}"><span class="pal-ic">${icon(r.icon)}</span><span class="pal-main"><b>${esc(r.label)}</b><span>${esc(r.sub)}</span></span><em>${typeLabel(r.type)}</em></li>`,
+            (r, i) => `<li role="option" id="palOpt${i}" aria-selected="${i === sel}" class="${i === sel ? 'on' : ''}" data-i="${i}" style="--c:${r.color}"><span class="pal-ic">${icon(r.icon)}</span><span class="pal-main"><b>${esc(r.label)}</b><span>${esc(r.sub)}</span></span><em>${typeLabel(r.type)}</em></li>`,
           )
           .join('')
       : `<li class="pal-empty">${esc(t('palEmpty'))}</li>`;
     list.querySelector('li.on')?.scrollIntoView({ block: 'nearest' });
+    // The active option for a screen reader (the visual one is .on), and how many there are
+    if (results.length) input.setAttribute('aria-activedescendant', `palOpt${sel}`);
+    else input.removeAttribute('aria-activedescendant');
+    const said = results.length ? t('palCount', { count: results.length }) : t('palEmpty');
+    if (count.textContent !== said) count.textContent = said;
   }
 
   function choose(i) {
     const r = results[i];
     if (!r) return;
     hide();
-    if (r.run) return r.run();
+    if (r.run) {
+      beforeRun();
+      return r.run();
+    }
     open({ type: r.type, id: r.id });
   }
 
@@ -130,16 +141,33 @@ export function createPalette({ open, commands = [] }) {
     } else if (e.key === 'Enter') {
       choose(sel);
       e.preventDefault();
-    } else if (e.key === 'Escape') {
-      hide();
-      e.preventDefault();
     }
+  });
+  // The whole dialog, wherever the keyboard is in it: Escape closes it (focus back to where it was), Tab and
+  // Shift+Tab stay in it (its one control is the input: the page behind is not reached; review U01)
+  root.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      hide();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      input.focus();
+    }
+  });
+  // Focus that leaves the dialog some other way (a click outside closes it already) comes back to the input
+  root.addEventListener('focusout', (e) => {
+    if (!root.hidden && e.relatedTarget && !root.contains(e.relatedTarget)) input.focus();
   });
   list.addEventListener('mousemove', (e) => {
     const li = e.target.closest('[data-i]');
     if (li && Number(li.dataset.i) !== sel) {
       sel = Number(li.dataset.i);
-      for (const x of list.children) x.classList.toggle('on', x === li);
+      for (const x of list.children) {
+        x.classList.toggle('on', x === li);
+        if (x.hasAttribute('aria-selected')) x.setAttribute('aria-selected', String(x === li));
+      }
+      input.setAttribute('aria-activedescendant', li.id);
     }
   });
   list.addEventListener('click', (e) => {

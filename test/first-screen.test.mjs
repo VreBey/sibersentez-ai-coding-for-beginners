@@ -38,7 +38,7 @@ test('the one big start: while there is no project of their own, Today shows "Go
   assert.match(html, /<section class="first-card" aria-labelledby="firstCardH">/, 'its own class and id: the Projects page has a start-card of its own');
   assert.doesNotMatch(html, /start-card|startCardH/);
   assert.match(html, /data-cl="project"[^>]*>.*Yeni proje oluştur/);
-  assert.match(html, /data-cl="guide"/);
+  assert.match(html, /data-cl="tour"/, 'the tour link opens the tour (review U12)');
   assert.doesNotMatch(html, /data-cl="tool"/, 'a tool was found: no tool button');
   assert.match(startCardHtml({ tools: { status: 'ready', tools: [] } }), /data-cl="tool"/, 'no tool yet: its button too');
   assert.doesNotMatch(startCardHtml({ tools: { status: 'loading', tools: [] } }), /data-cl="tool"/, 'still looking: no button yet');

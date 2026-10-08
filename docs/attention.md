@@ -94,3 +94,14 @@ a change made in the terminal with Shift+Tab shows at the next line. SiberSentez
   session of another project showed only once something changed in the shown one). When a usage limit's reset time
   comes, a notice says it opened and how to go on (`notify.js checkLimits`, every 30 s, once per session and reset
   time; a limit that opened before the page looked, or more than ten minutes ago, is only remembered).
+
+## Every AI tool (2026-10-07)
+
+Before this, only Claude Code's sessions were read from its logs, so another tool (Codex, Gemini CLI and the rest) had
+no "waiting" state at all. An AI tab in SiberSentez's terminal whose screen asks the person something now waits too: the dock
+keeps what its screen asks (`terminalDock.js` `asking()`, the same `promptHelp.detectPrompt` the tab's note uses) until
+the person types in that tab; hiding the note is not an answer, the question is still on the screen. A tool that ended
+or a closed tab asks nothing. `attention.js dockWaiting` turns these into waiting rows: the header's counter and menu,
+Today's block, the taskbar count, and the project's state in the Building, the project list and Today. Its row brings
+the tab forward. A Claude Code tab is left out: its own session already says it waits. A question the note does not
+recognize is not counted; a tool run outside SiberSentez's terminal is not seen. Tests: `test/dock-waiting.test.mjs`.

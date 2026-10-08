@@ -18,8 +18,17 @@ import { normPath } from './util.mjs';
 import { isLocalPath } from './fsutil.mjs';
 import { codeError, lstat, isLink, isRealDir, findLibraryItem, treeHash, measureTree, sizeProblem, sameHash, placeCopy, copyTree, writeJsonAtomic, within, withinReal, isLegacyHub, realPath, hasStreamColon, isDriveRoot, sweepStaging, libraryStageDirs, LIMITS } from './library.mjs';
 import { readKit, findKitItem, defaultKitDir, KIT_SOURCE } from './kit.mjs';
+import { AGENT_FORMATS, AGENT_FORMAT_VERSION, agentFileName, convertAgent } from './agentFormats.mjs';
+import crypto from 'node:crypto';
 
-export const TARGETS = Object.freeze(['claude', 'agents']);
+// claude and agents hold skills (and claude the agents as they are); gemini, qwen, opencode and codex hold agents only,
+// converted to that tool's own file (server/agentFormats.mjs, 2026-10-07)
+export const TARGETS = Object.freeze(['claude', 'agents', ...AGENT_FORMATS]);
+const SKILL_TARGETS = Object.freeze(['claude', 'agents']);
+const TOOL_FOLDER = Object.freeze({ claude: '.claude', agents: '.agents', gemini: '.gemini', qwen: '.qwen', opencode: '.opencode', codex: '.codex' });
+const converted = (target) => AGENT_FORMATS.includes(target);
+// A converted copy's record keeps its source's hash and the converter's version (a new converter updates the copies)
+const srcHashOf = (libHash) => `${libHash}|f${AGENT_FORMAT_VERSION}`;
 // Tools that read the shared Agent Skills folder (.agents/skills) and not .claude/skills
 const AGENTS_TOOLS = Object.freeze(['codex', 'gemini-cli', 'antigravity']);
 export const TRIAL_MARKER = '.sibersentez-trial.json';
@@ -146,11 +155,12 @@ export function resolveProject({ catalog, projectId, hubDir = null, homeDir = nu
   return { ok: true, project: p, dir };
 }
 
-// Destination of an item in a target: { base (.claude or .agents), group (skills or agents folder), dest, inside }
+// Destination of an item in a target: { base (the tool folder: .claude, .agents, .gemini, .qwen, .opencode, .codex),
+// group (skills or agents folder), dest, inside }
 export function destination(dir, kind, name, target) {
-  const base = path.resolve(dir, target === 'agents' ? '.agents' : '.claude');
+  const base = path.resolve(dir, TOOL_FOLDER[target] || '.claude');
   const group = path.join(base, kind === 'skill' ? 'skills' : 'agents');
-  const dest = path.resolve(group, kind === 'skill' ? name : `${name}.md`);
+  const dest = path.resolve(group, kind === 'skill' ? name : agentFileName(name, target));
   const inside = dest.toLowerCase().startsWith(group.toLowerCase() + path.sep) && path.dirname(dest).toLowerCase() === group.toLowerCase();
   return { base, group, dest, inside };
 }
@@ -160,7 +170,9 @@ function reparseOnTheWay({ base, group }) {
   return isLink(base) || isLink(group);
 }
 
-const targetsOf = (kind, targets) => (kind === 'agent' ? ['claude'] : targets);
+// An agent always goes to .claude (Claude Code, Copilot CLI and Cursor CLI read it) and to the converted targets asked
+// for; a skill to the skill targets asked for
+const targetsOf = (kind, targets) => (kind === 'agent' ? ['claude', ...targets.filter(converted)] : targets.filter((t) => SKILL_TARGETS.includes(t)));
 
 // The item an install or a trial copies: the library's, else the kit's. kit: a kit (kit.mjs readKit) or undefined
 // for the kit of this process (defaultKitDir: the one config.mjs names KIT_DIR). null: in neither.
@@ -218,13 +230,28 @@ export function planInstall({ project, dir, items, targets, library, installs, l
       const st = lstat(d.dest);
       const fromKit = isKitItem(lib);
       Object.assign(e, { _src: lib.path, _rel: lib.rel, _kit: fromKit ? { kitVersion: lib.kitVersion || null, itemVersion: lib.version || null } : null, _libHash: libHash, _rec: rec, _d: d });
+      // A converted agent is converted here, so the preview says when it cannot be (and no folder is made for it)
+      if (converted(target)) {
+        let text = null;
+        try {
+          text = convertAgent(fs.readFileSync(lib.path, 'utf8'), target, it.name);
+        } catch {
+          text = null;
+        }
+        if (!text) {
+          e.reason = 'not-convertible';
+          continue;
+        }
+        e._text = text;
+      }
       if (st?.isSymbolicLink()) e.reason = 'reparse-point';
       else if (!st) {
         e.op = 'copy';
         e.reason = rec ? 'missing' : 'new';
       } else if (!rec) e.reason = 'project-owned';
       else if (!sameHash(treeHash(d.dest, { limits }), rec.hash)) e.reason = 'modified';
-      else if (libHash === rec.hash) e.reason = 'up-to-date';
+      // A converted agent is another text than its source: its record keeps the source's hash apart (srcHash)
+      else if (converted(target) ? rec.srcHash === srcHashOf(libHash) : libHash === rec.hash) e.reason = 'up-to-date';
       else {
         e.op = 'update';
         e.reason = fromKit ? 'kit-changed' : 'library-changed';
@@ -251,12 +278,26 @@ export function executeInstall({ plan, project, hubDir, installs, rows = install
       fs.mkdirSync(e._d.group, { recursive: true });
       if (reparseOnTheWay(e._d)) throw codeError('reparse-point');
       const opts = { limits, stageDir: e._d.base, ...(removeTree ? { removeTree } : {}) };
-      if (e.op === 'copy') placeCopy(e._src, e.path, { ...opts, replace: false });
-      else placeCopy(e._src, e.path, { ...opts, replace: true, expectHash: e._rec.hash });
+      // A converted agent: its text is written in the staging folder under a staging name (swept if left over), and
+      // placed from there as any copy
+      let src = e._src;
+      let staged = null;
+      if (converted(e.target)) {
+        if (!e._text) throw codeError('not-convertible');
+        staged = path.join(e._d.base, `.sibersentez-tmp-${crypto.randomBytes(6).toString('hex')}`);
+        fs.writeFileSync(staged, e._text, { flag: 'wx' });
+        src = staged;
+      }
+      try {
+        if (e.op === 'copy') placeCopy(src, e.path, { ...opts, replace: false });
+        else placeCopy(src, e.path, { ...opts, replace: true, expectHash: e._rec.hash });
+      } finally {
+        if (staged) fs.rmSync(staged, { force: true });
+      }
       const hash = treeHash(e.path, { limits });
       // A kit copy names the kit, its version and the item's version (so a later kit can offer an update)
       const from = e._kit ? { source: KIT_SOURCE, kitVersion: e._kit.kitVersion, itemVersion: e._kit.itemVersion, kitPath: String(e._rel || '').replace(/^kit\//, '') } : { source: e._rel };
-      upsert(records, { project: project.id, target: e.target, kind: e.kind, name: e.name, path: e.path, hash, ...from, installedAt: new Date(now()).toISOString() });
+      upsert(records, { project: project.id, target: e.target, kind: e.kind, name: e.name, path: e.path, hash, ...(converted(e.target) ? { srcHash: srcHashOf(e._libHash) } : {}), ...from, installedAt: new Date(now()).toISOString() });
       if (e.op === 'copy') copied++;
       else updated++;
     } catch (err) {
@@ -283,7 +324,10 @@ const errCode = (err) => (typeof err?.code === 'string' && /^[a-z][a-z-]*$/.test
 export function planRemove({ project, dir, items, targets, installs }) {
   const plan = [];
   for (const it of items) {
-    for (const target of targetsOf(it.kind, targets)) {
+    // An agent's converted copies go with it: every converted target the record lists for this project and agent,
+    // whatever the request named (the page sends claude; a job may have installed .codex or .gemini: review 2026-10-07)
+    const recorded = it.kind === 'agent' ? (installs || []).filter((r) => r.project === project.id && r.kind === 'agent' && r.name === it.name && converted(r.target)).map((r) => r.target) : [];
+    for (const target of [...new Set([...targetsOf(it.kind, targets), ...recorded])]) {
       const d = destination(dir, it.kind, it.name, target);
       const e = { op: 'skip', kind: it.kind, name: it.name, target, path: d.dest, reason: '' };
       plan.push(e);
@@ -465,7 +509,7 @@ export function recordStageDirs(installs, { claudeDir = null } = {}) {
     if (!isLocalPath(r.path) || hasStreamColon(r.path) || /[\u0000-\u001f\u007f-\u009f]/.test(r.path)) continue;
     const group = path.dirname(r.path);
     const base = path.dirname(group);
-    if (!/^(skills|agents)$/i.test(path.basename(group)) || !/^\.(claude|agents)$/i.test(path.basename(base))) continue;
+    if (!/^(skills|agents)$/i.test(path.basename(group)) || !/^\.(claude|agents|gemini|qwen|opencode|codex)$/i.test(path.basename(base))) continue;
     if (claudeDir && (within(base, claudeDir) || (realClaude && within(base, realClaude)))) continue;
     const real = realPath(base);
     if (!real || normPath(real) !== normPath(base) || !isRealDir(base)) continue;

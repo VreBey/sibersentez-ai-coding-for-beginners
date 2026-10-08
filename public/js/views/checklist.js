@@ -34,7 +34,7 @@ export function checklistModel({ tools = { status: 'idle', tools: [] }, mode = '
 export function startCardHtml({ tools = { status: 'idle', tools: [] } } = {}) {
   const noTool = tools.status === 'ready' && !tools.tools.some((x) => x.installed);
   const toolBtn = noTool ? `<button type="button" class="act-btn" data-cl="tool" data-fk="cl:tool">${esc(t('cl_tool_go'))}</button>` : '';
-  return `<section class="first-card" aria-labelledby="firstCardH"><div class="fc-text"><h2 id="firstCardH">${esc(t('firstCardTitle'))}</h2><p>${esc(t('firstCardBody'))}</p></div><div class="fc-btns"><button type="button" class="act-btn primary fc-go" data-cl="project" data-fk="cl:project">${icon('folder')}<span>${esc(t('firstCardGo'))}</span></button>${toolBtn}<button type="button" class="linkish" data-cl="guide" data-fk="cl:guide">${esc(t('firstCardTour'))}</button></div></section>`;
+  return `<section class="first-card" aria-labelledby="firstCardH"><div class="fc-text"><h2 id="firstCardH">${esc(t('firstCardTitle'))}</h2><p>${esc(t('firstCardBody'))}</p></div><div class="fc-btns"><button type="button" class="act-btn primary fc-go" data-cl="project" data-fk="cl:project">${icon('folder')}<span>${esc(t('firstCardGo'))}</span></button>${toolBtn}<button type="button" class="act-btn" data-cl="demo" data-fk="cl:demo">${icon('play')}<span>${esc(t('firstCardDemo'))}</span></button><button type="button" class="linkish" data-cl="tour" data-fk="cl:tour">${esc(t('firstCardTour'))}</button></div></section>`;
 }
 
 // Whether the person has a project of their own (a folder they work in; broad and system folders do not count)
@@ -95,6 +95,9 @@ export function createChecklist(el, actions) {
       return;
     }
     if (id === 'guide') actions.guide?.();
+    // The link names the full tour, so it opens the tour itself (review U12: it opened the guide's window before)
+    else if (id === 'tour') actions.tour?.();
+    else if (id === 'demo') actions.demo?.();
     else if (id === 'tool') actions.tools();
     else if (id === 'actions') actions.actions?.();
     else if (id === 'project') actions.newProject();

@@ -290,7 +290,7 @@ try {
   Start-Sleep -Seconds 2
   $lines = Log-Lines | Select-Object -Skip $from
   $P6 = [ordered]@{}
-  foreach ($n in @('hidden', 'bridge', 'kit', 'about', 'kit folder', 'actions live via bridge', 'actions live via tray', 'actions dry', 'actions off', 'folder rule inside the hub', 'folder rule holding the hub', 'folder rule system folder', 'project-add', 'project-idea', 'laptop next step', 'laptop next step demo', 'actions panel', 'terminal', 'hidden at the end')) { $P6[$n] = Probe $lines $n }
+  foreach ($n in @('hidden', 'bridge', 'kit', 'about', 'kit folder', 'actions live via bridge', 'actions live via tray', 'actions dry', 'actions off', 'folder rule inside the hub', 'folder rule holding the hub', 'folder rule system folder', 'project-add', 'project-idea', 'laptop next step', 'laptop next step demo', 'keyboard', 'actions panel', 'terminal', 'hidden at the end')) { $P6[$n] = Probe $lines $n }
   $R.run6_probes = $P6
   $R.run6_panel_shot_log = First-Log $lines 'QA: screenshot'
   $R.run6_live_saved_logged = [bool]($lines -match '-> live: saved')
@@ -301,7 +301,7 @@ try {
   $entry = if ($disc) { $disc.projects | Where-Object { $_.path -eq $ProjectDir } | Select-Object -First 1 } else { $null }
   $R.run6_discovered_entry = $entry
   Check 'run 6: exit code 0' ($R.run6_exit_code -eq 0)
-  Check 'probe: window.sibersentezShell has exactly its six functions' ($P6['bridge'] -eq 'pickLibraryFolder:function,pickProjectFolder:function,saveProjectIdea:function,setActionsMode:function,setAttention:function,setLanguage:function')
+  Check 'probe: window.sibersentezShell has exactly its seven functions' ($P6['bridge'] -eq 'createIdeaProject:function,pickLibraryFolder:function,pickProjectFolder:function,saveProjectIdea:function,setActionsMode:function,setAttention:function,setLanguage:function')
   # The expected counts come from the kit's own catalog, so a bigger kit needs no edit here
   $kitCat = Get-Content (Join-Path $PSScriptRoot '..\kit\catalog.json') -Raw -Encoding UTF8 | ConvertFrom-Json
   $kitSkills = @($kitCat.items | Where-Object { $_.kind -eq 'skill' }).Count
@@ -318,6 +318,8 @@ try {
   Check 'probe: the actions panel opens (?qa=1&actpanel=choose)' ($P6['actions panel'] -eq 'open')
   $L = $P6['laptop next step']
   Check 'probe: at 1366 x 768 the next step is in the first screen, fits, no sideways scroll, comes first for the keyboard' ($L.shown -and $L.firstScreen -and $L.inWidth -and $L.noSideScroll -and $L.text -and $L.oneLineFits -and $L.keyboardFirst -and $L.width -eq 1366 -and $L.height -eq 768)
+  $K = $P6['keyboard']
+  Check 'probe: keyboard: the search dialog keeps Tab, closes on Escape with focus back; the menu arrow moves; no tab roles' ($K.searchButton -and $K.opened.open -and $K.opened.inInput -and $K.afterTabs.open -and $K.afterTabs.inInput -and -not $K.afterEscape.open -and $K.afterEscape.focus -eq 'paletteBtn' -and $K.menuButton -and $K.menu.focus -eq 'projects' -and $K.menu.tabRoles -eq 0)
   $LD = $P6['laptop next step demo']
   Check 'probe: the same in the example, whose button is the first thing the keyboard reaches' ($LD.step -eq 'demo' -and $LD.shown -and $LD.firstScreen -and $LD.noSideScroll -and $LD.oneLineFits -and $LD.keyboardFirst -and $LD.width -eq 1366)
   Check 'probe: screenshot of the panel saved' ((Test-Path $PanelShot) -and ((Get-Item $PanelShot).Length -gt 10000))

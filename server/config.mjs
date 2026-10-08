@@ -184,6 +184,18 @@ export const HOME_DIR = CONFIG.homeDir;
 export const CLAUDE_DIR = CONFIG.claudeDir;
 export const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
 export const SESSIONS_DIR = path.join(CLAUDE_DIR, 'sessions');
+// Other AI tools' session logs (server/toolLogs.mjs): Codex CLI's (CODEX_HOME, as its adapter reads it, else
+// ~/.codex) and Gemini CLI's (~/.gemini/tmp)
+export const CODEX_SESSIONS_DIR = path.join(process.env.CODEX_HOME || path.join(HOME_DIR, '.codex'), 'sessions');
+export const GEMINI_TMP_DIR = path.join(HOME_DIR, '.gemini', 'tmp');
+// Qwen Code's (its runtime folder ~/.qwen, then projects/<project>/chats)
+export const QWEN_PROJECTS_DIR = path.join(HOME_DIR, '.qwen', 'projects');
+// GitHub Copilot CLI's (COPILOT_HOME, as its adapter reads it, else ~/.copilot)
+export const COPILOT_SESSIONS_DIR = path.join(process.env.COPILOT_HOME || path.join(HOME_DIR, '.copilot'), 'session-state');
+// OpenCode's database (XDG_DATA_HOME, else ~/.local/share, then opencode/opencode.db)
+export const OPENCODE_DB = path.join(process.env.XDG_DATA_HOME || path.join(HOME_DIR, '.local', 'share'), 'opencode', 'opencode.db');
+// Cursor CLI's (~/.cursor: projects/<folder>/agent-transcripts and chats/<hash>/<id>/meta.json)
+export const CURSOR_DIR = path.join(HOME_DIR, '.cursor');
 
 export const HOST = '127.0.0.1';
 export const PORT = CONFIG.port;

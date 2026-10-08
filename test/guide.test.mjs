@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GUIDE_STEPS, GUIDE_KEY, GUIDE_VERSION, clampStep, shouldAutoOpen, startStep, readSeen, markSeen, stepHtml } from '../public/js/guide.js';
+import { GUIDE_STEPS, GUIDE_KEY, GUIDE_VERSION, GLOSSARY, glossaryHtml, clampStep, shouldAutoOpen, startStep, readSeen, markSeen, stepHtml } from '../public/js/guide.js';
 import { STRINGS, LANGUAGES, setLanguage } from '../public/js/i18n.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -106,7 +106,42 @@ test('the page wires the guide: header button, stylesheet, ? key, palette comman
   assert.match(main, /shouldAutoOpen\(\{ stored: readSeen\(\), qa: QA, param: params\.get\('guide'\) \}\)/);
   assert.doesNotMatch(main, /<span>Ara<\/span>/, 'the search button text comes from the string table');
   const pal = read('public', 'js', 'palette.js');
-  assert.match(pal, /if \(r\.run\) return r\.run\(\);/);
+  assert.match(pal, /if \(r\.run\) \{\n      beforeRun\(\);\n      return r\.run\(\);/, 'a command runs after the drawer closed (review U02)');
   // Code and comments stay English (the Turkish words live in the string table and in the palette's search words)
   assert.doesNotMatch(read('public', 'js', 'guide.js'), /[çğıöşüÇĞİÖŞÜ]/);
+});
+
+test('the words the app uses, each said plainly (review U11): every word has a name and a meaning in both languages; every step links to them; the palette opens them', () => {
+  for (const lang of LANGUAGES) {
+    setLanguage(lang);
+    for (const id of GLOSSARY) {
+      assert.ok(STRINGS[lang][`gl_${id}_t`]?.trim(), `${lang} gl_${id}_t`);
+      assert.ok(STRINGS[lang][`gl_${id}_d`]?.trim(), `${lang} gl_${id}_d`);
+    }
+    const html = glossaryHtml();
+    assert.equal((html.match(/<dt>/g) || []).length, GLOSSARY.length);
+    assert.match(html, /data-guide="words-back"/, 'back to the step it was opened from');
+    assert.match(html, /id="guideTitle"/, 'the dialog keeps its accessible name');
+    for (let i = 0; i < GUIDE_STEPS.length; i++) assert.match(stepHtml(i), /data-guide="words"/, `step ${i}`);
+  }
+  setLanguage('en');
+  // The technical name stays, in brackets, next to the plain one
+  assert.match(STRINGS.tr.gl_skill_t, /\(skill\)/);
+  assert.match(STRINGS.tr.gl_agent_t, /\(ajan\)/);
+  // The menu, the subtitle and the restore section say what they are for
+  assert.equal(STRINGS.tr.shTabRoster, 'Yardımcılar');
+  assert.equal(STRINGS.tr.rstTitle, 'Önceki hâle dön');
+  assert.doesNotMatch(STRINGS.tr.shBrandSub, /kontrol salonu/);
+  // The guide's New project step follows the "New project" window (review U05)
+  assert.doesNotMatch(STRINGS.tr.guide_idea_body, /bir klasör seç/);
+  const guide = read('public', 'js', 'guide.js');
+  assert.ok(guide.includes("else if (b.dataset.guide === 'words') showWords();"));
+  assert.ok(guide.includes('return { show, hide, refresh, showWords,'));
+  assert.ok(guide.includes("if (root.hidden || box.querySelector('.guide-words-list')) return;"), 'a mode change does not close the words');
+  const main = read('public', 'js', 'main.js');
+  assert.ok(main.includes("run: () => guide.showWords() },"));
+});
+
+test('the same words for going back everywhere (review U11): the drawer section and the Workshop button', () => {
+  for (const lang of LANGUAGES) assert.equal(STRINGS[lang].wsPointOpen, STRINGS[lang].rstTitle, lang);
 });

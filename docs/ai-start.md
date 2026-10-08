@@ -142,8 +142,14 @@ tool ends):
 ```
 @set NoDefaultCurrentDirectoryInExePath=1
 @rem SiberSentez: starts Claude Code in the project folder (docs/ai-start.md). Removed after 24 hours.
+@set "SIBERSENTEZ_ENDED=%~f0.ended"
 @"%USERPROFILE%\.local\bin\claude.exe" "Please read .sibersentez/ilk-mesaj.md and follow it. Reply in the user's language."
+@type nul>"%SIBERSENTEZ_ENDED%" 2>nul
 ```
+
+The third and the last line tell SiberSentez's terminal that the tool ended while its shell stays open
+(`docs/embedded-terminal.md`, "The tool ended, the shell stays"); the mark lands next to the launcher, never in the
+project.
 
 - **The first line, and why.** The shell runs in the project folder, and a project is not always trusted (a cloned
   repository, a download). `cmd.exe` looks a bare program name up in its working folder **before** `PATH`. An npm
@@ -308,8 +314,34 @@ allowed in launcher paths; a tool that is not installed accepted; the launcher's
 
 `start-ai` with `resume: true` continues a closed Claude Code session: the same checked launcher, with
 `--resume <session id>` as the tool's arguments instead of the first-message prompt (the id is a UUID, quoted like
-the prompt). Only with `tool: 'claude'` and a `sessionId` (SiberSentez's sessions are Claude Code's), never with an idea
-(`bad-field`), never for an open session (`409 session-live`: its copy, fork, still goes to Windows Terminal); another
-tool is `400 resume-claude-only`. The session menu and the session drawer use it when the desktop app has the terminal
+the prompt). Never with an idea (`bad-field`), never for an open session (`409 session-live`: its copy, fork, still
+goes to Windows Terminal). Since 2026-10-07 every tool's session continues with its own tool and its own resume
+arguments (`docs/tool-view.md`); only Windows Terminal's continue and the copy stay Claude Code's
+(`400 resume-claude-only`). The session menu and the session drawer use it when the desktop app has the terminal
 dock and it has room: "Resume Claude Code session" continues in the dock, "Resume in Windows Terminal" is the second
 item (the `resume` action as before). Without the dock, or with a full one, nothing changes.
+
+## The setup wizard (roadmap F2, 2026-10-08)
+
+Someone who never used a terminal gets an AI tool ready in four steps, inside the AI tools panel
+(`public/js/views/setupWizard.js`, wired in `views/tools.js`): **what it needs** (Git for Windows for Claude Code,
+which runs its commands through Git Bash; Node.js for a tool whose only install command is npm's), **install**,
+**sign in**, **ready**. It opens by itself while no tool is installed; otherwise "Step by step" in the panel opens it,
+"All tools" leaves it. The first screen lists the seven tools with the account each one needs; Claude Code is marked as
+the one that works best with SiberSentez, Gemini CLI as one that can start free.
+
+The commands are the tools' own (the panel's install commands; the prerequisites through winget; the sign-in lines
+checked on each tool's `--help`: `claude auth login`, `codex login`, `copilot login`, `cursor-agent login` (or
+`agent login`, the name found), `opencode auth login`; Gemini CLI and Qwen Code ask how to sign in when they open).
+SiberSentez never runs them: with actions On, "Type in terminal" writes one into the setup terminal without Enter;
+otherwise the person copies it into PowerShell. While a step waits for an install or a sign-in, the tools are asked
+again every 15 s, so the wizard goes on by itself; "Check again" does it at once. "Use it and start a project" makes the
+tool the one jobs start with and opens the New project window.
+
+**Sign-in states.** Claude Code and Codex answer with an exit code (`auth status`, `login status`). Cursor's `status`
+answers 0 either way, so its words decide ("Logged in as"), and the output is dropped at once. Gemini CLI, Qwen Code and
+OpenCode have no such command; `server/tools.mjs` `fileReady` reads their own settings for the sign-in type they chose,
+whether their credentials file exists, and whether the variable their key comes from is set. Only names of fields and
+whether a file or a variable exists are looked at; no key, token or account name is read into an answer. GitHub
+Copilot CLI keeps its sign-in in the Windows credential store: its state stays "not known", and the wizard's last step
+offers its sign-in line and "I signed in". The page gets the command's name (`cmd`, no folder) for the sign-in line.

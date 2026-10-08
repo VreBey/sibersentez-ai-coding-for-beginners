@@ -9,6 +9,7 @@ import { runAction, actionsState, argvSummary } from './actions.js';
 import { isLibraryItem } from './rosterModel.js';
 import { isHiddenProject, setProjectHidden } from './hiddenProjects.js';
 import { t, language } from './i18n.js';
+import { sessionTool, sessionToolName, canContinueTool } from './jobId.js';
 // "Start with AI" items, their notice, and asking for the tools on first need (docs/ai-start.md)
 import { aiStartMenuItems, aiStartToast, needTools } from './views/tools.js';
 
@@ -56,12 +57,14 @@ export function sessionTitle(s) {
   return s.title || s.lastPrompt || s.firstPrompt || s.live?.name || t('shSessionNew');
 }
 
-// The project's latest session (by last activity; the status time of an open session counts too)
-export function latestSession(data, projectId) {
+// The project's latest session (by last activity; the status time of an open session counts too); tool: only that AI
+// tool's sessions, or a test of the tool id (a session of a tool that cannot continue must not hide one that can)
+export function latestSession(data, projectId, tool = null) {
+  const takes = typeof tool === 'function' ? (s) => tool(s.tool || 'claude') : tool ? (s) => (s.tool || 'claude') === tool : () => true;
   let best = null;
   let bt = -1;
   for (const s of values(data?.sessions)) {
-    if (!s || s.projectId !== projectId) continue;
+    if (!s || s.projectId !== projectId || !takes(s)) continue;
     const t = Math.max(s.lastAt || 0, s.live?.since || 0);
     if (t > bt) {
       bt = t;
@@ -77,8 +80,14 @@ function sessionActionable(s) {
 }
 
 // For an open session: its copy (fork) instead of "continue"; a second client is not attached to an open session.
-// Both items work with Claude Code sessions only, and their labels say so (strings/terminal.js).
+// Copy and Windows Terminal work with Claude Code sessions only, and their labels say so (strings/terminal.js).
+// Another tool's session (Codex, Gemini CLI, Qwen Code: server/toolLogs.mjs) continues with that tool's own resume
+// arguments through the checked launcher (start-ai with resume, server/tools.mjs resume), never with Claude's.
 function continueItem(s, where) {
+  if (sessionTool(s) !== 'claude') {
+    if (!canContinueTool(sessionTool(s)) || s.live) return [];
+    return [{ id: 'resume', label: t('termResumeTool', { tool: sessionToolName(s) }), hint: where === 'project' ? clip(sessionTitle(s), 30) : dockOpen && !dockFull?.() ? t('termResumeDockHint') : 'Windows Terminal', icon: 'play', action: 'start-ai', payload: { sessionId: s.id, tool: sessionTool(s), resume: true } }];
+  }
   if (s.live) {
     return {
       id: 'fork',
@@ -204,7 +213,8 @@ function projectMenu(id, d, mode, on) {
     // continuing a Claude Code session follows when the project has one
     items.push(...aiStartMenuItems({ projectId: p.id }, { name: p.name, projectId: p.id, hasIdea: !!p.idea }));
     items.push(...terminalItems({ projectId: p.id }, p.name, false));
-    const s = latestSession(d, p.id);
+    // The newest session the menu can continue (any tool that can), never hidden by a newer one of a tool that cannot
+    const s = latestSession(d, p.id, canContinueTool);
     if (s && sessionActionable(s)) items.push(...[].concat(continueItem(s, 'project')));
     items.push(SEP());
     items.push({ id: 'explorer', label: t('shCmOpenFolder'), hint: t('shCmExplorer'), icon: 'folder', action: 'explorer', payload: { projectId: p.id } });
@@ -461,7 +471,10 @@ export function resultToast(label, r, item = null) {
   if ((res.action || item?.action) === 'start-ai') return aiStartToast(res, item, errorText);
   if (res.ok) {
     if (res.mode === 'dry') return { tone: 'dry', title: t('shToastDryTitle', { label }), body: t('shToastDryBody'), code: argvSummary(res.argv) || '—' };
-    return { tone: 'ok', title: DONE.has(res.action) ? t(`shDone_${res.action}`) : label, body: res.sessionId ? t('shToastSession', { id: String(res.sessionId).slice(0, 8) }) : '' };
+    // "Open in browser" runs the explorer action on the project's index.html: the page opens, not the folder (seen when
+    // using the app, 2026-10-08: it said "Opening the folder in Explorer")
+    const page = res.action === 'explorer' && item?.payload?.open === 'index.html';
+    return { tone: 'ok', title: page ? t('shDone_openPage') : DONE.has(res.action) ? t(`shDone_${res.action}`) : label, body: res.sessionId ? t('shToastSession', { id: String(res.sessionId).slice(0, 8) }) : '' };
   }
   return { tone: 'err', title: t('shToastFail', { label }), body: errorText(res) };
 }

@@ -40,5 +40,7 @@ import { geminiCli } from './gemini-cli.mjs';
 import { copilot } from './copilot.mjs';
 import { cursor } from './cursor.mjs';
 import { antigravity } from './antigravity.mjs';
+import { qwen } from './qwen.mjs';
+import { opencode } from './opencode.mjs';
 
-export const ADAPTERS = Object.freeze([claudeCode, codex, geminiCli, copilot, cursor, antigravity]);
+export const ADAPTERS = Object.freeze([claudeCode, codex, geminiCli, copilot, cursor, antigravity, qwen, opencode]);

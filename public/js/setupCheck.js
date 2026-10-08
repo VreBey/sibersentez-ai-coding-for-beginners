@@ -97,7 +97,7 @@ const ERRORS = [
   { id: 'errNotRecognized', re: /is not recognized as|not recognized as an internal or external command|tanınmıyor|command not found|komut bulunamadı|the term '[^']+' is not/, fixes: [] },
   { id: 'errTls', re: /could not establish trust|ssl\/tls|unable_to_get_issuer|self[_ -]signed|certificate|sertifika|tls/, fixes: [{ how: 'powershell', cmd: FIX.tls }] },
   { id: 'errAuth', re: /invalid api key|authentication_error|\b401\b|not logged in|please run \/login|credit balance is too low|oauth token|unauthorized/, fixes: [] },
-  { id: 'errLimit', re: /rate.?limit|\b429\b|usage limit|limit reached|overloaded|\b529\b/, fixes: [] },
+  { id: 'errLimit', re: /rate.?limit|\b429\b|usage limit|limit reached|overloaded|\b529\b|resource_exhausted|quota/, fixes: [] },
   { id: 'errPerm', re: /\beperm\b|\beacces\b|operation not permitted|access is denied|erişim engellendi|erişim reddedildi/, fixes: [] },
   { id: 'errNetwork', re: /enotfound|econnrefused|etimedout|econnreset|getaddrinfo|network error|unable to connect/, fixes: [] },
 ];

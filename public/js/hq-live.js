@@ -27,7 +27,7 @@ export function projectsInOrder(store, now = Date.now()) {
   const recent = now - 3 * 86400000;
   return store
     .sortedProjects(now)
-    .map((p) => ({ p, state: projectState(p, byProject, now), open: (byProject.get(p.id) || []).filter((s) => sessionState(s, now) !== 'closed').length }))
+    .map((p) => ({ p, state: projectState(p, byProject, now, store.dockAsking?.() || []), open: (byProject.get(p.id) || []).filter((s) => sessionState(s, now) !== 'closed').length }))
     .filter(({ p, state }) => (isOtherFolder(p) ? state !== 'closed' : p.kind !== 'adhoc' || state !== 'closed' || p.lastActivity > recent));
 }
 
@@ -101,7 +101,7 @@ export function liveSnapshot(store, p, { now = Date.now(), mainRoomKind = 'dev',
     .map((w) => ({ id: w.id, sessionId: w.sessionId, name: w.name || '', status: w.status === 'running' ? 'running' : 'done', agentCount: w.agentCount || 0, phases: Array.isArray(w.phases) ? w.phases.map(String) : [] }));
   // store.dockRunning: the terminal tabs that still run (main.js, terminalDock.running)
   const tools = toolActors(p, now, store.dockRunning?.() || []).map((x) => ({ id: x.tool, name: TOOL_NAMES[x.tool] || x.tool, state: x.state }));
-  return { now, project: { id: p.id, name: p.name, state: projectState(p, byProject, now), mainRoomKind }, sessions, agents, workflows, tools, quota: null, job: jobOf(job) };
+  return { now, project: { id: p.id, name: p.name, state: projectState(p, byProject, now, store.dockAsking?.() || []), mainRoomKind }, sessions, agents, workflows, tools, quota: null, job: jobOf(job) };
 }
 
 // A project's job from the team's hand-off files (GET /api/projects/<id>/team, views/job.js): the step and its
@@ -109,7 +109,7 @@ export function liveSnapshot(store, p, { now = Date.now(), mainRoomKind = 'dev',
 const STEPS = ['plan', 'build', 'check', 'finish', 'done'];
 export function jobOf(d) {
   if (!d || !STEPS.includes(d.step)) return null;
-  return { step: d.step, tasks: d.tasks || null, review: d.review || null, ...(d.reviewIssue === 'job-identity' ? { reviewIssue: d.reviewIssue } : {}), current: d.current || null, title: d.plan?.title || null, jobId: d.plan?.jobId || null, updatedAt: d.updatedAt || null };
+  return { step: d.step, tasks: d.tasks || null, review: d.review || null, ...(d.reviewIssue === 'job-identity' ? { reviewIssue: d.reviewIssue } : {}), current: d.current || null, title: d.plan?.title || null, jobId: d.plan?.jobId || null, tool: d.tool || null, updatedAt: d.updatedAt || null, plan: d.plan ? { approved: d.plan.approved === true } : null };
 }
 
 // The project's feed and tool calls within the rewind's reach (the scene reads nothing older)

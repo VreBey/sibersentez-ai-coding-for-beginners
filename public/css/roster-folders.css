@@ -118,3 +118,18 @@
 @media (min-width: 981px) and (max-width: 1240px) {
   .rbody .rhead, .rbody .rrow { grid-template-columns: 30px minmax(0, 1fr) minmax(110px, 170px) 96px; gap: 8px; padding: 10px 10px; }
 }
+
+/* An empty library with the kit there, and "For your latest project" (review U14) */
+.lib-card.kit-first { border-color: rgba(var(--accent-rgb), 0.35); }
+.lib-card.kit-first .lc-ic { color: var(--accent); }
+.sg-card { margin: 0 0 14px; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(var(--accent-rgb), 0.35); background: rgba(var(--accent-rgb), 0.06); display: grid; gap: 10px; }
+.sg-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-start; justify-content: space-between; }
+.sg-head h3 { margin: 0 0 2px; font: 650 16px var(--display); color: var(--text); }
+.sg-head p { margin: 0; }
+.sg-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.sg-list li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 10px; border-radius: 9px; background: var(--panel-solid); border: 1px solid var(--line); }
+.sg-main { display: grid; gap: 2px; min-width: 0; }
+.sg-name { font-size: 13.5px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.sg-desc { font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.sg-fit { font-style: normal; font-size: 11px; color: var(--muted); }
+.sg-fit.strong { color: var(--accent); font-weight: 600; }

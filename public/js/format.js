@@ -319,7 +319,7 @@ export function itemDescription(desc) {
 }
 
 // Names to show for projects (pure): two folders with the same name (a project moved to another drive leaves its old
-// folder behind) get where they are, "arena (D:\Projeler)" and "arena (C:\…\Desktop)". Returns Map id -> name.
+// folder behind) get where they are, "arena (D:\Work)" and "arena (C:\…\Desktop)". Returns Map id -> name.
 export function projectNames(projects) {
   const count = new Map();
   for (const p of projects) count.set(p.name, (count.get(p.name) || 0) + 1);

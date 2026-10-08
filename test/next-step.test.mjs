@@ -55,3 +55,22 @@ test('the strip comes first on the building screen, the sign reads the same step
   const css = read('public/css/workshop.css');
   assert.ok(css.includes('.ws-next {'));
 });
+
+test('F3: a job at its result is the next step whatever tool did it; where it opens follows what is there', () => {
+  // The reproduction: the whole-job check approved (finish), Codex open in the terminal, no Claude session waiting
+  assert.deepEqual(nextStep({ resultReady: true, resultAt: 'terminal', running: true }), { key: 'result', act: 'show-terminal' });
+  // The tool's tab is closed: the project's "How to run it"
+  assert.deepEqual(nextStep({ resultReady: true, resultAt: 'drawer' }), { key: 'result', act: 'open-run' });
+  // A waiting Claude lead: its card, as before
+  assert.deepEqual(nextStep({ resultReady: true, resultAt: 'lead', running: true }), { key: 'result', act: 'open-lead' });
+  assert.deepEqual(nextStep({ resultReady: true }), { key: 'result', act: 'open-lead' }, 'the default is the lead');
+  // The result does not jump ahead of a plan waiting or an error
+  assert.equal(nextStep({ resultReady: true, resultAt: 'drawer', planPending: true }).key, 'plan');
+  assert.equal(nextStep({ resultReady: true, resultAt: 'drawer', error: true }).key, 'error');
+  const ws = read('public/js/views/workshop.js');
+  assert.ok(ws.includes("resultReady: !!scene.resultReady || (live && !!job && job.step === 'finish'),"), 'the job step, not a Claude session, says the result is ready');
+  assert.ok(ws.includes("resultAt: scene.resultReady ? 'lead' : scene.actors.some((a) => a.state === 'running') ? 'terminal' : 'drawer',"));
+  assert.ok(ws.includes("if (job.step === 'done' || job.step === 'finish') body.append(button('resultRun'"), 'the job box offers the result too');
+  assert.ok(read('public/js/views/drawer.js').includes("['check', 'finish', 'done'].includes(job.get(p.id).data?.step)"), 'the drawer shows how to run it at the result');
+  assert.ok(read('public/js/main.js').includes("d.action === 'open-run' && d.projectId"), 'open-run reaches the drawer');
+});

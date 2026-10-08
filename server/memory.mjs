@@ -220,9 +220,10 @@ export class ProjectMemory {
 // The desktop shell's requests to this server (docs/start-flow.md, step 2), as they arrive over the server process's
 // own message channel (server/index.mjs: process.parentPort under Electron's utilityProcess, the ipc channel of a
 // forked process in development). Nothing else can send on that channel; a request is still checked in full.
-//   { sibersentez: 'shell-call', id, type: 'project-add', path }                 catalog.addProjectFolder(path)
+//   { sibersentez: 'shell-call', id, type: 'project-add', path, fresh? }         catalog.addProjectFolder(path) (fresh:
+//                                                                                a folder just made, never inside a project)
 //   { sibersentez: 'shell-call', id, type: 'project-idea', projectId, idea }     catalog.setProjectIdea(projectId, idea)
-//   { sibersentez: 'shell-call', id, type: 'terminal-target', launchId | projectId | sessionId }   actions.terminalTarget
+//   { sibersentez: 'shell-call', id, type: 'terminal-target', launchId | setup | projectId | sessionId }   actions.terminalTarget
 //   { sibersentez: 'shell-call', id, type: 'terminal-state', sessions, ended }   actions.terminalState (what runs in the
 //                                                                                embedded terminals, after every change)
 // handle(msg) returns the reply { sibersentez: 'shell-reply', id, ok, reason, projectId?, existed?, saved? }, or null for a
@@ -255,7 +256,7 @@ export function createProjectChannel({ catalog, appDir = null, onChange = () => 
     };
     try {
       if (msg.type === 'project-add') {
-        const r = catalog.addProjectFolder(msg.path, { appDir });
+        const r = catalog.addProjectFolder(msg.path, { appDir, fresh: msg.fresh === true });
         if (r.ok) changed('project-add', r.projectId);
         return reply(r);
       }
@@ -268,7 +269,8 @@ export function createProjectChannel({ catalog, appDir = null, onChange = () => 
       // carries no mode, so this channel can never pick one) and answers with the mode it now runs in
       if (msg.type === 'actions-reload' && reloadActions) return reply(reloadActions());
       if (msg.type === 'terminal-target' && terminalTarget) {
-        const req = msg.launchId !== undefined ? { launchId: msg.launchId } : { projectId: msg.projectId, sessionId: msg.sessionId };
+        // The setup terminal's { setup } is passed on as it came (terminalTarget checks it is exactly true)
+        const req = msg.launchId !== undefined ? { launchId: msg.launchId } : msg.setup !== undefined ? { setup: msg.setup } : { projectId: msg.projectId, sessionId: msg.sessionId };
         return reply(terminalTarget(req));
       }
       // terminal-state: what runs in the embedded terminals and the one that just ended (the shell sends it after every

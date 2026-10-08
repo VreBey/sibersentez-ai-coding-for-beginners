@@ -4,10 +4,12 @@
 // http://127.0.0.1:<port>/ only; system tray; logs; QA mode (optionally hidden: nothing reaches the screen).
 // Every decision lives in helpers.mjs as a pure, tested function; this file only wires them to Electron.
 // Security: the window is sandboxed (sandbox + contextIsolation, nodeIntegration off). Its preload
-// (electron/preload.cjs) gives the page exactly three functions over three IPC channels that the shell honours only
-// from the main window's top frame on the server origin (bridgeSender): setActionsMode(mode), pickProjectFolder() and
-// saveProjectIdea(projectId, text); nothing else reaches the renderer. Permission requests are denied except
-// notifications and clipboard writes from our own origin; the page may only send network requests to its own origin.
+// (electron/preload.cjs) gives the page exactly seven functions, one IPC channel each, that the shell honours only
+// from the main window's top frame on the server origin (bridgeSender): setActionsMode(mode), pickProjectFolder(),
+// createIdeaProject(name, idea, choose), pickLibraryFolder(), setLanguage(lang), saveProjectIdea(projectId, text) and
+// setAttention(count, text); nothing else reaches the renderer (the terminal bridge: test/terminal.test.mjs).
+// Permission requests are denied except notifications and clipboard writes from our own origin; the page may only
+// send network requests to its own origin.
 // New project (docs/start-flow.md, step 2): the folder picker is the shell's; the chosen folder is checked here and
 // remembered by the server in the program's project memory (<hub>\registry\discovered.json), which the shell asks for
 // over the server process's own message channel (createServerCalls). The page gets the project id, never a path.
@@ -59,6 +61,10 @@ import {
   PANEL_CONFIRM_LIVE_SCRIPT,
   PANEL_HANDOVER_MS,
   PROJECT_IDEA_IPC_CHANNEL,
+  IDEA_PROJECT_IPC_CHANNEL,
+  IDEA_PROJECTS_DIR,
+  ideaProjectRequest,
+  createIdeaProject,
   PROJECT_PICK_IPC_CHANNEL,
   QA_ACTIONS_SCRIPTS,
   QA_SERVED_MODE_SCRIPT,
@@ -72,6 +78,7 @@ import {
   QA_LAPTOP_SIZE,
   QA_VIEWPORT_SCRIPT,
   QA_LAPTOP_DEMO_SCRIPT,
+  QA_KEYS_SCRIPTS,
   SHELL_STATE_FILE,
   actionsMenuItems,
   actionsSubmenuTemplate,
@@ -81,6 +88,7 @@ import {
   checkActionsOnReady,
   checkLocalDir,
   checkProjectFolder,
+  plannedFolderRefusal,
   confirmActionsLive,
   createServerCalls,
   createsTray,
@@ -1096,6 +1104,51 @@ async function onPickLibraryFolderRequest(event) {
   }
 }
 
+// window.sibersentezShell.createIdeaProject(name, idea, choose) (review U05): the same sender rule and one picker or
+// folder at a time. The folder goes under the SiberSentez folder in Documents (choose: under a folder the person picks), is made,
+// checked as a picked folder is (refused: the empty folder is removed again), remembered by the server, and the idea
+// kept with it. The answer carries the project id only; the log never names the folder or the idea.
+async function onCreateIdeaProjectRequest(event, name, idea, choose) {
+  const req = ideaProjectRequest({ name, idea, choose, ...senderFacts(event) });
+  if (!req.ok) {
+    log(`idea project request refused (${req.reason})`);
+    return projectReply({ ok: false, reason: req.reason === 'bad-name' ? 'bad-name' : req.reason === 'invalid' ? 'invalid' : 'refused' });
+  }
+  if (state.pickingFolder) return projectReply({ ok: false, reason: 'busy' });
+  state.pickingFolder = true;
+  try {
+    let documents = null;
+    try {
+      documents = app.getPath('documents');
+    } catch {
+      documents = path.join(HOME_DIR, 'Documents');
+    }
+    const result = await createIdeaProject({
+      S,
+      base: path.join(documents, IDEA_PROJECTS_DIR),
+      name: req.name,
+      idea: req.idea,
+      choose: req.choose,
+      showOpenDialog: (options) => dialog.showOpenDialog(win, options),
+      exists: (p) => fs.existsSync(p),
+      mkdir: (p, recursive) => fs.mkdirSync(p, { recursive }),
+      removeEmpty: (p) => fs.rmdirSync(p),
+      precheck: (folder) => plannedFolderRefusal(folder, projectFolderRules()),
+      check: (folder) => checkProjectFolder(folder, projectFolderRules()),
+      add: (folder) => serverCalls.call(state.server, 'project-add', { path: folder, fresh: true }),
+      saveIdea: (projectId, text) => serverCalls.call(state.server, 'project-idea', { projectId, idea: text }),
+    });
+    const reply = projectReply(result);
+    log(`idea project: ${reply.ok ? 'created' : reply.reason}`);
+    return reply;
+  } catch (e) {
+    log(`idea project failed: ${e?.code || 'error'}`);
+    return projectReply({ ok: false, reason: 'error' });
+  } finally {
+    state.pickingFolder = false;
+  }
+}
+
 // window.sibersentezShell.saveProjectIdea(projectId, text): checked by projectIdeaRequest (the same sender rule), stored by
 // the server with the project's memory entry (only a project it already remembers). The text is never logged.
 async function onSaveProjectIdeaRequest(event, projectId, text) {
@@ -1319,6 +1372,32 @@ async function qaLaptopProbe() {
   }
 }
 
+// The keyboard (helpers QA_KEYS_SCRIPTS): real key events into the page the laptop probe left loaded. A hidden run
+// takes them as well (they go to the page, not to the screen)
+async function qaKeyboardProbe() {
+  const wc = win.webContents;
+  const key = async (keyCode, modifiers = []) => {
+    wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+    if (keyCode.length === 1) wc.sendInputEvent({ type: 'char', keyCode, modifiers });
+    wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+    await qaSleep(200);
+  };
+  const out = {};
+  out.searchButton = await qaRun(QA_KEYS_SCRIPTS.focusSearch);
+  await key('K', ['control']);
+  out.opened = qaJson(await qaRun(QA_KEYS_SCRIPTS.searchState));
+  await key('Tab');
+  await key('Tab');
+  await key('Tab', ['shift']);
+  out.afterTabs = qaJson(await qaRun(QA_KEYS_SCRIPTS.searchState));
+  await key('Escape');
+  out.afterEscape = qaJson(await qaRun(QA_KEYS_SCRIPTS.searchState));
+  out.menuButton = await qaRun(QA_KEYS_SCRIPTS.focusMenu);
+  await key('Down');
+  out.menu = qaJson(await qaRun(QA_KEYS_SCRIPTS.menuState));
+  qaProbe('keyboard', out);
+}
+
 async function runQaProbes() {
   qaProbe('hidden', { hidden: QA_SHELL.hidden, visible: Boolean(win?.isVisible()), tray: Boolean(tray) });
   qaProbe('bridge', await qaRun(QA_BRIDGE_PROBE_SCRIPT));
@@ -1334,6 +1413,7 @@ async function runQaProbes() {
   if (QA_SHELL.hidden && QA_SHELL.projectDir) await qaProjectProbe();
   else qaProbe('project-add', 'skipped (needs SIBERSENTEZ_QA_HIDDEN=1 and SIBERSENTEZ_QA_PROJECT_DIR)');
   await qaLaptopProbe();
+  await qaKeyboardProbe();
   await qaPanelProbe();
   await qaTerminalProbe();
   qaProbe('hidden at the end', { visible: Boolean(win?.isVisible()), tray: Boolean(tray) });
@@ -1480,6 +1560,7 @@ function main() {
       ipcMain.handle(LIBRARY_PICK_IPC_CHANNEL, onPickLibraryFolderRequest);
       ipcMain.handle(LANGUAGE_IPC_CHANNEL, onSetLanguageRequest);
       ipcMain.handle(PROJECT_IDEA_IPC_CHANNEL, onSaveProjectIdeaRequest);
+      ipcMain.handle(IDEA_PROJECT_IPC_CHANNEL, onCreateIdeaProjectRequest);
       ipcMain.handle(ATTENTION_IPC_CHANNEL, onAttention);
       ipcMain.handle(TERMINAL_IPC.open, onTermOpen);
       ipcMain.handle(TERMINAL_IPC.list, (event) => (termSenderOk(event) ? terminals.list() : []));

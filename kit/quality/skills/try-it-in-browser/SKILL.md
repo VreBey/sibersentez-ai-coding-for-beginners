@@ -4,7 +4,7 @@ description: "Uses a web feature the way a real person does: runs the app, walks
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.2.0"
   sibersentez-tags: "testing, web"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "tarayıcıda dene*, kullanıcı gibi dene*, uçtan uca test, e2e, tıklayıp dene*, sayfayı dene*, akışı dene*, tarayıcı testi"
@@ -25,6 +25,10 @@ walk-through so it stays working.
 - Never switch off your tool's permission prompts or safety checks, and never tell the user to.
 - Use made-up data only. Never enter real passwords, payment details or other people's data, and never try the flow
   against a live site that real people use.
+- **A separate test browser, never the person's own.** Use the project's browser-test tool or a fresh browser you
+  start yourself with an empty profile. Do not drive the person's everyday browser through an extension or remote
+  control: it carries their sign-ins and open tabs. If nothing else is available, ask first and say what it could see.
+  A plain page with no build can often be checked by opening its file once and reading it.
 
 ## 1. Pick one flow
 

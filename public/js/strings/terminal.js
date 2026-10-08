@@ -9,6 +9,7 @@ export default {
     termOpenHereHint: 'Start any AI tool you like',
     // Context menu: items that only work with Claude Code sessions say so
     termResume: 'Resume Claude Code session',
+    termResumeTool: 'Continue the {tool} session',
     termResumeDockHint: 'In SiberSentez’s terminal, below',
     termResumeOutside: 'Resume in Windows Terminal',
     termResumeParent: 'Resume the parent Claude Code session',
@@ -38,6 +39,7 @@ export default {
     termOpenHere: 'Bu klasörde terminal aç',
     termOpenHereHint: 'İstediğin yapay zekâ aracını başlat',
     termResume: 'Claude Code oturumuna devam et',
+    termResumeTool: '{tool} oturumuna devam et',
     termResumeDockHint: 'SiberSentez’in alttaki terminalinde',
     termResumeOutside: 'Windows Terminal’de devam et',
     termResumeParent: 'Ana Claude Code oturumuna devam et',

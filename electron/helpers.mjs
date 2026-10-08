@@ -801,6 +801,140 @@ export function projectIdeaRequest({ projectId, text, mainWindow = false, frame 
   return { ok: true, projectId, text };
 }
 
+// A new project from an idea (review U05, 2026-10-07): the person names it and writes the idea; the shell makes its
+// folder under Documents\SiberSentez (the owner's choice), or under a folder the person picks ("Somewhere else…"),
+// checks it as a picked folder is checked, has the server remember it, keeps the idea with it. The page gets the
+// project id only, never a path.
+export const IDEA_PROJECT_IPC_CHANNEL = 'sibersentez:create-idea-project';
+export const PROJECT_NAME_MAX = 60;
+export const IDEA_PROJECTS_DIR = 'SiberSentez';
+const WIN_NAME_BAD_RE = /[<>:"/\\|?*\u0000-\u001f\u007f-\u009f]/g;
+const WIN_RESERVED_RE = /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)(\..*)?$/i;
+
+// A project name as a Windows folder name: characters Windows refuses become spaces, spaces collapse, no trailing dot
+// or space, at most PROJECT_NAME_MAX characters, never a reserved device name. '' when nothing is left.
+export function projectFolderName(name) {
+  let s = String(name || '').normalize('NFC').replace(WIN_NAME_BAD_RE, ' ').replace(/\s+/g, ' ').trim();
+  s = Array.from(s).slice(0, PROJECT_NAME_MAX).join('').replace(/[. ]+$/, '').trim();
+  return s && !WIN_RESERVED_RE.test(s) ? s : '';
+}
+
+// Checks the page's request: the bridge's sender rule, a name that makes a folder name, an idea of at most
+// IDEA_TEXT_MAX characters, choose a boolean (true: pick where). Returns { ok, name, idea, choose } or { ok: false, reason }.
+export function ideaProjectRequest({ name, idea = '', choose = false, mainWindow = false, frame = null, origin = null } = {}) {
+  const sender = bridgeSender({ mainWindow, frame, origin });
+  if (!sender.ok) return sender;
+  if (typeof name !== 'string' || name.length > 200 || typeof idea !== 'string' || idea.length > IDEA_TEXT_MAX || typeof choose !== 'boolean') return { ok: false, reason: 'invalid' };
+  const folderName = projectFolderName(name);
+  if (!folderName) return { ok: false, reason: 'bad-name' };
+  return { ok: true, name: folderName, idea, choose };
+}
+
+// A folder name not taken yet under base: "<name>", else "<name> (2)" ... "(99)"; null when all are taken
+export function freeProjectFolder(base, name, exists) {
+  for (let n = 1; n < 100; n++) {
+    const p = path.win32.join(base, n === 1 ? name : `${name} (${n})`);
+    if (!exists(p)) return p;
+  }
+  return null;
+}
+
+// "Somewhere else…": the folder the new project's folder goes into
+export function ideaParentDialogOptions(S) {
+  return { title: S.newProjectWhereTitle || S.newProjectPickTitle, buttonLabel: S.newProjectWhereButton || S.newProjectPickButton, properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'] };
+}
+
+// The steps (pure but for the injected parts): where (base, or a picked folder), a free name, its path checked before
+// anything is made, the folder made (the last step never recursive: a folder that appeared meanwhile is never taken
+// over, the next name is tried), checked in full as a picked folder is, remembered by the server as a new project
+// only (a folder inside a listed project is refused: its idea would land on that project), the idea kept with it.
+// Refused after it was made: the empty folder is removed again, and the base folder too when this call made it and it
+// is empty. Parts: showOpenDialog, exists(p), mkdir(p, recursive) (throws EEXIST when p is there and not recursive),
+// removeEmpty(p) (only an empty folder), precheck(folder) (plannedFolderRefusal: a reason or null), check(folder)
+// (checkProjectFolder), add(folder) ('project-add' with fresh), saveIdea(projectId, idea) ('project-idea').
+// Returns the server's reply with created: true, or { ok: false, reason }.
+export async function createIdeaProject({ S, base, name, idea = '', choose = false, showOpenDialog, exists, mkdir, removeEmpty, precheck = () => null, check, add, saveIdea }) {
+  let root = base;
+  if (choose) {
+    let r;
+    try {
+      r = await showOpenDialog(ideaParentDialogOptions(S));
+    } catch {
+      return { ok: false, reason: 'error' };
+    }
+    root = r && !r.canceled && Array.isArray(r.filePaths) ? r.filePaths[0] : null;
+    if (typeof root !== 'string' || !root) return { ok: false, reason: 'cancelled' };
+  }
+  if (typeof root !== 'string' || !path.win32.isAbsolute(root) || /^[\\/]{2}/.test(root)) return { ok: false, reason: 'not-local' };
+  const rootMade = !exists(root);
+  let folder = freeProjectFolder(root, name, exists);
+  if (!folder) return { ok: false, reason: 'exists' };
+  const early = precheck(folder);
+  if (early) return { ok: false, reason: early };
+  const removeIfEmpty = (p) => {
+    try {
+      removeEmpty(p);
+    } catch {
+      /* not empty or gone: left as it is */
+    }
+  };
+  try {
+    if (rootMade) mkdir(root, true);
+  } catch {
+    return { ok: false, reason: 'error' };
+  }
+  // Every name tried once at most: a name that says EEXIST while exists() says no (a broken link) is not tried again
+  const tried = new Set();
+  for (let made = false; !made; ) {
+    tried.add(folder);
+    try {
+      mkdir(folder, false);
+      made = true;
+    } catch (e) {
+      // Made by someone else between the look and the make: never taken over, the next free name is tried
+      const next = e?.code === 'EEXIST' ? freeProjectFolder(root, name, (p) => tried.has(p) || exists(p)) : null;
+      if (!next) {
+        if (rootMade) removeIfEmpty(root);
+        return { ok: false, reason: e?.code === 'EEXIST' ? 'exists' : 'error' };
+      }
+      folder = next;
+    }
+  }
+  const undo = () => {
+    removeIfEmpty(folder);
+    if (rootMade) removeIfEmpty(root);
+  };
+  const c = check(folder);
+  if (!c?.ok) {
+    undo();
+    return { ok: false, reason: c?.reason || 'invalid' };
+  }
+  let r = null;
+  try {
+    r = await add(c.path);
+  } catch {
+    r = null;
+  }
+  if (!r?.ok) {
+    undo();
+    return r && typeof r === 'object' ? r : { ok: false, reason: 'error' };
+  }
+  // The server answered with a project that was there already (an older server without fresh): the new folder lies
+  // inside it. Its idea and its job must not land on that project (review of U05).
+  if (r.existed === true) {
+    undo();
+    return { ok: false, reason: 'inside-project' };
+  }
+  if (idea) {
+    try {
+      await saveIdea(r.projectId, idea);
+    } catch {
+      /* the project is there; its idea can be written again in its drawer */
+    }
+  }
+  return { ...r, created: true };
+}
+
 // The system folder picker. Windows' picker has "New folder" itself; createDirectory asks for the same on macOS.
 export function projectFolderDialogOptions(S) {
   return { title: S.newProjectPickTitle, buttonLabel: S.newProjectPickButton, properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'] };
@@ -867,28 +1001,41 @@ export function systemFolderRules(env = {}) {
 // A folder that is itself a link (junction or symbolic link) is refused: the project would be somewhere else.
 // Returns { ok: true, path } or { ok: false, reason: 'invalid' | 'network' | 'not-local' | 'drive-root' | 'home' |
 // 'broad' | 'hub' | 'program' | 'missing' | 'not-folder' | 'link' }.
-export function checkProjectFolder(raw, { homeDir = null, broadDirs = [], systemTrees = [], hubPath = null, programDirs = [], lstat = (p) => fs.lstatSync(p), realpath = fs.realpathSync.native } = {}) {
-  if (typeof raw !== 'string' || !raw.trim() || raw.length > 1024) return { ok: false, reason: 'invalid' };
-  const v = raw.trim();
-  // \\server\share, \\wsl$\..., \\wsl.localhost\..., \\?\ and \\.\ device paths: never touched
-  if (/^[\\/]{2}/.test(v)) return { ok: false, reason: 'network' };
-  if (IS_WINDOWS ? !/^[a-zA-Z]:[\\/]/.test(v) : !path.isAbsolute(v)) return { ok: false, reason: 'not-local' };
-  // A ':' after the drive letter (an alternate data stream), reserved characters, control characters
-  if (/[<>:"|?*\u0000-\u001f\u007f-\u009f]/.test(IS_WINDOWS ? v.slice(2) : v)) return { ok: false, reason: 'invalid' };
-  const written = path.resolve(v);
-  const given = (d) => typeof d === 'string' && d.trim();
-  const why = (p) => {
+const givenDir = (d) => typeof d === 'string' && d.trim();
+// The rules a folder's path breaks as written (nothing on disk is read): its reason, or null
+function folderRuleOf({ homeDir = null, broadDirs = [], systemTrees = [], hubPath = null, programDirs = [] } = {}) {
+  return (p) => {
     if (samePath(p, path.parse(p).root)) return 'drive-root';
-    if (given(homeDir) && (samePath(p, homeDir) || isInside(homeDir, p))) return 'home';
-    if (broadDirs.some((b) => given(b) && samePath(p, b))) return 'broad';
-    if (systemTrees.some((t) => given(t) && (samePath(p, t) || isInside(p, t)))) return 'broad';
+    if (givenDir(homeDir) && (samePath(p, homeDir) || isInside(homeDir, p))) return 'home';
+    if (broadDirs.some((b) => givenDir(b) && samePath(p, b))) return 'broad';
+    if (systemTrees.some((t) => givenDir(t) && (samePath(p, t) || isInside(p, t)))) return 'broad';
     // Both ways: a project inside the hub, and a project folder that holds the hub
-    if (given(hubPath) && pathsOverlap(p, hubPath)) return 'hub';
-    if (programDirs.some((d) => given(d) && pathsOverlap(p, d))) return 'program';
+    if (givenDir(hubPath) && pathsOverlap(p, hubPath)) return 'hub';
+    if (programDirs.some((d) => givenDir(d) && pathsOverlap(p, d))) return 'program';
     return null;
   };
-  const first = why(written);
+}
+
+// Why a folder that does not exist yet could not be a project, from its path alone (the rules of checkProjectFolder
+// that read nothing on disk): the reason, or null. A new project's folder is checked with it before it is made
+// (review U05), and again in full once it is there.
+export function plannedFolderRefusal(raw, rules = {}) {
+  if (typeof raw !== 'string' || !raw.trim() || raw.length > 1024) return 'invalid';
+  const v = raw.trim();
+  // \\server\share, \\wsl$\..., \\wsl.localhost\..., \\?\ and \\.\ device paths: never touched
+  if (/^[\\/]{2}/.test(v)) return 'network';
+  if (IS_WINDOWS ? !/^[a-zA-Z]:[\\/]/.test(v) : !path.isAbsolute(v)) return 'not-local';
+  // A ':' after the drive letter (an alternate data stream), reserved characters, control characters
+  if (/[<>:"|?*\u0000-\u001f\u007f-\u009f]/.test(IS_WINDOWS ? v.slice(2) : v)) return 'invalid';
+  return folderRuleOf(rules)(path.resolve(v));
+}
+
+export function checkProjectFolder(raw, { homeDir = null, broadDirs = [], systemTrees = [], hubPath = null, programDirs = [], lstat = (p) => fs.lstatSync(p), realpath = fs.realpathSync.native } = {}) {
+  const first = plannedFolderRefusal(raw, { homeDir, broadDirs, systemTrees, hubPath, programDirs });
   if (first) return { ok: false, reason: first };
+  const written = path.resolve(raw.trim());
+  const given = givenDir;
+  const why = folderRuleOf({ homeDir, broadDirs, systemTrees, hubPath, programDirs });
   let st;
   try {
     st = lstat(written);
@@ -1330,6 +1477,15 @@ export const QA_LAPTOP_PATH = '/?qa=1';
 // pixels from the page's after the screen scale is applied)
 export const QA_VIEWPORT_SCRIPT = 'JSON.stringify([innerWidth, innerHeight])';
 // The building's example (its play button): a step with a button, so the keyboard check has one to find first
+// The keyboard on the page (review U01, U03): real key events (main.mjs qaKeyboardProbe) and these fixed reads. The
+// search dialog keeps Tab inside and closes on Escape with focus back to its button; the menu's down arrow moves to
+// the next screen button. Each returns a JSON text or a boolean; nothing is changed but focus.
+export const QA_KEYS_SCRIPTS = Object.freeze({
+  focusSearch: "(() => { const b = document.getElementById('paletteBtn'); if (b) b.focus(); return document.activeElement === b; })()",
+  searchState: "JSON.stringify({ open: !document.querySelector('.palette-wrap')?.hidden, inInput: document.activeElement === document.querySelector('.palette input'), focus: document.activeElement?.id || document.activeElement?.tagName || null })",
+  focusMenu: "(() => { const b = document.querySelector('.side-nav [data-tab=\"today\"]'); if (b) b.focus(); return document.activeElement === b; })()",
+  menuState: "JSON.stringify({ focus: document.activeElement?.dataset?.tab || null, current: [...document.querySelectorAll('[aria-current=\"page\"]')].map((b) => b.dataset.tab), tabRoles: document.querySelectorAll('.side [role=\"tab\"], .side [role=\"tablist\"], section.panel[role=\"tabpanel\"]').length })",
+});
 export const QA_LAPTOP_DEMO_SCRIPT = "(() => { const b = document.querySelector('[data-ws=\"play\"]'); if (!b) return 'missing'; b.click(); return 'started'; })()";
 export const QA_LAPTOP_PROBE_SCRIPT =
   "(() => { const s = document.querySelector('[data-ws=\"next\"]'); if (!s) return 'missing'; const r = s.getBoundingClientRect(); const text = (s.querySelector('[data-ws=\"next-text\"]')?.textContent || '').trim(); const go = s.querySelector('[data-ws=\"next-go\"]'); const root = s.parentElement; const focusables = [...root.querySelectorAll('button, input, select, textarea, a[href], [tabindex]')].filter((e) => !e.hidden && !e.disabled && e.tabIndex >= 0 && e.getClientRects().length); const first = focusables[0] || null; let focused = null; if (go && !go.hidden) { go.focus(); focused = document.activeElement === go; go.blur(); } return JSON.stringify({ shown: r.width > 0 && r.height > 0, firstScreen: r.top >= 0 && r.bottom <= innerHeight, inWidth: r.left >= 0 && r.right <= innerWidth + 0.5, noSideScroll: document.documentElement.scrollWidth <= innerWidth, text: text.length > 0, oneLineFits: s.scrollWidth <= s.clientWidth + 1, keyboardFirst: !focusables.some((e) => e.tabIndex > 0) && (go && !go.hidden ? first === go && focused === true : !first || !s.contains(first) || first === go), step: s.dataset.step || '', width: innerWidth, height: innerHeight }); })()";

@@ -7,6 +7,9 @@ export const JOB_ID_RE = /^J[0-9a-f]{32}$/;
 export const CURRENT_JOB_FILE = 'current-job.json';
 export const newJobId = () => `J${crypto.randomBytes(16).toString('hex')}`;
 export const validJobId = (id) => typeof id === 'string' && JOB_ID_RE.test(id);
+// The AI tool an app job was started with (a tool id of server/tools.mjs), kept in the marker: a Claude session is
+// never offered to continue a job another tool started (docs/development-plan-2026-10-07.md F1)
+const TOOL_RE = /^[a-z][a-z0-9-]{1,30}$/;
 export const jobMessageName = (id) => {
   if (!validJobId(id)) throw new Error('invalid job id');
   return `job-${id}.md`;
@@ -62,7 +65,7 @@ export function readCurrentJob(folder, xfs = fs) {
   }
   try {
     const data = JSON.parse(raw);
-    if (data?.version === 1 && validJobId(data.jobId)) return { present: true, jobId: data.jobId };
+    if (data?.version === 1 && validJobId(data.jobId)) return { present: true, jobId: data.jobId, ...(TOOL_RE.test(data.tool || '') ? { tool: data.tool } : {}) };
   } catch { /* not JSON: unknown below */ }
   return { present: true, jobId: null, problem: 'unknown' };
 }
@@ -86,7 +89,8 @@ export function markerError(current) {
 }
 
 // Replace only the app's own valid marker, atomically. Links/directories/unknown contents are never overwritten.
-export function writeCurrentJob(folder, jobId, xfs = fs) {
+// tool: the AI tool the job starts with (kept when it is a tool id; a job written outside the app has none)
+export function writeCurrentJob(folder, jobId, xfs = fs, { tool = null } = {}) {
   if (!validJobId(jobId)) return { ok: false, error: 'first-message-blocked' };
   const realFolder = () => {
     try { const st = xfs.lstatSync(folder); return st.isDirectory() && !st.isSymbolicLink(); } catch { return false; }
@@ -102,7 +106,7 @@ export function writeCurrentJob(folder, jobId, xfs = fs) {
   const temp = path.join(folder, `.current-${jobId}-${crypto.randomBytes(6).toString('hex')}.tmp`);
   let created = false;
   try {
-    xfs.writeFileSync(temp, JSON.stringify({ version: 1, jobId }) + '\n', { encoding: 'utf8', flag: 'wx' });
+    xfs.writeFileSync(temp, JSON.stringify({ version: 1, jobId, ...(TOOL_RE.test(tool || '') ? { tool } : {}) }) + '\n', { encoding: 'utf8', flag: 'wx' });
     created = true;
     const current = readCurrentJob(folder, xfs);
     if (!realFolder()) return { ok: false, error: 'first-message-blocked' };
@@ -114,4 +118,29 @@ export function writeCurrentJob(folder, jobId, xfs = fs) {
   } finally {
     if (created && realFolder()) { try { xfs.unlinkSync(temp); } catch { /* renamed or already removed */ } }
   }
+}
+
+// The job as the person wrote it, from the job's own message (<project>/.sibersentez/job-<id>.md, launch.mjs
+// jobMessageText: the quoted lines under "## The job"): its first line, at most 120 characters, or null. A session the
+// app started for a job is then named by the job, not by the tool's title for "read .sibersentez/job-J….md" (seen when
+// using the app, 2026-10-08: "Job J764b5cd98f2fd06dfaf205c587fb8833 görevi"). Only a real small file is read.
+const JOB_TEXT_MAX_BYTES = 64 * 1024;
+export function readJobText(projectDir, jobId, xfs = fs) {
+  if (typeof projectDir !== 'string' || !projectDir || !validJobId(jobId)) return null;
+  const file = path.join(projectDir, '.sibersentez', jobMessageName(jobId));
+  try {
+    const st = xfs.lstatSync(file);
+    if (!st.isFile() || st.isSymbolicLink() || st.size > JOB_TEXT_MAX_BYTES) return null;
+    const lines = xfs.readFileSync(file, 'utf8').split(/\r?\n/);
+    const from = lines.findIndex((l) => /^##\s+The job\s*$/.test(l));
+    if (from < 0) return null;
+    for (const l of lines.slice(from + 1)) {
+      if (/^##\s/.test(l)) break;
+      const text = /^>\s?(.*)$/.exec(l)?.[1]?.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (text) return Array.from(text).slice(0, 120).join('');
+    }
+  } catch {
+    /* not there, or not readable now */
+  }
+  return null;
 }

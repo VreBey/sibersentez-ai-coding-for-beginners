@@ -27,8 +27,8 @@ at most two plans, the most likely first:
 
 Commands are built from fixed words; a script is used only by one of the four fixed names, and a file name only when
 it matches a plain pattern. `empty`: the folder holds nothing but SiberSentez's first message, git, a plan, a readme or
-an AI tool's own file; the section says to start the AI first. `unknown`: the section offers a question to copy for the
-AI ("How do I run this project on Windows?").
+an AI tool's own file; the section says to start the AI first. `unknown`: the section offers a question for the AI ("How do I
+run this project on Windows?"), to copy and, on the page, one way that leads somewhere (Ask the AI, below).
 
 ## Page (`public/js/runHint.js`)
 
@@ -43,9 +43,33 @@ prompt: not while a program started there runs, an AI tool started there by hand
 two quick clicks wait for each other), waits until the shell printed its prompt
 and was quiet for 400 ms (at most 6 s), shows it and writes the command there. It never sends Enter: the person reads
 the command and presses Enter. A tab an AI tool runs in is never used (the command would reach the AI as a message),
-and the question for the AI ("unknown") has no such button. The text is one line of printable ASCII, at most 200.
+and the question for the AI ("unknown") never goes into a plain terminal. The text is one line of printable ASCII,
+at most 200.
 Opening the terminal follows the terminal's own rules (actions on, the folder checks); a refusal shows its toast.
 QA: `?qa=1&dock=demo&runtype=1` types `npm run dev` into the first project's stand-in terminal.
+
+## Ask the AI (2026-10-07, review U09)
+
+When the way is unknown the question no longer only waits to be copied "into the AI's terminal", which a newcomer
+may not find. One button, chosen when the section draws:
+
+- **An AI of the project runs in SiberSentez's terminal:** "Ask the AI how to run it" (`terminalDock.askAi`): the
+  newest running AI tab of the project comes forward with the keyboard and the question is written into the tool's
+  input. It is never sent: the person reads it and presses Enter. The draft is checked first (`dockState.aiDraftOk`:
+  one line of at most 300 characters, any language, no control character, so no Enter and no escape sequence).
+- **None runs** (or a plain browser): "Ask as a new job" puts the question into the project's job box
+  (`drawer.js fillJob`, the same way a finished job's follow-ups fill it); Start stays the person's. If the AI
+  stopped between the drawing and the click, the ask button does the same instead of doing nothing.
+
+Before writing, the dock checks the last terminal text with `dockState.aiDraftCheck` and the existing
+`promptHelp.detectPrompt`. A recognized permission question or menu brings the tab forward and shows a note to
+answer it first, without writing anything or filling the new-job box. Hiding the help note does not bypass the
+check: it reads the terminal text, not the dismissed note. Some menus act on a single letter without Enter.
+This is a best-effort check, not proof that the tool is at an empty input: unrecognized menus are not detected,
+and old question text may conservatively block a draft until it leaves the tail. Existing text in the AI input
+is not cleared; the question would be appended. Review the terminal input before using the button.
+
+Tests: `test/run-ask.test.mjs`, `test/run-ask-safety.test.mjs`.
 
 ## Seeing the result (2026-10-02)
 

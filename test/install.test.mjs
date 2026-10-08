@@ -176,7 +176,8 @@ test('default targets from via: claude for Claude Code or no .agents tool; agent
   assert.deepEqual(defaultTargets(['claude-code', 'gemini-cli']), ['claude', 'agents']);
   assert.deepEqual(defaultTargets(['cursor']), ['claude'], 'Cursor reads .claude/skills');
   assert.deepEqual(defaultTargets(['copilot']), ['claude']);
-  assert.deepEqual([...TARGETS], ['claude', 'agents']);
+  // Gemini CLI, Qwen Code, OpenCode and Codex: agent-only targets (server/agentFormats.mjs, 2026-10-07)
+  assert.deepEqual([...TARGETS], ['claude', 'agents', 'gemini', 'qwen', 'opencode', 'codex']);
 });
 
 test('install: default targets from the project via; an agent always goes to .claude/agents only', async () => {
@@ -981,7 +982,7 @@ test('page: install into a project — no default project, registered projects f
 });
 
 test('page: every plan reason and error code the server sends has a text in English and Turkish', () => {
-  const reasons = ['new', 'missing', 'library-changed', 'kit-changed', 'up-to-date', 'modified', 'project-owned', 'not-installed', 'not-in-library', 'reparse-point', 'outside-project', 'outside-library', 'too-large', 'too-many-files', 'too-many-folders', 'too-deep', 'unchanged', 'trial', 'trial-claude-code-only', 'same', 'conflict', 'replace', 'bad-name', 'duplicate', 'bad-category', 'not-found', 'exists', 'error'];
+  const reasons = ['new', 'missing', 'library-changed', 'kit-changed', 'up-to-date', 'modified', 'project-owned', 'not-installed', 'not-in-library', 'reparse-point', 'outside-project', 'outside-library', 'too-large', 'too-many-files', 'too-many-folders', 'too-deep', 'not-convertible', 'unchanged', 'trial', 'trial-claude-code-only', 'same', 'conflict', 'replace', 'bad-name', 'duplicate', 'bad-category', 'not-found', 'exists', 'error'];
   const errors = ['legacy-hub', 'no-hub', 'not-a-project', 'broad-folder', 'folder-missing', 'not-local', 'project-in-hub', 'personal-folder', 'bad-name', 'bad-items', 'bad-kind', 'too-many-items', 'bad-targets', 'bad-category', 'bad-source', 'source-missing', 'source-is-root', 'source-is-home', 'source-in-hub', 'reparse-point', 'busy', 'record-broken', 'record-write-failed', 'nothing-to-try', 'unsafe-path', 'terminal-missing', 'launch-failed', 'trial-failed', 'app-folder-missing', 'too-large', 'too-many-files', 'not-found', 'internal'];
   try {
     for (const lang of ['en', 'tr']) {
@@ -1448,7 +1449,7 @@ test('restore points: preview and a dry apply write nothing; live goes back afte
     // Malformed reports are refused or cleaned field by field; they never mark a project busy
     assert.deepEqual(docked.actions.terminalState({ sessions: 'x' }), { ok: false, reason: 'invalid' });
     docked.actions.terminalState({ sessions: [{ id: '../x', projectId: 'cc', ai: true }, { id: 't9', projectId: 'cc', ai: true, tool: 'Bad Tool', jobId: 'nope' }] });
-    assert.deepEqual(docked.actions.dockSessions(), [{ id: 't9', projectId: 'cc', ai: true, tool: null, jobId: null, startedAt: null }]);
+    assert.deepEqual(docked.actions.dockSessions(), [{ id: 't9', projectId: 'cc', ai: true, tool: null, jobId: null, startedAt: null, running: true }], 'no running field (an older shell): still running');
     docked.actions.terminalState({ sessions: [] });
   } finally {
     await docked.close();

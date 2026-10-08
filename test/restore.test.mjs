@@ -5,8 +5,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { scanProject, createPoint, listPoints, planRestore, applyRestore, safeRel, pointsDir, projectKey, RESTORE_KEEP, RESTORE_LIMITS, POINT_ID_RE, LABEL_MAX } from '../server/restore.mjs';
 
+const require_ = createRequire(import.meta.url);
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-restore-'));
 after(() => fs.rmSync(TMP, { recursive: true, force: true }));
 let n = 0;
@@ -239,12 +241,18 @@ test('drawer section: the points with plain reasons; off disables going back; th
   const data = { points: [{ id: 'R20260930120000abcd', at: Date.now() - 60000, reason: 'before-restore', files: 3 }, { id: 'R20260930110000beef', at: Date.now() - 3600000, reason: 'ai-start', files: 2 }] };
   const live = restoreSectionHtml(P, data, { mode: 'live' });
   assert.ok(live.includes(esc(S['rstReason_before-restore'])) && live.includes(esc(S['rstReason_ai-start'])));
-  assert.match(live, /data-rst-act="preview" data-rst-id="R20260930110000beef" data-fk="rst:R20260930110000beef">Buna geri dön</);
+  assert.match(live, /data-rst-act="preview" data-rst-id="R20260930110000beef" data-fk="rst:R20260930110000beef">Geri dönüşü incele</, 'the row only opens the review (review U17)');
+  assert.doesNotMatch(S.rstIntro, /tek tık/i, 'no "one click": the review comes first');
   assert.match(restoreSectionHtml(P, data, { mode: 'off' }), /data-rst-id="R20260930110000beef"[^>]*aria-disabled="true"/);
   assert.ok(restoreSectionHtml(P, data, { mode: 'off' }).includes(esc(S.rstWhyOff)));
   const plan = { counts: { changed: 1, missing: 0, added: 12 }, changed: ['index.html'], missing: [], added: Array.from({ length: 12 }, (_, i) => `f${i}.js`) };
   const ask = restoreSectionHtml(P, data, { mode: 'live', ui: { step: 'confirm', pointId: 'R20260930110000beef', plan } });
-  assert.match(ask, /data-rst-act="yes" data-fk="rst:yes">Evet, geri dön</);
+  assert.match(ask, /data-rst-act="yes" data-fk="rst:yes">Bu noktaya geri dön</);
+  // What stays as it is, said next to what changes (review U17); a lean point names its big files
+  assert.ok(ask.includes(esc(S.rstUntouched)) && ask.indexOf(esc(S.rstUntouched)) < ask.indexOf('data-rst-act="yes"'));
+  const leanData = { points: [{ ...data.points[1], scope: 'lean', leftOut: 5 }] };
+  const leanAsk = restoreSectionHtml(P, leanData, { mode: 'live', ui: { step: 'confirm', pointId: 'R20260930110000beef', plan } });
+  assert.ok(leanAsk.includes(esc(S.rstLean.replace('{count}', '5'))) && leanAsk.lastIndexOf(esc(S.rstLean.replace('{count}', '5'))) > leanAsk.indexOf(esc(S.rstUntouched)));
   assert.ok(ask.includes(esc(S.rstChanged.replace('{count}', '1'))) && ask.includes(esc(S.rstAdded.replace('{count}', '12'))));
   assert.ok(!ask.includes(esc(S.rstMissing.replace('{count}', '0'))), 'an empty list is not shown');
   assert.ok(ask.includes(esc(S.rstMore.replace('{count}', '4'))), 'eight names, then how many more');
@@ -416,4 +424,35 @@ test('a point keeps the job it was taken for: one line, at most LABEL_MAX charac
   setLanguage('en');
   assert.ok(h.includes('“Menü sayfası ekle” işinden önce') && h.includes(STRINGS.tr.rstReason_ai_start ?? STRINGS.tr['rstReason_ai-start']));
   assert.ok(fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8').includes("await takeStartPoint(ctx.pointProjectId, ctx.job || '', jobId)"), 'start-ai names the job');
+});
+
+test('a point taken before 0.17 that still names files of a tool folder now left out (.gemini) stays listed and usable; that folder is never touched', () => {
+  const w = world();
+  w.write('index.html', 'one');
+  w.write('.gemini/settings.json', '{"a":1}');
+  const p = createPoint({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, reason: 'ai-start', now: tick });
+  const pd = path.join(pointsDir(w.hub, w.projectId), p.id);
+  const mf = path.join(pd, 'manifest.json');
+  // As 0.16 wrote it: the tool folder's file was copied and named
+  const m = JSON.parse(fs.readFileSync(mf, 'utf8'));
+  const crypto = require_('node:crypto');
+  const buf = Buffer.from('{"a":1}');
+  fs.mkdirSync(path.join(pd, 'files', '.gemini'), { recursive: true });
+  fs.writeFileSync(path.join(pd, 'files', '.gemini', 'settings.json'), buf);
+  m.files.push({ rel: '.gemini/settings.json', size: buf.length, mtimeMs: 1, sha256: crypto.createHash('sha256').update(buf).digest('hex') });
+  fs.writeFileSync(mf, JSON.stringify(m));
+  assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).length, 1, 'still listed after the update');
+  w.write('index.html', 'two');
+  w.write('.gemini/settings.json', '{"a":2}');
+  const plan = planRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id });
+  assert.equal(plan.ok, true, JSON.stringify(plan));
+  assert.deepEqual([plan.changed, plan.missing, plan.added], [['index.html'], [], []], 'the tool folder is not part of going back');
+  const r = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(w.read('index.html'), 'one');
+  assert.equal(w.read('.gemini/settings.json'), '{"a":2}', 'never written');
+  // A path that is unsafe still makes the whole list untrusted
+  m.files.push({ rel: '../escape.txt', size: 1, mtimeMs: 1, sha256: 'x'.repeat(64) });
+  fs.writeFileSync(mf, JSON.stringify(m));
+  assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).some((x) => x.id === p.id), false);
 });

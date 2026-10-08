@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { startPointText, rememberStartPoint, startPointOf, restoreSectionHtml } from '../public/js/restore.js';
+import { startPointText, rememberStartPoint, startPointOf, restoreSectionHtml, planHtml } from '../public/js/restore.js';
 import { aiStartToast } from '../public/js/views/tools.js';
 import { setLanguage, STRINGS } from '../public/js/i18n.js';
 
@@ -141,15 +141,16 @@ test('the job box asks the server once for a job it did not start, a few times a
   let calls = 0;
   let clock = 0;
   const now = () => clock;
-  const fetchFn = async () => (calls++, { jobs: [{ jobId: 'J' + 'b'.repeat(32), id: 'R0' }, { jobId: J, id: 'R20261006120000abcd', scope: 'lean', leftOut: 2 }] });
+  const fetchFn = async () => (calls++, { points: [{ id: 'R20261006120000abcd' }], jobs: [{ jobId: 'J' + 'b'.repeat(32), id: 'R0' }, { jobId: J, id: 'R20261006120000abcd', scope: 'lean', leftOut: 2 }] });
   const v = startPointsVersion();
   assert.equal(await askJobPoint('q1', J, { fetchFn, now }), true);
   assert.equal(startPointOf('q1', J).id, 'R20261006120000abcd', 'its own record, not another job\'s');
   assert.ok(startPointsVersion() > v, 'the job box draws again');
-  assert.equal(askJobPoint('q1', J, { fetchFn, now }), null, 'known: not asked again');
+  assert.equal(askJobPoint('q1', J, { fetchFn, now }), null, 'known and its list fresh: not asked again');
   assert.equal(calls, 1);
+  assert.equal(startPointOf('q1', J).available, true);
   // No record (a job started outside the app): asked again after 30 s, four times at most
-  const none = async () => (calls++, { jobs: [] });
+  const none = async () => (calls++, { points: [], jobs: [] });
   const K = 'J' + 'c'.repeat(32);
   calls = 0;
   for (let i = 0; i < 10; i++) {
@@ -164,21 +165,153 @@ test('the job box asks the server once for a job it did not start, a few times a
   // This page's own start answer stays when the server's arrives later
   const L = 'J' + 'd'.repeat(32);
   let release;
-  const slow = () => new Promise((r) => (release = () => r({ jobs: [{ jobId: L, id: 'R20261006120000ffff' }] })));
+  const slow = () => new Promise((r) => (release = () => r({ points: [], jobs: [{ jobId: L, id: 'R20261006120000ffff' }] })));
   const pending = askJobPoint('q4', L, { fetchFn: slow, now });
   rememberStartPoint('q4', { id: 'R20261006130000aaaa', scope: 'full' }, L);
   release();
   await pending;
   assert.equal(startPointOf('q4', L).id, 'R20261006130000aaaa');
+  assert.equal(startPointOf('q4', L).available, false, 'the list that came with it does not hold it');
   for (const bad of [['', J], ['q5', ''], ['q5', null]]) assert.equal(askJobPoint(...bad, { fetchFn, now }), null);
 });
 
 test('wiring of the start record: the job box asks for it, a failed copy is recorded too, the job id goes in', () => {
   const ws = read('public/js/views/workshop.js');
-  assert.ok(ws.includes("if (mode === 'live' && job.jobId && !startPointOf(scene.project.id, job.jobId)) askJobPoint(scene.project.id, job.jobId);"));
+  assert.ok(ws.includes("if (mode === 'live' && scene.project.id && scene.job?.jobId) askJobPoint(scene.project.id, scene.job.jobId);"), 'asked on every frame (it asks only when there is something to learn)');
   assert.ok(ws.includes('errKey(), startPointsVersion()]);'), 'drawn again when a record arrives');
   const actions = read('server/actions.mjs');
   assert.ok(actions.includes("point = { problem: 'copy-failed' };"), 'a copy that failed is a record too');
   assert.ok(actions.includes('if (jobId && r?.ok) recordJobPoint({ hubDir, projectId: r.project.id, jobId, point, now });'), 'under the project of the points');
   assert.ok(actions.includes("await takeStartPoint(ctx.pointProjectId, ctx.job || '', jobId)"));
+});
+
+test('F2 reproduced: a job start copy pushed out by newer points is no longer promised; the current job keeps its own', async () => {
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { createPoint, recordJobPoint, projectRestore, pointsDir, RESTORE_KEEP } = await import('../server/restore.mjs');
+  const { writeCurrentJob } = await import('../server/job-id.mjs');
+  const hub = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-f2-hub-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-f2-project-'));
+  const catalog = { hubDir: hub, getProject: (id) => (id === 'p' ? { id } : null) };
+  let clock = Date.UTC(2026, 9, 7, 9, 0, 0);
+  const now = () => (clock += 1000);
+  const J = 'J' + 'a'.repeat(32);
+  const K = 'J' + 'b'.repeat(32);
+  try {
+    // The job's start copy, then RESTORE_KEEP newer points (resumes, going back) while the job is NOT the current one
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'v0');
+    const start = createPoint({ hubDir: hub, projectId: 'p', dir, now, reuse: false });
+    recordJobPoint({ hubDir: hub, projectId: 'p', jobId: J, point: start, now });
+    for (let i = 1; i <= RESTORE_KEEP; i++) {
+      fs.writeFileSync(path.join(dir, 'a.txt'), `v${i}`);
+      createPoint({ hubDir: hub, projectId: 'p', dir, now, reuse: false });
+    }
+    let body = projectRestore({ catalog, projectId: 'p' }).body;
+    assert.ok(!body.points.some((x) => x.id === start.id), 'pushed out');
+    const rec = body.jobs.find((r) => r.jobId === J);
+    assert.equal(rec.available, false, 'the record says it is gone');
+    for (const lang of ['en', 'tr']) {
+      setLanguage(lang);
+      assert.equal(startPointText(rec), STRINGS[lang].rstStartGone, 'no return is promised');
+      assert.notEqual(startPointText(rec), STRINGS[lang].rstStartFull);
+    }
+    setLanguage('en');
+    // The current job (its marker) keeps its start copy past RESTORE_KEEP: one point more at most
+    fs.mkdirSync(path.join(dir, '.sibersentez'));
+    assert.ok(writeCurrentJob(path.join(dir, '.sibersentez'), K).ok);
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'k0');
+    const kStart = createPoint({ hubDir: hub, projectId: 'p', dir, now, reuse: false });
+    recordJobPoint({ hubDir: hub, projectId: 'p', jobId: K, point: kStart, now });
+    for (let i = 1; i <= RESTORE_KEEP + 2; i++) {
+      fs.writeFileSync(path.join(dir, 'a.txt'), `k${i}`);
+      createPoint({ hubDir: hub, projectId: 'p', dir, now, reuse: false });
+    }
+    body = projectRestore({ catalog, projectId: 'p' }).body;
+    assert.equal(body.jobs.find((r) => r.jobId === K).available, true, 'still there for its job');
+    assert.equal(body.points.length, RESTORE_KEEP + 1, 'one more at most');
+    assert.equal(startPointText(body.jobs.find((r) => r.jobId === K)), STRINGS.en.rstStartFull);
+    // Damaged: a manifest that cannot be read takes the point out of the list, and with it the promise
+    fs.writeFileSync(path.join(pointsDir(hub, 'p'), kStart.id, 'manifest.json'), '{');
+    assert.equal(projectRestore({ catalog, projectId: 'p' }).body.jobs.find((r) => r.jobId === K).available, false);
+  } finally {
+    fs.rmSync(hub, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the same open page: after newer points the job box stops promising, at once after a start or going back', async () => {
+  const { askJobPoint, notePoints, pointsChanged, startPointsVersion, POINTS_FRESH_MS } = await import('../public/js/restore.js');
+  const J = 'J' + 'e'.repeat(31) + 'f';
+  rememberStartPoint('r1', { id: 'R20261007100000aaaa', scope: 'full', leftOut: 0 }, J);
+  notePoints('r1', { points: [{ id: 'R20261007100000aaaa' }] }, 0);
+  assert.equal(startPointText(startPointOf('r1', J)), STRINGS.en.rstStartFull);
+  // The drawer (or this page's check) lists the points again: the copy is gone
+  const v = startPointsVersion();
+  notePoints('r1', { points: [{ id: 'R20261007110000bbbb' }] }, 1);
+  assert.ok(startPointsVersion() > v, 'the box draws again');
+  assert.equal(startPointText(startPointOf('r1', J)), STRINGS.en.rstStartGone);
+  // While the list is fresh nothing is asked; once old, the box's own check asks again
+  let calls = 0;
+  const fetchFn = async () => (calls++, { points: [{ id: 'R20261007100000aaaa' }], jobs: [] });
+  assert.equal(askJobPoint('r1', J, { fetchFn, now: () => 2 }), null);
+  await askJobPoint('r1', J, { fetchFn, now: () => 2 + POINTS_FRESH_MS });
+  assert.equal(calls, 1);
+  assert.equal(startPointOf('r1', J).available, true);
+  // A start or going back forgets the list: the next frame asks at once
+  pointsChanged('r1');
+  assert.equal(startPointOf('r1', J).available, undefined, 'not known until asked');
+  await askJobPoint('r1', J, { fetchFn, now: () => 3 + POINTS_FRESH_MS });
+  assert.equal(calls, 2);
+  assert.ok(read('public/js/main.js').includes('pointsChanged(e.detail?.projectId);'), 'a start forgets the list');
+  assert.ok(read('public/js/restore.js').includes('cache.delete(projectId);\n      pointsChanged(projectId);'), 'going back too');
+  for (const lang of ['en', 'tr']) assert.ok(STRINGS[lang].rstStartGone, lang);
+  // A list that cannot be read (a restarting server, no network) is not asked for on every frame: again after 30 s
+  pointsChanged('r1');
+  let failed = 0;
+  const down = async () => {
+    failed++;
+    throw new Error('offline');
+  };
+  const t0 = 10 * POINTS_FRESH_MS;
+  for (let i = 0; i < 20; i++) await askJobPoint('r1', J, { fetchFn: down, now: () => t0 + i });
+  assert.equal(failed, 1, 'one ask in 20 frames');
+  await askJobPoint('r1', J, { fetchFn: down, now: () => t0 + POINTS_FRESH_MS });
+  assert.equal(failed, 2, 'again after 30 s');
+});
+
+test('an answer asked for before a start took its new point does not call that copy gone', async () => {
+  const { askJobPoint, pointsChanged, POINTS_FRESH_MS } = await import('../public/js/restore.js');
+  const J = 'J' + 'c'.repeat(31) + 'd';
+  rememberStartPoint('s1', { id: 'R20261007100000aaaa', scope: 'full' }, J);
+  let release;
+  const slow = () => new Promise((r) => (release = () => r({ points: [{ id: 'R20261007100000aaaa' }], jobs: [] })));
+  const pending = askJobPoint('s1', J, { fetchFn: slow, now: () => 0 });
+  // Meanwhile a new start of the same job took a new point (its answer names it); the old list does not hold it
+  pointsChanged('s1');
+  rememberStartPoint('s1', { id: 'R20261007120000bbbb', scope: 'full' }, J);
+  release();
+  await pending;
+  assert.notEqual(startPointOf('s1', J).available, false, 'the old answer is dropped');
+  // The next frame asks for the list of now
+  let calls = 0;
+  await askJobPoint('s1', J, { fetchFn: async () => (calls++, { points: [{ id: 'R20261007120000bbbb' }], jobs: [] }), now: () => 1 });
+  assert.equal(calls, 1);
+  assert.equal(startPointOf('s1', J).available, true);
+  assert.ok(POINTS_FRESH_MS > 0);
+});
+
+test('going back names the project\'s own files and folds the team\'s notes (seen when using the app: style.css among eleven notes)', () => {
+  setLanguage('tr');
+  const S = STRINGS.tr;
+  const plan = { counts: { changed: 3, missing: 0, added: 2 }, notes: { changed: 2, missing: 0, added: 2 }, changed: ['style.css', '.sibersentez/PLAN.md', '.sibersentez/TASKS.md'], missing: [], added: ['.sibersentez/archive/x/PLAN.md', '.sibersentez/job-J1.md'] };
+  const h = planHtml(plan);
+  assert.ok(h.includes(S.rstChanged.replace('{count}', '1')) && h.includes('style.css'), 'one file of the project goes back');
+  assert.ok(!h.includes(S.rstAdded.replace('{count}', '2')) && !h.includes(S.rstAdded.replace('{count}', '0')), 'no list of the project\'s added files: only notes came');
+  assert.ok(h.includes('<details class="rst-notes">') && h.includes(S.rstNotes.replace('{count}', '4')), 'the notes folded, counted');
+  assert.ok(h.indexOf('style.css') < h.indexOf('.sibersentez/PLAN.md'), 'the project first');
+  const only = planHtml({ counts: { changed: 1, missing: 0, added: 0 }, notes: { changed: 1, missing: 0, added: 0 }, changed: ['.sibersentez/PLAN.md'], missing: [], added: [] });
+  assert.ok(only.includes(S.rstOnlyNotes), 'only notes: said so');
+  const old = planHtml({ counts: { changed: 2, missing: 0, added: 0 }, changed: ['style.css', '.sibersentez/PLAN.md'], missing: [], added: [] });
+  assert.ok(old.includes(S.rstChanged.replace('{count}', '2')) && old.includes('.sibersentez/PLAN.md') && !old.includes('rst-notes'), 'an older server: every file as before');
+  setLanguage('en');
 });

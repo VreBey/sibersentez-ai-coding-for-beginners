@@ -214,7 +214,7 @@ describe('detection: finding the tools', () => {
     assert.equal(claude.chosen.file, 'C:\\Users\\u\\.local\\bin\\claude.exe');
     assert.equal(claude.ready, 'yes');
     const gemini = r.tools.find((x) => x.id === 'gemini');
-    assert.deepEqual([gemini.installed, gemini.via, gemini.version, gemini.ready], [true, 'npm', '0.52.0', 'unknown'], 'Gemini has no sign-in command: unknown');
+    assert.deepEqual([gemini.installed, gemini.via, gemini.version, gemini.ready], [true, 'npm', '0.52.0', 'no'], 'Gemini has no sign-in command: read from its own files (nothing set up here)');
     const codex = r.tools.find((x) => x.id === 'codex');
     assert.deepEqual([codex.installed, codex.app], [false, true], 'the desktop app is there, the command-line tool is not');
     assert.deepEqual(r.node, { installed: true, version: '24.18.0' });
@@ -307,7 +307,8 @@ describe('detection: finding the tools', () => {
     const pub = publicTools(r);
     const text = JSON.stringify(pub);
     assert.doesNotMatch(text, /\\|:\/|Users|\.exe|\.cmd|@|email/i);
-    assert.deepEqual(Object.keys(pub.tools[0]).sort(), ['app', 'id', 'installed', 'installs', 'name', 'onPath', 'others', 'pathDir', 'ready', 'version', 'via']);
+    assert.deepEqual(Object.keys(pub.tools[0]).sort(), ['app', 'cmd', 'id', 'installed', 'installs', 'name', 'onPath', 'others', 'pathDir', 'ready', 'version', 'via']);
+    assert.equal(pub.tools[0].cmd, 'claude', 'the command name only');
     assert.deepEqual(pub.tools.map((x) => x.id), TOOL_IDS);
     const claude = pub.tools[0];
     assert.deepEqual([claude.installs, claude.others], [2, [{ via: 'npm', version: '2.1.193' }]]);
@@ -354,14 +355,17 @@ describe('launcher and first message', () => {
     const p = launchPrompt('ilk-mesaj.md');
     const a = launcherText({ toolName: 'Claude Code', file: 'C:\\Users\\Şükrü\\.local\\bin\\claude.exe', ext: '.exe', args: [p], env });
     assert.equal(a.ok, true);
-    assert.equal(a.text.split('\r\n')[2], `@"%USERPROFILE%\\.local\\bin\\claude.exe" "${p}"`);
+    assert.equal(a.text.split('\r\n')[3], `@"%USERPROFILE%\\.local\\bin\\claude.exe" "${p}"`);
+    // The tool ended, the shell stays: the path of the mark is taken first (before any cd), the mark left after the tool
+    assert.equal(a.text.split('\r\n')[2], '@set "SIBERSENTEZ_ENDED=%~f0.ended"');
+    assert.equal(a.text.split('\r\n').filter(Boolean).at(-1), '@type nul>"%SIBERSENTEZ_ENDED%" 2>nul');
     assert.match(a.text, /^[\x20-\x7e\r\n]*$/);
     assert.ok(a.text.split('\r\n').filter(Boolean).every((l) => l.startsWith('@')));
     assert.doesNotMatch(a.text, /Şükrü|echo off/);
     const g = launcherText({ toolName: 'Gemini CLI', file: 'C:\\Users\\Şükrü\\AppData\\Roaming\\npm\\gemini.cmd', ext: '.cmd', args: ['-i', p], cdDir: 'C:\\Users\\Şükrü\\Desktop\\game', env });
-    assert.deepEqual(g.text.split('\r\n').slice(2, 4), ['@cd /d "%USERPROFILE%\\Desktop\\game" || exit /b 1', `@call "%APPDATA%\\npm\\gemini.cmd" -i "${p}"`]);
+    assert.deepEqual(g.text.split('\r\n').slice(2, 6), ['@set "SIBERSENTEZ_ENDED=%~f0.ended"', '@cd /d "%USERPROFILE%\\Desktop\\game" || exit /b 1', `@call "%APPDATA%\\npm\\gemini.cmd" -i "${p}"`, '@type nul>"%SIBERSENTEZ_ENDED%" 2>nul']);
     const none = launcherText({ toolName: 'Claude Code', file: 'C:\\t\\claude.exe', ext: '.exe', args: [], env });
-    assert.equal(none.text.split('\r\n')[2], '@"C:\\t\\claude.exe"');
+    assert.equal(none.text.split('\r\n')[3], '@"C:\\t\\claude.exe"');
     // cmd looks a bare program name up in the working folder (the project) before PATH: an npm shim calls a bare
     // `node`, so a node.exe / node.bat / node.cmd in an untrusted project would run. The first line switches that off.
     for (const x of [a, g, none]) assert.equal(x.text.split('\r\n')[0], '@set NoDefaultCurrentDirectoryInExePath=1');
@@ -449,8 +453,13 @@ describe('launcher and first message', () => {
     const now = Date.now();
     fs.utimesSync(old, new Date(now - 25 * 3600 * 1000), new Date(now - 25 * 3600 * 1000));
     fs.utimesSync(other, new Date(now - 25 * 3600 * 1000), new Date(now - 25 * 3600 * 1000));
-    assert.equal(cleanupLaunchers(dir, { now }), 1);
-    assert.deepEqual(listTree(dir), ['bbbbbbbbbbbb.cmd', 'keep-me.cmd']);
+    // The marks launchers leave when their tool ended go with them; a name that is not one stays
+    const oldMark = touch(path.join(dir, 'aaaaaaaaaaaa.cmd.ended'), '');
+    const otherMark = touch(path.join(dir, 'keep-me.cmd.ended'), '');
+    fs.utimesSync(oldMark, new Date(now - 25 * 3600 * 1000), new Date(now - 25 * 3600 * 1000));
+    fs.utimesSync(otherMark, new Date(now - 25 * 3600 * 1000), new Date(now - 25 * 3600 * 1000));
+    assert.equal(cleanupLaunchers(dir, { now }), 2);
+    assert.deepEqual(listTree(dir), ['bbbbbbbbbbbb.cmd', 'keep-me.cmd', 'keep-me.cmd.ended']);
     assert.ok(fs.existsSync(fresh));
     assert.equal(cleanupLaunchers(path.join(dir, 'missing')), 0);
   });
@@ -600,7 +609,8 @@ describe('start-ai action', () => {
         const x = await env.post({ action: 'start-ai', ...body });
         assert.deepEqual([x.status, x.json?.error], [status, error], JSON.stringify(body));
       };
-      await no({ sessionId: S_A, tool: 'gemini', resume: true }, 400, 'resume-claude-only');
+      // Another tool's resume of a Claude Code session: refused (each session continues with its own tool)
+      await no({ sessionId: S_A, tool: 'gemini', resume: true }, 400, 'resume-other-tool');
       await no({ projectId: 'idea', tool: 'claude', resume: true }, 400, 'bad-field');
       await no({ sessionId: S_A, tool: 'claude', resume: true, withIdea: true }, 400, 'bad-field');
       await no({ sessionId: S_A, tool: 'claude', resume: 'yes' }, 400, 'bad-field');
@@ -1284,19 +1294,37 @@ test('notices show above the terminal dock that a start opens (they were hidden 
   assert.ok(z('.toasts') < z('.palette-wrap'), 'under the command palette');
 });
 
-test('a job starts Claude Code in plan mode (it asks the person to approve its plan itself); other tools and resumes as before', async () => {
-  const { jobArgs } = await import('../server/launch.mjs');
+test('a job starts a tool in its own plan mode (Claude Code, Gemini CLI, Qwen Code, Cursor CLI, Copilot CLI: it asks the person to approve its plan itself); other tools and resumes as before', async () => {
+  const { jobArgs, versionAtLeast } = await import('../server/launch.mjs');
   const claude = TOOLS.find((x) => x.id === 'claude');
   const gemini = TOOLS.find((x) => x.id === 'gemini');
   assert.deepEqual(jobArgs(claude), ['--permission-mode', 'plan']);
-  assert.deepEqual(jobArgs(gemini), []);
-  assert.ok(!jobArgs(claude).some((a) => /bypass|dangerously|dontAsk/i.test(a)), 'never a mode that skips the person');
+  assert.deepEqual(jobArgs(gemini, '0.61.0'), ['--approval-mode', 'plan']);
+  assert.deepEqual(jobArgs(gemini, '0.62.3'), ['--approval-mode', 'plan']);
+  // An older or unknown Gemini starts as usual: an option it does not know would stop it from starting (review)
+  assert.deepEqual(jobArgs(gemini, '0.58.1'), []);
+  assert.deepEqual(jobArgs(gemini, null), []);
+  assert.equal(versionAtLeast('1.10.0', '1.9.9'), true);
+  assert.equal(versionAtLeast('v0.61', '0.61.0'), true);
+  assert.equal(versionAtLeast('', '0.61.0'), false);
+  // Codex has no plan mode; OpenCode's plan agent stops and needs Tab to go on (a beginner's job would stand still)
+  for (const id of ['codex', 'opencode']) assert.deepEqual(jobArgs(TOOLS.find((x) => x.id === id), '9.9.9'), [], `${id}: no plan mode used`);
+  assert.deepEqual(jobArgs(TOOLS.find((x) => x.id === 'copilot'), '1.0.93'), ['--plan'], 'Copilot CLI 1.0.93 --plan');
+  assert.deepEqual(jobArgs(TOOLS.find((x) => x.id === 'copilot'), '1.0.92'), [], 'an older Copilot starts as usual');
+  // Checked on their --help: Qwen Code 0.25 --approval-mode plan, Cursor CLI 2026.10.01 --plan
+  assert.deepEqual(jobArgs(TOOLS.find((x) => x.id === 'qwen'), '0.25.0'), ['--approval-mode', 'plan']);
+  assert.deepEqual(jobArgs(TOOLS.find((x) => x.id === 'cursor'), '2026.10.01-e373342'), ['--plan']);
+  assert.deepEqual(jobArgs(TOOLS.find((x) => x.id === 'cursor'), '2025.1.1'), []);
+  // Each tool's resume, checked on its --help
+  const resumeOf = (id) => TOOLS.find((x) => x.id === id).resume;
+  assert.deepEqual(['claude', 'codex', 'gemini', 'copilot', 'cursor', 'qwen', 'opencode'].map((id) => resumeOf(id).join(' ')), ['--resume', 'resume', '--resume', '--resume=', '--resume', '--resume', '--session']);
+  for (const x of TOOLS) assert.ok(!jobArgs(x, '9.9.9').some((a) => /bypass|dangerously|dontAsk|yolo|auto_edit|full-auto/i.test(a)), `${x.id}: never a mode that skips the person`);
   const env = { LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local', USERPROFILE: 'C:\\Users\\u' };
   const lt = launcherText({ toolName: 'Claude Code', file: 'C:\\t\\claude.exe', ext: '.exe', args: [...jobArgs(claude), 'Read the job file'], env });
   assert.ok(lt.ok, 'the launcher takes the flag');
   assert.match(lt.text, /claude\.exe" --permission-mode "plan" "Read the job file"/);
   const actions = fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8');
-  assert.ok(actions.includes("args: ctx.resume ? ['--resume', ctx.sessionId] : [...(ctx.job ? jobArgs(tool) : []), ...toolArgs(tool, file ? launchPrompt(file) : null)]"), 'only a job, never a resume');
+  assert.ok(actions.includes("args: ctx.resume ? resumeArgs(tool, ctx.sessionId) : [...(ctx.job ? jobArgs(tool, rec.version) : []), ...toolArgs(tool, file ? launchPrompt(file) : null)]"), 'only a job, never a resume');
 });
 
 test('a job start records what its copy kept, in the hub, for that job; an idea start records nothing', async () => {

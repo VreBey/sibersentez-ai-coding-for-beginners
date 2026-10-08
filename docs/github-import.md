@@ -50,8 +50,9 @@ is read as ref `a`, folder `b` (a branch with a slash in its name is not support
 
 The archive (§3.4) is always tried first: it streams through the tar reader with every limit checked as the bytes
 arrive, and it was the faster path in the real run (1.7 s against 6 s for git, §10). git is used **only when the
-archive path fails** with `network`, `timeout`, `fetch-failed`, `redirect-refused`, `rate-limited` or `tar-corrupt`
-(codeload blocked by a proxy, for example), when git is on this computer, and when the ref is not a commit id. Not after
+archive path fails** with `network`, `timeout`, `fetch-failed`, `redirect-refused` or `rate-limited` (codeload
+blocked by a proxy, for example; a broken archive, `tar-corrupt`, no longer falls back since 2026-10-01, so a repository
+cannot steer the download to git, whose size is only measured once a second), when git is on this computer, and when the ref is not a commit id. Not after
 `not-public`, `ref-not-found`, a size limit or `tar-unsafe-path`: git would answer the same, or the archive was crafted.
 When git then cannot run (`git-failed`, `git-missing`), the archive's failure is the answer. Preview names the order:
 `method: 'tar'`, `fallback: 'git' | null`, and the hosts of both.

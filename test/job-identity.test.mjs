@@ -175,3 +175,18 @@ test('a new active job hides the old completed plan immediately and survives rer
   fs.writeFileSync(path.join(team, 'current-job.json'), '{');
   assert.equal(teamSummary(teamFacts(dir)).step, 'plan', 'corrupt marker cannot revive old completion');
 });
+
+test('the marker keeps the tool the job started with; the team answer and the Building carry it for this job only', () => {
+  const folder = path.join(ROOT, 'marker-tool');
+  fs.mkdirSync(folder);
+  assert.equal(writeCurrentJob(folder, A, fs, { tool: 'codex' }).ok, true);
+  assert.deepEqual(readCurrentJob(folder), { present: true, jobId: A, tool: 'codex' });
+  assert.equal(writeCurrentJob(folder, B, fs, { tool: 'Bad Tool!' }).ok, true);
+  assert.deepEqual(readCurrentJob(folder), { present: true, jobId: B }, 'not a tool id: left out');
+  assert.equal(writeCurrentJob(folder, A).ok, true);
+  assert.deepEqual(readCurrentJob(folder), { present: true, jobId: A }, 'a marker without a tool (written outside the app) still reads');
+  const plan = parsePlan(`# Plan: x\nJob-ID: ${A}\n\n## Tasks\n`);
+  assert.equal(teamSummary({ plan, tasks: [], review: null, currentJob: { present: true, jobId: A, tool: 'gemini-cli' } }).tool, 'gemini-cli');
+  assert.equal(teamSummary({ plan, tasks: [], review: null, currentJob: { present: true, jobId: B, tool: 'gemini-cli' } }).tool, null, "another job's marker: not this plan's tool");
+  assert.equal(jobOf({ step: 'build', plan: { jobId: A }, tool: 'codex' }).tool, 'codex');
+});

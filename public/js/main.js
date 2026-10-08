@@ -5,12 +5,15 @@ import { projectsInOrder } from './hq-live.js';
 import { createWorkshop } from './views/workshop.js';
 import { giveJob, fetchFitFor } from './views/job.js';
 import { createProjectsView, createNewProjectFlow, projectBridge, qaProjectBridge } from './views/projects.js';
+import { createIdeaDialog } from './views/newIdea.js';
+import { checkUpdates, noticeDue, markTold, updatesState } from './updates.js';
 import { createRosterView } from './views/roster.js';
 import { createTimelineView } from './views/timeline.js';
 import { createFeedView, renderMiniFeed, bindOpen } from './views/feed.js';
 import { createSettingsView } from './views/settings.js';
 import { createTodayRecent } from './views/today.js';
-import { createChecklist } from './views/checklist.js';
+import { createChecklist, hasOwnProject } from './views/checklist.js';
+import { firstScreenParts } from './firstScreen.js';
 import { createDrawer, resetFlows } from './views/drawer.js';
 import { createNotifier } from './notify.js';
 import { createPalette } from './palette.js';
@@ -18,12 +21,13 @@ import { esc, num, tok, modelName, projectColor, CAT, STATUS, agoTag, fillAgo, a
 import { icon } from './icons.js';
 import { initActions, actionsReady, actionsState, onActionsChange, runAction } from './actions.js';
 import { createContextMenu, focusKeyOf, suggestable, setDockOpener, runMenuItem, AI_STARTED_EVENT } from './contextmenu.js';
-import { rememberStartPoint } from './restore.js';
+import { pointsChanged, rememberStartPoint } from './restore.js';
 import { onHiddenChange } from './hiddenProjects.js';
-import { createTerminalDock, qaTerminalBridge } from './terminalDock.js';
+import { createTerminalDock, qaTerminalBridge, escapeClosesDrawer } from './terminalDock.js';
+import { tabResumeSession } from './dockState.js';
 import { actionToast } from './toasts.js';
 import { libraryState } from './rosterModel.js';
-import { pickLanguage, setLanguage, t, modeName, language } from './i18n.js';
+import { pickLanguage, setLanguage, t, indicatorMode, language } from './i18n.js';
 import { createActionsSwitch, shellBridge, qaBridge, keepPlace, resumeRecord, readResume, RESUME_KEY } from './actionsSwitch.js';
 import { stripHtml, setPeriod, setCostShown, costShown, onPrefs, stripOpen, setStripOpen, advancedShown } from './usage.js';
 import { reconnectDelay } from './layout.js';
@@ -31,8 +35,9 @@ import { createWaitingMenu } from './views/waiting.js';
 import { sessionState } from './attention.js';
 import { createGuide, shouldAutoOpen, startStep, readSeen } from './guide.js';
 import { createTour, TOUR_EXAMPLE_KEY } from './tour.js';
-import { openToolsPanel, needTools, toolsState, installedTools, onToolsChange, loadTools, setSetupTyper } from './views/tools.js';
-import { setRunTyper, setRunOpener } from './runHint.js';
+import { openToolsPanel, needTools, toolsState, installedTools, onToolsChange, loadTools, setSetupTyper, setWizardDone } from './views/tools.js';
+import { setRunTyper, setRunOpener, setRunAsker } from './runHint.js';
+import { sessionTool, sessionToolName, canContinueTool } from './jobId.js';
 import { diagnosticsText, collectDiagnostics } from './diagnostics.js';
 import { hintHtml, initHints } from './hints.js';
 
@@ -154,7 +159,7 @@ const actSwitch = createActionsSwitch({
   panel: $('#actPanel'),
   bridge: QA_PANEL ? qaBridge(QA_PANEL === 'saved') : shellBridge(window),
   getMode: () => actionsState().mode,
-  onUnavailable: () => actionToastHere({ tone: 'dry', title: t('actionsIndicator', { mode: modeName(actionsState().mode) }), body: t('actionsHowTo') }),
+  onUnavailable: () => actionToastHere({ tone: 'dry', title: t('actionsIndicator', { mode: indicatorMode(actionsState().mode) }), body: t('actionsHowTo') }),
 });
 actionsReady().then(() => actSwitch.setMode(actionsState().mode));
 // The shell hands On from the tray or the window menu to this panel (electron/helpers.mjs PANEL_CONFIRM_LIVE_SCRIPT)
@@ -177,7 +182,9 @@ if (QA) {
   };
 }
 const openSkills = (t) => open({ ...t, section: t.type === 'project' ? 'skills' : 'install' });
-const waitingMenu = createWaitingMenu({ chipEl: $('#waitChip'), menuEl: $('#waitMenu'), open });
+// An asking terminal tab of any tool is a row too: its row brings the tab forward (termDock is made further down; a
+// click comes after)
+const waitingMenu = createWaitingMenu({ chipEl: $('#waitChip'), menuEl: $('#waitMenu'), open, showTab: (tabId) => termDock.showTab(tabId) });
 const menu = createContextMenu({ openDrawer: open, openSkills, toast: actionToastHere, getData: () => store, qa: QA });
 // Terminals inside the window (docs/embedded-terminal.md): only in the SiberSentez window, whose preload has the bridge;
 // then "Open terminal" opens here and Windows Terminal becomes the menu's second item
@@ -193,20 +200,40 @@ if (qaDock) globalThis.sibersentezTerminal = qaTerminalBridge({ ask: QA_ASK, err
 // A command run in the setup terminal ended: check the tools again (a tool just installed shows up)
 // The Claude Code session of a project that acted in the last two minutes: the one an AI tab that just ended ran (none
 // when the tab ran another tool, so nothing else is resumed by mistake)
-const recentSession = (projectId) => {
-  let best = null;
-  for (const s of store.sessions.values()) if (s.projectId === projectId && Date.now() - (s.lastAt || 0) < 2 * 60000 && (!best || s.lastAt > best.lastAt)) best = s;
-  return best;
-};
-const termDock = createTerminalDock({ toast: actionToastHere, onSetupDone: () => loadTools({ refresh: true }), resumeFor: recentSession, onResume: (s) => resumeSession(s.id) });
+// The Claude session a Claude tab goes on with once its tool ended: its own job's first (dockState.js), never another
+// job's, never one whose job still runs in another tab
+const recentSession = (projectId, jobId = null, tool = 'claude') => tabResumeSession(store.sessions.values(), { projectId, jobId, tool, busyJobs: new Set(termDock.running().map((x) => x.jobId).filter(Boolean)) });
+// onFix: an error of the person's own program goes to the project's running AI tab as one sentence (typed, never sent);
+// with no AI tab (or one whose screen asks something) the project's drawer opens with the sentence in its job box
+const termDock = createTerminalDock({
+  toast: actionToastHere,
+  onSetupDone: () => loadTools({ refresh: true }),
+  resumeFor: recentSession,
+  onResume: (s) => resumeSession(s.id),
+  onAsk: () => schedule(),
+  onFix: (projectId, text) => {
+    const r = termDock.askAi(projectId, text);
+    if (r?.ok || r?.reason === 'asks' || !store.projects.get(projectId)) return;
+    if (active !== 'projects') showTab('projects');
+    drawer.openWithJob(projectId, text);
+  },
+});
 if (qaDock) setTimeout(() => termDock.open({ projectId: store.sortedProjects()[0]?.id || 'demo' }), 800);
 if (termDock.available) setDockOpener((target) => termDock.open(target), () => termDock.count() >= 8);
 // What the last start's restore point holds, per project: the job box says it next to the job (restore.js)
-window.addEventListener(AI_STARTED_EVENT, (e) => rememberStartPoint(e.detail?.projectId, e.detail?.restorePoint, e.detail?.jobId));
+// A start takes a point (and may push an old one out): the project's list is asked again
+window.addEventListener(AI_STARTED_EVENT, (e) => {
+  pointsChanged(e.detail?.projectId);
+  rememberStartPoint(e.detail?.projectId, e.detail?.restorePoint, e.detail?.jobId);
+});
 // The building shows a tool that runs in SiberSentez's terminal as open there (hq-live.js liveSnapshot)
 if (termDock.available) store.dockRunning = () => termDock.running();
+// Every tool's question in the terminal waits for the person too (attention.js dockWaiting: the header, the Building)
+if (termDock.available) store.dockAsking = () => termDock.asking();
 // "How to run it" (runHint.js): a command goes into the project's terminal, never with Enter
 if (termDock.available) setRunTyper((projectId, cmd) => termDock.typeInto(projectId, cmd));
+// The way to run it is not known (review U09): the question into the project's running AI tab, never with Enter
+if (termDock.available) setRunAsker((projectId, text) => termDock.askAi(projectId, text), (projectId) => termDock.running().some((x) => x.projectId === projectId));
 // "Open in the browser" of a plain web page (docs/run-hint.md): the explorer action with the project's own index.html,
 // on the person's click, under the actions mode like every action
 setRunOpener((projectId) => runMenuItem({ id: 'open-page', label: t('runOpenPage'), action: 'explorer', payload: { projectId, open: 'index.html' } }, { toast: actionToastHere }));
@@ -280,6 +307,8 @@ document.addEventListener('keydown', (e) => {
 // ---------- notices and the command palette ----------
 $('#bellBtn').innerHTML = icon('bell');
 $('#paletteBtn').innerHTML = `${icon('search')}<span>${esc(t('palInputAria'))}</span><kbd>Ctrl K</kbd>`;
+// A narrow window shows the header's buttons as icons (review U15): their names stay for screen readers
+$('#paletteBtn').setAttribute('aria-label', t('palInputAria'));
 // A notice about a session or an agent opens the Building on its project with that actor's card (its plan or result
 // is there, docs/simplify.md); anything else opens its drawer
 const openFromNotice = (target) => {
@@ -335,15 +364,21 @@ const tour = createTour({
     tourBox(false);
   },
 });
+// A move that acts on the page behind the drawer (a dialog over it, the page inert: review U02) closes it first
+const leaveDrawer = (fn) => (...args) => {
+  if (drawer.isOpen()) drawer.close();
+  return fn(...args);
+};
 const guide = createGuide({
   go: {
-    tour: () => tour.show(),
-    tools: () => openToolsPanel(),
-    newProject: () => newProject.start(),
-    projects: () => showTab('projects'),
-    roster: () => showTab('roster'),
+    // The tour plays on the page behind; the tools panel as from the search (its beforeRun closes the drawer too)
+    tour: leaveDrawer(() => tour.show()),
+    tools: leaveDrawer(() => openToolsPanel()),
+    newProject: leaveDrawer(() => newProject.start()),
+    projects: leaveDrawer(() => showTab('projects')),
+    roster: leaveDrawer(() => showTab('roster')),
     // The actions panel lives in the desktop app only
-    actions: shellBridge(window) ? () => actSwitch.open() : undefined,
+    actions: shellBridge(window) ? leaveDrawer(() => actSwitch.open()) : undefined,
   },
   getMode: () => actionsState().mode,
 });
@@ -351,12 +386,14 @@ $('#guideBtn').addEventListener('click', () => guide.show());
 onActionsChange(() => guide.refresh());
 const palette = createPalette({
   open,
+  beforeRun: () => drawer.isOpen() && drawer.close(),
   commands: [
     // The two main moves first (2026-10-02): give a job in the Building's box, start a new project
     { id: 'tour', label: t('tourPalette'), sub: t('tourPaletteSub'), hay: 'tour guide demo simulation how help tur rehber simulasyon nasil yardim tam kullanim', run: () => tour.show() },
     { id: 'give-job', label: t('wsPaletteGive'), sub: t('wsPaletteGiveSub'), hay: 'job give start task do iş ver işi başlat görev yap is ver isi baslat gorev yapay zeka zekâ', run: () => (showTab('today'), setTimeout(() => $('#wsGiveText')?.focus(), 50)) },
     { id: 'new-project', label: t('newProjectButton'), sub: t('wsPaletteNewSub'), hay: 'new project folder idea yeni proje klasör klasor fikir', run: () => newProject.start() },
     { id: 'guide', label: t('guidePalette'), sub: t('guidePaletteSub'), hay: 'guide help tour rehber yardim yardım ?', run: () => guide.show() },
+    { id: 'words', label: t('guideWordsTitle'), sub: t('guideWordsPaletteSub'), hay: 'words glossary terms what is skill agent session sözlük sozluk terim nedir ne demek ajan oturum', run: () => guide.showWords() },
     { id: 'library-add', label: t('rfLibAdd'), sub: t('rfLibAddSub'), hay: 'library add import skill agent github folder kütüphane kutuphane ekle içe al ice al klasör klasor', run: () => (showTab('roster'), views.roster.openImport()) },
     { id: 'tools', label: t('aiPalette'), sub: t('aiPaletteSub'), hay: 'ai tools setup check install error kurulum kontrolü kontrol araç araçlar yapay zeka zekâ hata path git node', run: () => openToolsPanel() },
   ],
@@ -412,24 +449,42 @@ $('#replayTrack').addEventListener('click', (e) => {
 rangeSel.disabled = true;
 
 // ---------- new project: the header button, the start card, the tray ----------
-// Choose or create a folder (the shell's picker) -> the project's drawer opens at the idea box -> the skills that fit
-// -> "Open terminal". In a plain browser the button explains that this happens in the app.
+// The "New project" window (review U05): a name and an idea -> the shell makes the folder under Documents › SiberSentez
+// (or where the person picks) -> the project's drawer opens with the idea in its job box; Start stays the person's.
+// "Already have a project folder?" takes the old way: the shell's picker -> the drawer at the idea box. In a plain
+// browser the button explains that this happens in the app.
+const ideaDialog = createIdeaDialog();
 const newProject = createNewProjectFlow({
   bridge: projectShell,
+  ask: (prev) => ideaDialog.ask(prev),
   toast: actionToastHere,
   hasProject: (id) => store.projects.has(id),
   refresh: () => loadSnapshot(),
   nameOf: (id) => store.projects.get(id)?.name || id,
-  openProject: (id) => {
+  openProject: (id, idea) => {
     if (active !== 'projects') showTab('projects');
-    open({ type: 'project', id, section: 'skills' });
+    if (idea) drawer.openWithJob(id, idea);
+    else open({ type: 'project', id, section: 'skills' });
   },
 });
 const newProjectBtn = $('#newProjectBtn');
 newProjectBtn.innerHTML = `${icon('folder')}<span>${esc(t('newProjectButton'))}</span>`;
 newProjectBtn.title = t('newProjectButtonTitle');
+newProjectBtn.setAttribute('aria-label', t('newProjectButton'));
 newProjectBtn.hidden = false;
 newProjectBtn.addEventListener('click', () => newProject.start());
+// The setup wizard's last step goes on to a project (roadmap F2): the same New project window
+setWizardDone(() => newProject.start());
+// "A new version is out" (roadmap F3a): only when the person turned it on in Settings (off by default: nothing leaves
+// this computer); one notice per version, the link is in Settings. Never in QA (screenshots stay as asked).
+if (!QA) {
+  checkUpdates().then(() => {
+    if (!noticeDue()) return;
+    const a = updatesState().answer;
+    actionToastHere({ tone: 'info', title: t('updNoticeTitle', { latest: a.latest }), body: t('updNoticeBody') });
+    markTold();
+  });
+}
 initHints();
 // The tray's "New project…" (electron/helpers.mjs NEW_PROJECT_SCRIPT) starts the same flow; only with the real bridge
 if (projectShell && !QA_NEW) window.sibersentezNewProject = Object.freeze({ start: () => (newProject.start(), true) });
@@ -461,9 +516,14 @@ const giveJobTo = (projectId, text) => {
   return giveJob(p, text, { mode: actionsState().mode, tools: toolsState(), fetchFit: fetchFitFor, runAction, runMenuItem, openDrawer: open, toast: actionToastHere });
 };
 const workshop = createWorkshop($('#workshopBody'), { store, toast: (title) => actionToastHere({ tone: 'ok', title }), label: (s) => store.sessionLabel(s), autoGuide: !QA || params.get('wsguide') === '1', giveJob: giveJobTo });
-// A closed Claude Code session goes on where it stopped, in the terminal below (the session menu's own item; the actions
-// mode decides as for every start)
-const resumeSession = (sessionId) => runMenuItem({ id: 'resume', label: t('termResume'), action: 'start-ai', payload: { sessionId, tool: 'claude', resume: true } }, { openDrawer: open, toast: actionToastHere });
+// A closed session goes on where it stopped, in the terminal below, with its own tool's resume (the session menu's own
+// item; the actions mode decides as for every start). A session of a tool that cannot continue is said, not started.
+const resumeSession = (sessionId) => {
+  const s = store.sessions.get(sessionId);
+  const tool = sessionTool(s);
+  if (!canContinueTool(tool)) return actionToastHere({ tone: 'warn', title: t('termResume'), body: t('aiErr_resume-not-supported') });
+  return runMenuItem({ id: 'resume', label: tool === 'claude' ? t('termResume') : t('termResumeTool', { tool: sessionToolName(s) }), action: 'start-ai', payload: { sessionId, tool, resume: true } }, { openDrawer: open, toast: actionToastHere });
+};
 window.addEventListener('hq-action', (e) => {
   const d = e.detail || {};
   if (d.action === 'open-session' && d.sessionId) open({ type: 'session', id: d.sessionId });
@@ -532,6 +592,9 @@ const checklist = createChecklist($('#todayChecklist'), {
   toolsState: () => toolsState(),
   mode: () => actionsState().mode,
   guide: () => guide.show(),
+  tour: () => tour.show(),
+  // "Watch the example": the Building's own example plays (the card is on the Building already); nothing runs
+  demo: () => workshop.playExample(),
 });
 // Advanced views (docs/direction.md §3.3, Settings): off by default. Off hides every .adv-only element (the Feed's
 // numbers, its timeline switch and the orchestra scene, the drawer's tiles, the most used charts); nothing is deleted.
@@ -562,8 +625,12 @@ function showTab(key) {
   for (const b of document.querySelectorAll('[data-tab]')) {
     const on = b.dataset.tab === key || b.dataset.tabAlso === key;
     b.classList.toggle('on', on);
-    if (b.getAttribute('role') === 'tab') b.setAttribute('aria-selected', on);
-    else b.setAttribute('aria-pressed', on);
+    // The menu moves between screens (navigation, review U03): its buttons say which screen is shown (aria-current);
+    // the Feed/Timeline switch inside a screen stays a pressed toggle
+    if (b.closest('.side-nav, .side-foot')) {
+      if (on) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    } else b.setAttribute('aria-pressed', on);
   }
   for (const k of TAB_KEYS) $(`#tab-${k}`).hidden = k !== key;
   try {
@@ -656,6 +723,9 @@ function renderHubFoot() {
 
 function renderHeader() {
   waitingMenu.render();
+  // No project of the person's own yet, or none the Building shows: the start card or the strip holds the one primary
+  // New project; this one is a quiet shortcut (firstScreen.js)
+  newProjectBtn.classList.toggle('quiet', firstScreenParts({ loaded: store.loaded, ownProject: hasOwnProject([...store.projects.values()]), buildingProject: projectsInOrder(store).length > 0 }).headerQuiet);
   const k = store.kpi || {};
   // Nothing open: no "0 open sessions" chip (docs/direction.md §3.3, fewer header items)
   setHtml($('#statusChips'), `
@@ -983,6 +1053,22 @@ function connect() {
 }
 
 // ---------- keyboard ----------
+// The menu: the up and down arrows move between its screen buttons (each one stays in the Tab order too)
+const NAV_BUTTONS = '.side-nav [data-tab], .side-foot [data-tab]';
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  const at = document.activeElement;
+  if (!at?.matches?.(NAV_BUTTONS)) return;
+  const list = [...document.querySelectorAll(NAV_BUTTONS)].filter((b) => b.getClientRects().length > 0);
+  const i = list.indexOf(at);
+  if (i < 0) return;
+  e.preventDefault();
+  list[(i + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length].focus();
+});
+// Esc in SiberSentez's terminal while the project drawer is open closes the drawer first and never reaches the AI tool
+// (seen when using the app, 2026-10-08: the terminal keeps its keys, so the Esc meant for the drawer cancelled Claude
+// Code's "trust this folder?" and the tool quit). The next Esc goes to the tool as always.
+document.addEventListener('keydown', (e) => escapeClosesDrawer(e, drawer), true);
 document.addEventListener('keydown', (e) => {
   if (palette.isOpen() || guide.isOpen()) return;
   const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName);

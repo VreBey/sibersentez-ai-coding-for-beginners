@@ -18,7 +18,7 @@ test('placeOf: broad, temporary, chat folder, or a project; a registered project
   assert.equal(cat.placeOf(adhoc(String.raw`C:\Users\u\Documents\Codex\2026-09-29\https-claude-ai-artifact`)), 'chat');
   assert.equal(cat.placeOf(adhoc(String.raw`C:\Users\u\Documents\Codex\my-tool`)), null, 'a folder in Codex that is not a dated chat');
   assert.equal(cat.placeOf(adhoc(String.raw`C:\Users\u\Documents\Codex\2026-09-29\chat\src`)), null, 'a folder below a chat folder');
-  assert.equal(cat.placeOf(adhoc(String.raw`D:\Projeler\arena unity`)), null);
+  assert.equal(cat.placeOf(adhoc(String.raw`D:\Work\arena unity`)), null);
   assert.equal(cat.placeOf({ kind: 'registered', path: String.raw`C:\Users\u\AppData\Local\Temp\x` }), null);
   assert.equal(cat.placeOf(null), null);
 });

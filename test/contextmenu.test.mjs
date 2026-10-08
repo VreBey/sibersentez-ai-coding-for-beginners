@@ -378,6 +378,11 @@ test('menu: separators never lead, trail or repeat; ids are unique; unknown targ
   assert.deepEqual(ids(menuModel({ type: 'project', id: 'alpha' }, plain, 'live')), ids(menuModel({ type: 'project', id: 'alpha' }, d, 'live')));
   assert.equal(latestSession(d, 'alpha').id, S_LIVE);
   assert.equal(latestSession(d, 'empty'), null);
+  // A newer session of another tool does not hide the Claude Code session the menu continues (review 2026-10-07)
+  const mixed = { sessions: [{ id: 'c1', tool: 'claude', projectId: 'm', lastAt: 1000 }, { id: 'x1', tool: 'codex', projectId: 'm', lastAt: 5000 }] };
+  assert.equal(latestSession(mixed, 'm').id, 'x1');
+  assert.equal(latestSession(mixed, 'm', 'claude').id, 'c1');
+  assert.equal(latestSession(mixed, 'm', 'gemini'), null);
 });
 
 test('install validity: a dry preview is invalid once the mode turns live; a changed selection closes it; same mode and selection keeps it open', () => {
@@ -514,6 +519,11 @@ test('toast: dry mode shows a command summary (at most 120 chars); errors say wh
   assert.equal(argvSummary(['a', 'b c']), 'a "b c"');
   assert.equal(argvSummary([]), '');
   assert.equal(resultToast('Open folder', { ok: true, mode: 'live', action: 'explorer' }).tone, 'ok');
+  inLanguages((lang, S) => {
+    // "Open in browser" (the run hint's page): the page opens, not the folder (seen when using the app, 2026-10-08)
+    assert.equal(resultToast('x', { ok: true, mode: 'live', action: 'explorer' }, { action: 'explorer', payload: { projectId: 'p', open: 'index.html' } }).title, S.shDone_openPage, lang);
+    assert.equal(resultToast('x', { ok: true, mode: 'live', action: 'explorer' }, { action: 'explorer', payload: { projectId: 'p' } }).title, S.shDone_explorer, lang);
+  });
   inLanguages((lang, S) => {
     const e = resultToast(S.termResume, { ok: false, error: 'session-live', hint: 'fork', status: 409 });
     assert.equal(e.tone, 'err');
@@ -1056,4 +1066,24 @@ test('menu: a skill-flow item opens its drawer section through openSkills and ne
     'only the mode was read; nothing was posted',
   );
   _resetActionsForTest();
+});
+
+test("another tool's session continues with that tool (start-ai resume), never with Claude's; a session of a tool that cannot continue hides nothing", () => {
+  setLanguage('en');
+  const d = data();
+  const CODEX_ID = '01a11627-5555-4aaa-8aaa-619e30c69d4a';
+  const OTHER_ID = '01a11627-6666-4aaa-8aaa-619e30c69d4a';
+  d.sessions.set(CODEX_ID, { id: CODEX_ID, tool: 'codex', projectId: 'beta', title: 'Codex task', lastAt: 3000, cwd: 'C:\work\beta', live: null });
+  const m = menuModel({ type: 'session', id: CODEX_ID }, d, 'live');
+  const resume = m.find((x) => x.id === 'resume');
+  assert.ok(resume, 'offered');
+  assert.equal(resume.action, 'start-ai');
+  assert.deepEqual(resume.payload, { sessionId: CODEX_ID, tool: 'codex', resume: true });
+  assert.ok(resume.label.includes('Codex'));
+  assert.ok(!m.some((x) => x.id === 'fork' || x.id === 'resume-outside'), "Windows Terminal's continue and the copy are Claude's own");
+  // The project's newest session is of a tool whose sessions are not read: the Codex one is still offered
+  d.sessions.set(OTHER_ID, { id: OTHER_ID, tool: 'opencode', projectId: 'beta', title: 'Other', lastAt: 9000, cwd: 'C:\work\beta', live: null });
+  assert.equal(latestSession(d, 'beta', (tool) => ['claude', 'codex', 'gemini', 'qwen'].includes(tool)).id, CODEX_ID);
+  const pm = menuModel({ type: 'project', id: 'beta' }, d, 'live');
+  assert.ok(pm.some((x) => x.action === 'start-ai' && x.payload?.resume && x.payload.tool === 'codex' && x.payload.sessionId === CODEX_ID), 'the project menu continues it');
 });

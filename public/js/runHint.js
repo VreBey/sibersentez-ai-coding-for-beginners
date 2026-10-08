@@ -29,6 +29,16 @@ export function setRunOpener(fn) {
   opener = typeof fn === 'function' ? fn : null;
 }
 
+// The way is not known (review U09): the question goes into the project's running AI tab without Enter (set by
+// main.js: terminalDock askAi, and whether an AI of the project runs there); null: no terminal dock
+let asker = null;
+export function setRunAsker(ask, running) {
+  asker = typeof ask === 'function' && typeof running === 'function' ? { ask, running } : null;
+}
+
+const askBtn = () => `<button type="button" class="act-btn primary" data-run-ask data-fk="run:ask">${icon('prompt')}<span>${esc(t('runAskAi'))}</span></button>`;
+const asJobBtn = () => `<button type="button" class="act-btn" data-run-job data-fk="run:job">${icon('spark')}<span>${esc(t('runAskJob'))}</span></button>`;
+
 const typeBtn = () => `<button type="button" class="act-btn run-type" data-run-type>${icon('prompt')}<span>${esc(t('runType'))}</span></button>`;
 const copyBtn = () => `<button type="button" class="act-btn ai-copy" data-run-copy>${icon('copy')}<span>${esc(t('aiCopy'))}</span></button>`;
 
@@ -43,8 +53,9 @@ function stepHtml(s, n, canType, canOpen) {
 }
 
 // The section. data: the server's answer, or null while it is asked; p: the project; canType: the "Type in terminal"
-// button (the desktop app's terminal dock); canOpen: the "Open in the browser" button of a plain web page
-export function runSectionHtml(p, data, { canType = false, canOpen = false } = {}) {
+// button (the desktop app's terminal dock); canOpen: the "Open in the browser" button of a plain web page; aiRuns: an
+// AI of the project runs in SiberSentez's terminal (the unknown way asks it there, else as a new job)
+export function runSectionHtml(p, data, { canType = false, canOpen = false, aiRuns = false } = {}) {
   if (!p?.path || p.exists === false || p.broad || p.tmpOnly || p.kind === 'hub') return '';
   const head = `<h3 id="runH">${icon('play')} ${esc(t('runTitle'))}</h3>`;
   let inner;
@@ -61,7 +72,11 @@ export function runSectionHtml(p, data, { canType = false, canOpen = false } = {
     // The note on pasting commands only where there is a command (a plain web page has none)
     if (plans.some((pl) => pl.steps.some((s) => typeof s?.cmd === 'string' && CMD_RE.test(s.cmd)))) inner += `<p class="muted small">${esc(t(canType ? 'runFootType' : 'runFoot'))}</p>`;
   } else if (data.state === 'unreadable') return '';
-  else inner = `<p class="small">${esc(t('runUnknown'))}</p><div class="ai-cmd run-cmd"><code>${esc(t('runAsk'))}</code>${copyBtn()}</div>`;
+  else {
+    // One way that leads somewhere (review U09): into the running AI, else into the job box; copying stays
+    const way = aiRuns ? `<div class="run-open-row">${askBtn()}</div><p class="muted small">${esc(t('runAskAiNote'))}</p>` : `<div class="run-open-row">${asJobBtn()}</div><p class="muted small">${esc(t('runAskJobNote'))}</p>`;
+    inner = `<p class="small">${esc(t('runUnknown'))}</p><div class="ai-cmd run-cmd"><code>${esc(t('runAsk'))}</code>${copyBtn()}</div>${way}`;
+  }
   return `<section class="dr-sec run" data-sec="run" aria-labelledby="runH">${head}${inner}</section>`;
 }
 
@@ -88,13 +103,24 @@ export function createRunHint({ fetchJson = fetchRun, onData = () => {}, now = (
       });
     return next;
   }
-  return { get, html: (p) => (p?.path ? runSectionHtml(p, get(p.id).data, { canType: !!typer, canOpen: !!opener }) : '') };
+  return { get, html: (p) => (p?.path ? runSectionHtml(p, get(p.id).data, { canType: !!typer, canOpen: !!opener, aiRuns: !!asker && asker.running(p.id) }) : '') };
 }
 
 // Buttons of the section (the drawer body): the command beside the button goes to the clipboard, or into the project's
-// terminal (never with Enter). projectOf(el): the open project's id.
-export function bindRunHint(bodyEl, { projectOf = () => null } = {}) {
+// terminal (never with Enter). projectOf(el): the open project's id. asJob(projectId, text): the question goes into
+// the project's job box (the drawer's own, Start stays the person's)
+export function bindRunHint(bodyEl, { projectOf = () => null, asJob = () => {} } = {}) {
   bodyEl.addEventListener('click', (e) => {
+    const ab = e.target.closest?.('[data-run-ask], [data-run-job]');
+    if (ab) {
+      const id = projectOf(ab);
+      if (!id) return;
+      // The AI stopped since the section was drawn: the question still goes somewhere, into the job box
+      const r = ab.hasAttribute('data-run-ask') && asker ? asker.ask(id, t('runAsk')) : null;
+      // An existing question needs the person's answer in this tab, not a second job.
+      if (!r?.ok && r?.reason !== 'asks') asJob(id, t('runAsk'));
+      return;
+    }
     const ob = e.target.closest?.('[data-run-open]');
     if (ob && opener) {
       const id = projectOf(ob);

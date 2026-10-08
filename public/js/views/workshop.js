@@ -9,11 +9,13 @@ import { t, language } from '../i18n.js';
 import { FLOORS, ROOMS, HISTORY_MS, DEMO_MS, TOOL_CATS, sceneFrom, createDemo, roomKindFor, countByCategory, eventLabel, frameInterval } from '../hq-scene.js';
 import { HqRenderer } from '../hq-render.js';
 import { projectsInOrder, projectNames, pastSnapshots, liveSnapshot, liveEvents, liveTicks, KindCache, LiveHistory, TeamCache } from '../hq-live.js';
-import { jobNowText, stepsHtml, stoppedSession } from './job.js';
+import { jobNowText, stepsHtml, resumeCandidate, aiIdleIn, JOB_MAX } from './job.js';
 import { sessionState } from '../attention.js';
 import { apiErrorHtml, projectApiError, apiErrorWords } from '../apiError.js';
 import { permModeChip } from '../permMode.js';
 import { nextStep } from '../nextStep.js';
+import { firstScreenParts } from '../firstScreen.js';
+import { hasOwnProject } from './checklist.js';
 import { askJobPoint, startPointOf, startPointsVersion, startPointText } from '../restore.js';
 
 const GUIDE_KEY = 'sibersentez.hq.guide';
@@ -38,7 +40,7 @@ const SIGN_OF_STEP = Object.freeze({ error: 'signError', plan: 'signPlan', resul
 const TEMPLATE = () => `
 <div class="ws-next" data-ws="next" data-step=""><p data-ws="next-text" aria-live="polite"></p><button type="button" data-ws="next-go" hidden></button></div>
 <div class="ws-head">
-  <form class="ws-give" data-ws="give"><label class="sr-only" for="wsGiveText">${esc(word('giveLabel'))}</label><input id="wsGiveText" data-ws="give-text" type="text" maxlength="300" autocomplete="off" placeholder="${esc(word('givePlaceholder'))}"><button type="submit" data-ws="give-go">${esc(word('giveGo'))}</button><div class="ws-give-ex" data-ws="give-ex" role="group" aria-label="${esc(word('exTitle'))}"></div></form>
+  <form class="ws-give" data-ws="give"><label class="sr-only" for="wsGiveText">${esc(word('giveLabel'))}</label><textarea id="wsGiveText" data-ws="give-text" rows="2" maxlength="${JOB_MAX}" autocomplete="off" placeholder="${esc(word('givePlaceholder'))}" title="${esc(word('giveKeys'))}"></textarea><button type="submit" data-ws="give-go">${esc(word('giveGo'))}</button><div class="ws-give-ex" data-ws="give-ex" role="group" aria-label="${esc(word('exTitle'))}"></div></form>
   <div class="ws-head-side">
     <label class="ws-project"><span>${esc(word('chooseProject'))}</span><select data-ws="project"></select></label>
     <button type="button" data-ws="help">${esc(word('help'))}</button>
@@ -52,7 +54,7 @@ const TEMPLATE = () => `
 <div class="ws-layout" data-ws="layout">
   <div class="ws-scene">
     <div class="ws-toolbar">
-      <button type="button" data-ws="play"></button>
+      <button type="button" data-ws="play">${esc(word('play'))}</button>
       <button type="button" data-ws="step">${esc(word('step'))}</button>
       <select data-ws="speed" aria-label="${esc(word('speed'))}">${[1, 2, 4].map((n) => `<option value="${n}">${n}×</option>`).join('')}</select>
       <select data-ws="room" aria-label="${esc(word('room'))}">${['', ...ROOM_KEYS].map((k) => `<option value="${k}">${esc(word(k || 'room'))}</option>`).join('')}</select>
@@ -61,7 +63,7 @@ const TEMPLATE = () => `
     </div>
     <section class="ws-stage" data-ws="stage">
       <canvas data-ws="canvas" tabindex="-1" aria-label="${esc(word('canvasLabel'))}"></canvas>
-      <button type="button" class="ws-sign" data-ws="sign"></button>
+      <button type="button" class="ws-sign" data-ws="sign">${esc(word('resting'))}</button>
       <div class="ws-nav" data-ws="nav"></div>
       <div class="ws-empty" data-ws="empty" hidden></div>
       <div class="ws-guide" data-ws="guide" hidden><article role="dialog" aria-modal="true" aria-labelledby="wsGuideTitle"><h2 id="wsGuideTitle">${esc(word('guideTitle'))}</h2><p>${esc(word('guideBody'))}</p><button type="button" data-ws="guide-close">${esc(word('understood'))}</button></article></div>
@@ -456,7 +458,8 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     } catch {
       /* not kept: it opens again next time */
     }
-    $('help').focus();
+    // Back to the help button, or (its row hidden on a first screen) to the play button next to the example
+    ($('help').closest('[hidden]') ? $('play') : $('help')).focus();
   }
   $('guide').addEventListener('keydown', (e) => {
     if (e.key === 'Tab') {
@@ -564,6 +567,12 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
   // ---------- giving a job (docs/simplify.md) ----------
   // The box at the top of the screen, beside the project it goes to (above the fold on a laptop, 2026-10-02); its
   // card rides the lift up to the main room
+  // Several lines (review U06): Enter is a new line, Ctrl+Enter (Cmd+Enter) gives the job, as the drawer's box does
+  $('give-text').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    $('give').requestSubmit();
+  });
   $('give').addEventListener('submit', async (e) => {
     e.preventDefault();
     const input = $('give-text');
@@ -629,6 +638,8 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     $('range-start').textContent = formatTime(Math.max(mode === 'demo' ? 0 : liveNow - HISTORY_MS, liveNow - HISTORY_MS));
     $('range-end').textContent = formatTime(liveNow);
     const shownEvents = scene.events.filter((e) => eventLabel(e));
+    // The shown job's start copy: its record asked for, and whether it is still there checked now and then (restore.js)
+    if (mode === 'live' && scene.project.id && scene.job?.jobId) askJobPoint(scene.project.id, scene.job.jobId);
     const sig = JSON.stringify([scene.allActors.map((a) => [a.id, a.state, a.model, a.goneAt, a.data.lastAction?.text]), scene.workflows, scene.quota, shownEvents.slice(-4).map((e) => e.id ?? e.t), view.floor, view.room, mode, scene.job, scene.project.id && stoppedLead(scene.project.id)?.id, errKey(), startPointsVersion()]);
     // The inbox is over every project, so it is asked on every draw (its own signature keeps it cheap); before, a
     // session of another project waiting showed only once something changed in the shown one (2026-10-02). At most
@@ -720,6 +731,13 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     el.innerHTML = keys.map((x) => `<button type="button" class="ws-ex" data-ex="${x}">${esc(word(`ex_${x}`))}</button>`).join('');
     el._idea = idea;
   }
+  // The folded Building's two ways on: a new project (main.js answers), or the example playing here
+  $('empty').addEventListener('click', (e) => {
+    const b = e.target.closest?.('[data-ws-none]');
+    if (!b) return;
+    if (b.dataset.wsNone === 'new') window.dispatchEvent(new CustomEvent('hq-action', { detail: { action: 'new-project' } }));
+    else if (!(mode === 'demo' && playing)) $('play').click();
+  });
   $('give-ex').addEventListener('click', (e) => {
     const b = e.target.closest?.('[data-ex]');
     if (!b) return;
@@ -744,11 +762,10 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     box.hidden = !job && !err;
     if (!job && !err) return;
     const body = $('jobbox-body');
-    body.innerHTML = `${apiErrorHtml(err)}${job?.title ? `<p class="ws-job-title">${esc(job.title)}</p>` : ''}${job ? stepsHtml(job) : ''}`;
+    body.innerHTML = `${apiErrorHtml(err)}${job?.title ? `<p class="ws-job-title">${esc(job.title)}</p>` : ''}${job ? stepsHtml(job, { idle: mode === 'live' && store.loaded && aiIdleIn({ sessions: store.sessions.values(), projectId: scene.project.id, dock: store.dockRunning?.() || [] }) }) : ''}`;
     if (!job) return;
-    // What the restore point of this job's start holds (a full copy, a lean one, none): from this page's start, else
-    // the server's record of it (asked once; the box draws again when it arrives)
-    if (mode === 'live' && job.jobId && !startPointOf(scene.project.id, job.jobId)) askJobPoint(scene.project.id, job.jobId);
+    // What the restore point of this job's start holds (a full copy, a lean one, one no longer kept, none): from this
+    // page's start, else the server's record of it (asked on every frame above; the box draws again when it changes)
     const pointNote = mode === 'live' ? startPointText(startPointOf(scene.project.id, job.jobId)) : '';
     if (pointNote) {
       const p = document.createElement('p');
@@ -757,7 +774,7 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
       body.append(p, button('pointOpen', () => dispatch('open-restore')));
     }
     // A finished job: the result is one click away (the drawer's "How to run it")
-    if (job.step === 'done') body.append(button('resultRun', () => dispatch('open-run')));
+    if (job.step === 'done' || job.step === 'finish') body.append(button('resultRun', () => dispatch('open-run')));
     // The job is not finished and no AI of the project runs any more (its terminal was closed, seen 2026-10-01): the
     // last session goes on where it stopped, in the terminal below, when the person asks
     const last = mode === 'live' && job.step !== 'done' ? stoppedLead(scene.project.id) : null;
@@ -782,7 +799,10 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
       hasProject: !live || !store.loaded || !!scene.project.id,
       error: live && !!errKey(),
       planPending: !!scene.planPending,
-      resultReady: !!scene.resultReady,
+      // The job reached its result (the whole-job check approved it): ready whatever tool did it (F3); where to open
+      // it: the waiting Claude lead, else the tool still open in the terminal, else the project's "How to run it"
+      resultReady: !!scene.resultReady || (live && !!job && job.step === 'finish'),
+      resultAt: scene.resultReady ? 'lead' : scene.actors.some((a) => a.state === 'running') ? 'terminal' : 'drawer',
       waiting: scene.waiting.length,
       stopped: live && !!job && job.step !== 'done' && !!stoppedLead(scene.project.id),
       busy: scene.actors.some((a) => a.state === 'busy'),
@@ -792,7 +812,24 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
   // shownNext: the step on screen, worked out again on every frame; its button does what the strip says. A rewound
   // past moment says so ("back to now"), so a step of the past or of another project is never offered.
   let shownNext = { key: 'give', act: 'give' };
+  // The guide ("What happens in the building?") waits until the Building shows something: a project of the person's or
+  // the example. On a first screen with no project it would only cover the one start (firstScreen.js)
+  let guidePending = false;
   function renderNext() {
+    // ...and only while the keyboard is on the page or in the Building, never taking it from a drawer or the palette
+    // (the start card above the Building counts: "Watch the example" leaves the keyboard on it)
+    const focusHere = document.activeElement === document.body || root.contains(document.activeElement) || !!document.getElementById('todayChecklist')?.contains(document.activeElement);
+    if (guidePending && store.loaded && (mode !== 'live' || !!scene.project.id) && focusHere) {
+      guidePending = false;
+      showGuide();
+    }
+    // No project of the person's own yet: the start card above is the one primary start (firstScreen.js); the strip
+    // and the job row step back until a project exists
+    const parts = firstScreenParts({ live: mode === 'live', loaded: store.loaded, ownProject: hasOwnProject([...store.projects.values()]), buildingProject: mode !== 'live' || !!scene.project.id });
+    if ($('next').hidden === parts.strip) $('next').hidden = !parts.strip;
+    const headRow = $('give').closest('.ws-head');
+    if (headRow.hidden === parts.jobRow) headRow.hidden = !parts.jobRow;
+    $('play').classList.toggle('quiet', parts.playQuiet);
     const next = nextStep(nextFacts());
     shownNext = next;
     const sig = `${next.key}|${language()}`;
@@ -825,12 +862,12 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
       $('jobbox').scrollIntoView({ block: 'nearest' });
       return $('jobbox').querySelector('button, a')?.focus();
     }
-    // new-project, show-terminal: main.js answers (the new project flow, the terminal dock)
+    // new-project, show-terminal, open-run: main.js answers (the new project flow, the terminal dock, the drawer)
     dispatch(act, null, e.currentTarget);
   });
 
-  // The project's last session when none of its sessions runs (job.js, shared with the drawer)
-  const stoppedLead = (projectId) => stoppedSession(store.sessions.values(), projectId, Date.now(), scene?.job?.updatedAt);
+  // The session that can go on with the shown job (job.js resumeCandidate: the same answer as the drawer's)
+  const stoppedLead = (projectId) => resumeCandidate({ sessions: store.sessions.values(), projectId, job: scene?.job, dock: store.dockRunning?.() || [] });
 
   let inboxAt = 0;
   let inboxMode = null;
@@ -928,8 +965,21 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     sign.classList.toggle('waiting', scene.waiting.length > 0 && !scene.resultReady);
     sign.title = scene.job ? `${word('lamps')}: ${jobNowText(scene.job)}` : '';
     const empty = $('empty');
-    empty.hidden = !scene.closed;
-    empty.textContent = scene.project.id || mode === 'demo' ? word('empty') : word('noProject');
+    // No project to show (review U10): the Building folds to one short card, its controls, counts, timeline and team
+    // panel out of sight; a project, or the example, brings it all back
+    const none = store.loaded && mode !== 'demo' && !scene.project.id;
+    root.classList.toggle('ws-none', none);
+    if (none) {
+      if (empty.dataset.kind !== 'none') {
+        empty.dataset.kind = 'none';
+        empty.innerHTML = `<p>${esc(word('noneBody'))}</p><div class="ws-none-btns"><button type="button" class="ws-none-new" data-ws-none="new">${esc(word('noneNew'))}</button><button type="button" data-ws-none="example">${esc(word('noneExample'))}</button></div>`;
+      }
+      empty.hidden = false;
+    } else {
+      delete empty.dataset.kind;
+      empty.hidden = !scene.closed;
+      empty.textContent = scene.project.id || mode === 'demo' ? word('empty') : word('noProject');
+    }
     const rw = $('rewind');
     rw.min = mode === 'demo' ? Math.max(0, liveNow - HISTORY_MS) : liveNow - HISTORY_MS;
     rw.max = liveNow;
@@ -999,12 +1049,13 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
       }
       dirty = true;
     },
-    // The screen was opened: the guide the first time, and one frame at once
+    // The screen was opened: the guide the first time (once there is something to explain, renderNext), and one frame
+    // at once
     shown() {
       dirty = true;
       lastPaint = 0;
       try {
-        if (autoGuide && localStorage.getItem(GUIDE_KEY) !== '1') showGuide();
+        guidePending = autoGuide && localStorage.getItem(GUIDE_KEY) !== '1';
       } catch {
         /* storage blocked: no guide */
       }
@@ -1042,8 +1093,15 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
       }
       return false;
     },
+    // The start card's "Watch the example": the example plays; one that already plays goes on (play toggles)
+    playExample() {
+      if (mode === 'demo' && playing) return;
+      $('play').click();
+    },
     // The full tour explains the Building itself: its own first-time note is closed and counted as seen
     quietGuide() {
+      // The tour leads now: the guide that waits for the Building to show something (renderNext) never comes over it
+      guidePending = false;
       if (!$('guide').hidden) closeGuide();
       else {
         try {

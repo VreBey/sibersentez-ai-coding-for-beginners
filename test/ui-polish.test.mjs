@@ -71,3 +71,16 @@ test('the command palette: Turkish letters folded ("is ver" finds "İş ver"), a
   assert.ok(cmds.indexOf("id: 'give-job'") < cmds.indexOf("id: 'guide'") && cmds.includes("id: 'new-project'"));
   assert.ok(read('public/js/palette.js').includes("icon: 'spark', boost: 3, run: c.run"));
 });
+
+test('accessibility pass 2026-10-08: the tools panel keeps Tab inside (only what can take focus counts), small text meets 4.5:1, the Building names its buttons before the first frame', () => {
+  const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+  const tools = read('public/js/views/tools.js');
+  assert.ok(tools.includes("filter((el) => el.getClientRects().length > 0 && !el.closest('[hidden], details:not([open]) > :not(summary)'))"), 'a closed fold\'s fields do not count');
+  assert.ok(tools.includes('if (i < 0) {'), 'focus outside the dialog comes back in');
+  const css = read('public/css/polish.css');
+  for (const rule of ['.pmark { color: color-mix(in srgb, var(--pc) 60%, #fff); }', '.ev-meta, .ev time { color: #93a1b5; }', '.ev-kind { opacity: 1; }', '.s-other { --sc: #a3abbc; }']) assert.ok(css.includes(rule), rule);
+  const ws = read('public/js/views/workshop.js');
+  assert.ok(css.includes('.wait-chip:empty, .today-recent:empty { display: none; }'), 'empty chip and section hidden');
+  assert.ok(css.includes('.ev.k-live, .ev.k-compact, .ev.k-title { opacity: 0.85; }'), 'quieter feed rows still 4.5:1');
+  assert.ok(ws.includes(`<button type="button" data-ws="play">\${esc(word('play'))}</button>`) && ws.includes(`data-ws="sign">\${esc(word('resting'))}</button>`));
+});

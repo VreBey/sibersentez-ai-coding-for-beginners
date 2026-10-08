@@ -36,19 +36,19 @@
   <nav class="side" aria-label="Menu" data-i18n-attr="aria-label:navLabel">
     <div class="brand">
       <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path class="bm-s1" d="M26 8 C23 3 18 2 13 3 C7 4 4 8 5 13 C6 17 11 19 16 20 L18 15 C14 14 10 13 10 10 C10 7 18 6 22 11 Z"/><path class="bm-s2" d="M6 24 C9 29 14 30 19 29 C25 28 28 24 27 19 C26 15 21 13 16 12 L14 17 C18 18 22 19 22 22 C22 25 14 26 10 21 Z"/></svg>
-      <div class="brand-text"><strong>SiberSentez</strong><span data-i18n="shBrandSub">Live control room · local</span></div>
+      <div class="brand-text"><strong>SiberSentez</strong><span data-i18n="shBrandSub">Your AI team, on this computer</span></div>
     </div>
-    <div class="side-nav" role="tablist" aria-orientation="vertical">
-      <button type="button" data-tab="today" role="tab" class="on" data-nav-icon="building"><span data-i18n="navToday">Building</span><kbd>1</kbd></button>
-      <button type="button" data-tab="projects" role="tab" data-nav-icon="folder"><span data-i18n="shTabProjects">Projects</span><kbd>2</kbd></button>
+    <div class="side-nav">
+      <button type="button" data-tab="today" class="on" data-nav-icon="building"><span data-i18n="navToday">Building</span><kbd>1</kbd></button>
+      <button type="button" data-tab="projects" data-nav-icon="folder"><span data-i18n="shTabProjects">Projects</span><kbd>2</kbd></button>
       <div class="side-label" data-i18n="navAdvanced" aria-hidden="true">Advanced</div>
-      <button type="button" data-tab="roster" role="tab" data-nav-icon="skill" title="Skills, agents and plugins: ready-made instructions and helpers for your AI tools" data-i18n-attr="title:shTabRosterTip"><span data-i18n="shTabRoster">Skills &amp; agents</span><kbd>3</kbd></button>
-      <button type="button" data-tab="feed" data-tab-also="timeline" role="tab" data-nav-icon="list"><span data-i18n="shTabFeed">Feed</span><kbd>4</kbd></button>
+      <button type="button" data-tab="roster" data-nav-icon="skill" title="Ready-made instructions (skills), expert roles (agents) and plugins your AI tools read" data-i18n-attr="title:shTabRosterTip"><span data-i18n="shTabRoster">Helpers</span><kbd>3</kbd></button>
+      <button type="button" data-tab="feed" data-tab-also="timeline" data-nav-icon="list"><span data-i18n="shTabFeed">Feed</span><kbd>4</kbd></button>
     </div>
     <div class="side-foot">
       <button type="button" class="side-btn tools-btn" id="toolsBtn" title="AI tools and setup check" data-i18n-attr="title:aiHeaderBtn"></button>
       <button type="button" class="side-btn guide-btn" id="guideBtn" title="How SiberSentez works (?)" data-i18n-attr="title:guideBtnLabel"></button>
-      <button type="button" data-tab="settings" role="tab" class="side-btn" data-nav-icon="settings"><span data-i18n="navSettings">Settings</span><kbd>5</kbd></button>
+      <button type="button" data-tab="settings" class="side-btn" data-nav-icon="settings"><span data-i18n="navSettings">Settings</span><kbd>5</kbd></button>
       <div class="conn off" id="conn"><i></i><span data-i18n="shConnecting">Connecting</span></div>
     </div>
   </nav>
@@ -77,7 +77,7 @@
 
   <main class="panels">
   <!-- Today: what needs you, what runs now, the building (folded by default), the last 24 hours -->
-  <section id="tab-today" class="panel today" role="tabpanel">
+  <section id="tab-today" class="panel today">
   <div class="screen-head"><h1 class="screen-title" data-i18n="navToday">Building</h1></div>
   <div class="today-checklist" id="todayChecklist" hidden></div>
   <div class="screen-body ws-home" id="workshopBody"></div>
@@ -86,10 +86,10 @@
   <section class="usage-strip" id="usageStrip" aria-label="Usage: tokens and API-equivalent cost" data-i18n-attr="aria-label:shUsageLabel" hidden></section>
   </section>
 
-    <section id="tab-projects" class="panel" role="tabpanel" hidden><h1 class="screen-title" data-i18n="shTabProjects">Projects</h1><div class="screen-body" id="projectsBody"></div></section>
-    <section id="tab-roster" class="panel" role="tabpanel" hidden><h1 class="screen-title" data-i18n="shTabRoster">Skills &amp; agents</h1><div class="screen-body" id="rosterBody"></div></section>
+    <section id="tab-projects" class="panel" hidden><h1 class="screen-title" data-i18n="shTabProjects">Projects</h1><div class="screen-body" id="projectsBody"></div></section>
+    <section id="tab-roster" class="panel" hidden><h1 class="screen-title" data-i18n="shTabRoster">Helpers</h1><div class="screen-body" id="rosterBody"></div></section>
     <!-- Feed and Timeline share one menu item: a switch at the top of the screen -->
-    <section id="tab-feed" class="panel" role="tabpanel" hidden><div class="screen-head"><h1 class="screen-title" data-i18n="shTabFeed">Feed</h1><div class="seg feed-switch adv-only" role="group"><button type="button" data-tab="feed" class="on" data-i18n="shTabFeed">Feed</button><button type="button" data-tab="timeline" data-i18n="shTabTimeline">Timeline</button></div></div>
+    <section id="tab-feed" class="panel" hidden><div class="screen-head"><h1 class="screen-title" data-i18n="shTabFeed">Feed</h1><div class="seg feed-switch adv-only" role="group"><button type="button" data-tab="feed" class="on" data-i18n="shTabFeed">Feed</button><button type="button" data-tab="timeline" data-i18n="shTabTimeline">Timeline</button></div></div>
       <!-- The numbers of the last 24 hours belong with the activity they count -->
       <section class="kpis adv-only" id="kpis" aria-label="Last 24 hours" data-i18n-attr="aria-label:shKpisLabel"></section>
       <!-- The orchestra scene (an advanced view since the Building became the main screen, docs/simplify.md) -->
@@ -135,8 +135,8 @@
     </aside>
   </section>
       <div class="screen-body" id="feedBody"></div></section>
-    <section id="tab-timeline" class="panel" role="tabpanel" hidden><div class="screen-head"><h1 class="screen-title" data-i18n="shTabTimeline">Timeline</h1><div class="seg feed-switch adv-only" role="group"><button type="button" data-tab="feed" data-i18n="shTabFeed">Feed</button><button type="button" data-tab="timeline" class="on" data-i18n="shTabTimeline">Timeline</button></div></div><div class="screen-body" id="timelineBody"></div></section>
-    <section id="tab-settings" class="panel" role="tabpanel" hidden><h1 class="screen-title" data-i18n="navSettings">Settings</h1><div class="screen-body settings" id="settingsBody"></div>
+    <section id="tab-timeline" class="panel" hidden><div class="screen-head"><h1 class="screen-title" data-i18n="shTabTimeline">Timeline</h1><div class="seg feed-switch adv-only" role="group"><button type="button" data-tab="feed" data-i18n="shTabFeed">Feed</button><button type="button" data-tab="timeline" class="on" data-i18n="shTabTimeline">Timeline</button></div></div><div class="screen-body" id="timelineBody"></div></section>
+    <section id="tab-settings" class="panel" hidden><h1 class="screen-title" data-i18n="navSettings">Settings</h1><div class="screen-body settings" id="settingsBody"></div>
       <footer class="foot">
         <span><span data-i18n-html="shFootSources">Source: Claude Code logs (<code>~/.claude/projects</code>), open sessions (<code>~/.claude/sessions</code>), installed skills, agents and plugins, the project registry and library in the hub folder, git.</span> <span id="hubFoot"></span></span>
         <span data-i18n-html="shFootKeys">Shortcuts: <kbd>Ctrl</kbd>+<kbd>K</kbd> search anywhere · <kbd>1</kbd>–<kbd>5</kbd> screens · <kbd>R</kbd> replay · <kbd>/</kbd> search in a screen · <kbd>?</kbd> guide · <kbd>Esc</kbd> close</span>

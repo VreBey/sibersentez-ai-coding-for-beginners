@@ -27,6 +27,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const CHANNEL = 'sibersentez:set-actions-mode';
 const PICK_CHANNEL = 'sibersentez:pick-project-folder';
 const IDEA_CHANNEL = 'sibersentez:save-project-idea';
+const IDEA_PROJECT_CHANNEL = 'sibersentez:create-idea-project';
 // Same name as LIBRARY_PICK_IPC_CHANNEL in helpers.mjs
 const LIBRARY_PICK_CHANNEL = 'sibersentez:pick-library-folder';
 // Same name and choices as LANGUAGE_IPC_CHANNEL and LANGUAGE_CHOICES in helpers.mjs
@@ -42,7 +43,7 @@ const IDEA_MAX = 1200;
 
 // Embedded terminals (docs/embedded-terminal.md): ids and keystrokes only; the main process checks the sender and asks
 // the server where a terminal opens
-const TERM = { open: 'sibersentez:term-open', write: 'sibersentez:term-write', resize: 'sibersentez:term-resize', close: 'sibersentez:term-close', list: 'sibersentez:term-list', data: 'sibersentez:term-data', exit: 'sibersentez:term-exit' };
+const TERM = { open: 'sibersentez:term-open', write: 'sibersentez:term-write', resize: 'sibersentez:term-resize', close: 'sibersentez:term-close', list: 'sibersentez:term-list', data: 'sibersentez:term-data', exit: 'sibersentez:term-exit', toolEnd: 'sibersentez:term-tool-end' };
 const TERM_ID = /^t[1-9][0-9]{0,6}$/;
 const LAUNCH_ID = /^L[0-9a-f]{24}$/;
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -59,7 +60,11 @@ contextBridge.exposeInMainWorld('sibersentezTerminal', {
           ? { sessionId: t.sessionId }
           : typeof t.launchId === 'string' && LAUNCH_ID.test(t.launchId)
             ? { launchId: t.launchId }
-            : null;
+            : // The setup terminal (installing an AI tool): exactly { setup: true } (it was dropped here: "Type in
+              // terminal" never opened, found by using the app 2026-10-08)
+              t.setup === true && Object.keys(t).length === 1
+              ? { setup: true }
+              : null;
     if (!req) return Promise.resolve({ ok: false, reason: 'invalid' });
     return ipcRenderer.invoke(TERM.open, req, size(cols, 2, 500), size(rows, 2, 200));
   },
@@ -82,6 +87,10 @@ contextBridge.exposeInMainWorld('sibersentezTerminal', {
   onExit(fn) {
     if (typeof fn === 'function') ipcRenderer.on(TERM.exit, (_e, id, code) => fn(id, code));
   },
+  // The AI tool of a tab ended, its shell stays open (the launcher's mark): the page gets (id)
+  onToolEnd(fn) {
+    if (typeof fn === 'function') ipcRenderer.on(TERM.toolEnd, (_e, id) => fn(id));
+  },
 });
 
 contextBridge.exposeInMainWorld('sibersentezShell', {
@@ -91,6 +100,14 @@ contextBridge.exposeInMainWorld('sibersentezShell', {
   },
   pickProjectFolder() {
     return ipcRenderer.invoke(PICK_CHANNEL);
+  },
+  // A new project from an idea (review U05): its name and idea; choose: pick where its folder goes (else
+  // the SiberSentez folder in Documents). Resolves { ok, projectId? , reason } only, never a path.
+  createIdeaProject(name, idea, choose) {
+    if (typeof name !== 'string' || name.length > 200 || typeof idea !== 'string' || idea.length > IDEA_MAX || typeof choose !== 'boolean') {
+      return Promise.resolve({ ok: false, reason: 'invalid' });
+    }
+    return ipcRenderer.invoke(IDEA_PROJECT_CHANNEL, name, idea, choose);
   },
   // "Add to the library": the system folder picker; resolves { ok, path } or { ok: false, reason }
   pickLibraryFolder() {

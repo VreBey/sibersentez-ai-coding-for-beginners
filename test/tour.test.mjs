@@ -51,7 +51,7 @@ test('markup: the count, the simulation note, back from the second step, End on 
 test('wiring: the guide\'s first step and the palette open it; the page sets each step up without pressing or starting anything, and puts everything back', () => {
   assert.equal(GUIDE_STEPS[0].go, 'tour');
   const main = read('public/js/main.js');
-  assert.ok(main.includes('tour: () => tour.show(),') && main.includes("{ id: 'tour', label: t('tourPalette')"));
+  assert.ok(main.includes('tour: leaveDrawer(() => tour.show()),') && main.includes("{ id: 'tour', label: t('tourPalette')"));
   const sceneFn = main.slice(main.indexOf('const tour = createTour({'), main.indexOf('const guide = createGuide({'));
   assert.ok(sceneFn.includes('workshop.example(s.at, { lead: !!s.lead })') && sceneFn.includes('workshop.live();') && sceneFn.includes('tourBox(false);'));
   for (const never of ['giveJob', 'runAction', 'runMenuItem', 'requestSubmit', '.click()']) assert.ok(!sceneFn.includes(never), `the tour never calls ${never}`);

@@ -394,9 +394,11 @@ kbd { border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 
 .more-row { list-style: none; }
 
 /* ---------- çekmece ---------- */
+/* Its bottom stays above SiberSentez's terminal (--dock-space, terminalDock.js): the terminal lies over the page, so the
+   drawer's last lines ("Go back to this point") sat under it and could not be clicked (seen when using the app, 2026-10-08) */
 .scrim { position: fixed; inset: 0; background: rgba(3, 4, 8, 0.5); backdrop-filter: blur(2px); z-index: 20; }
 .drawer {
-  position: fixed; top: 0; right: 0; bottom: 0; width: min(600px, 100vw); z-index: 21; transform: translateX(104%);
+  position: fixed; top: 0; right: 0; bottom: var(--dock-space, 0px); width: min(600px, 100vw); z-index: 21; transform: translateX(104%);
   transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); background-color: #0f121b; background-image: linear-gradient(180deg, #121622, #0c0f16); border-left: 1px solid var(--line-2); box-shadow: -30px 0 80px rgba(var(--shade-rgb), 0.5);
   display: flex; flex-direction: column;
 }

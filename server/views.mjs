@@ -40,9 +40,12 @@ export function sessionView(ing, s) {
   }
   return {
     id: s.id,
+    tool: s.tool || 'claude',
     projectId: s.projectId,
     title: s.title,
     firstPrompt: s.firstPrompt,
+    jobId: s.jobId || null,
+    jobText: s.jobText || null,
     lastPrompt: s.lastPrompt,
     lastPromptAt: s.lastPromptAt,
     promptCount: s.promptCount,

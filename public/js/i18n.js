@@ -41,6 +41,11 @@ const BASE = {
     actionsModeOff: 'Off',
     actionsModeDry: 'Preview',
     actionsModeLive: 'On',
+    // The header indicator adds what the mode means for the person (review U11): "Actions: Off · only watches"; the
+    // mode names stay the same words as the panel, the tray and the messages
+    actionsStateOff: 'only watches',
+    actionsStateDry: 'only shows',
+    actionsStateLive: 'does the work',
     actionsHowTo: 'Change it in the SiberSentez app: click this indicator, or right-click the SiberSentez icon in the system tray and choose Actions.',
     actionsOffMenuTip: 'Turn actions on with the Actions indicator at the top, or from the tray menu: SiberSentez icon, then Actions.',
     actionsOffError: 'Actions are off. Turn them on with the Actions indicator at the top of the panel or from the tray menu (SiberSentez icon, then Actions); a server started on its own uses SIBERSENTEZ_ACTIONS.',
@@ -62,7 +67,11 @@ const BASE = {
     skTargets: 'Install for',
     skTarget_claude: 'Claude Code (.claude)',
     skTarget_agents: 'Other tools (.agents)',
-    skAgentsClaudeOnly: 'Agents always go to .claude/agents.',
+    skTarget_gemini: 'Gemini CLI agents (.gemini)',
+    skTarget_qwen: 'Qwen Code agents (.qwen)',
+    skTarget_opencode: 'OpenCode agents (.opencode)',
+    skTarget_codex: 'Codex agents (.codex)',
+    skAgentsClaudeOnly: 'Agents go to .claude/agents (Claude Code, Copilot and Cursor read it); a job with Gemini CLI, Qwen Code, OpenCode or Codex also gets them converted into that tool’s own agents folder.',
     skPreview: 'Preview',
     skTry: 'Try',
     skInstall: 'Install',
@@ -115,6 +124,7 @@ const BASE = {
     'skReason_too-many-files': 'more than 500 files',
     'skReason_too-many-folders': 'more than 500 folders',
     'skReason_too-deep': 'more than 16 folder levels deep',
+    'skReason_not-convertible': 'could not be converted for this tool (no frontmatter or name)',
     skReason_unchanged: 'unchanged: deleted',
     skReason_trial: 'copied into the trial folder',
     'skReason_trial-claude-code-only': 'trials start Claude Code only',
@@ -344,6 +354,9 @@ const BASE = {
   tr: {
     actionsIndicator: 'Eylemler: {mode}',
     actionsModeOff: 'Kapalı',
+    actionsStateOff: 'yalnız izler',
+    actionsStateDry: 'yalnız gösterir',
+    actionsStateLive: 'iş yapar',
     actionsModeDry: 'Önizleme',
     actionsModeLive: 'Açık',
     actionsHowTo: "SiberSentez uygulamasında değiştirilir: bu göstergeye tıkla ya da sistem tepsisindeki SiberSentez simgesine sağ tıklayıp Eylemler’i seç.",
@@ -366,7 +379,11 @@ const BASE = {
     skTargets: 'Nereye',
     skTarget_claude: 'Claude Code (.claude)',
     skTarget_agents: 'Diğer araçlar (.agents)',
-    skAgentsClaudeOnly: 'Ajanlar her zaman .claude/agents altına gider.',
+    skTarget_gemini: 'Gemini CLI ajanları (.gemini)',
+    skTarget_qwen: 'Qwen Code ajanları (.qwen)',
+    skTarget_opencode: 'OpenCode ajanları (.opencode)',
+    skTarget_codex: 'Codex ajanları (.codex)',
+    skAgentsClaudeOnly: 'Ajanlar .claude/agents altına gider (Claude Code, Copilot ve Cursor orayı okur); Gemini CLI, Qwen Code, OpenCode ya da Codex ile başlatılan iş onları o aracın kendi ajan klasörüne dönüştürülmüş olarak da alır.',
     skPreview: 'Önizle',
     skTry: 'Dene',
     skInstall: 'Kur',
@@ -419,6 +436,7 @@ const BASE = {
     'skReason_too-many-files': '500’den çok dosya',
     'skReason_too-many-folders': '500’den çok klasör',
     'skReason_too-deep': '16 klasör düzeyinden derin',
+    'skReason_not-convertible': 'bu araç için dönüştürülemedi (üst bilgi ya da ad yok)',
     skReason_unchanged: 'değişmemiş: silinir',
     skReason_trial: 'deneme klasörüne kopyalanır',
     'skReason_trial-claude-code-only': 'deneme yalnız Claude Code’u başlatır',
@@ -687,3 +705,11 @@ export function t(key, values = {}) {
 export function modeName(mode) {
   return t(MODE_KEYS[mode] || MODE_KEYS.off);
 }
+
+// What the mode means for the person, next to its name in the header indicator (review U11)
+const STATE_KEYS = Object.freeze({ off: 'actionsStateOff', dry: 'actionsStateDry', live: 'actionsStateLive' });
+export function stateName(mode) {
+  return t(STATE_KEYS[mode] || STATE_KEYS.off);
+}
+// The indicator's mode: its name and what it means ("Off · only watches")
+export const indicatorMode = (mode) => `${modeName(mode)} · ${stateName(mode)}`;

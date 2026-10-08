@@ -5,8 +5,10 @@
 import { esc } from '../format.js';
 import { icon } from '../icons.js';
 import { t } from '../i18n.js';
-import { installedTools, toolsState } from './tools.js';
+import { installedTools, toolsState, TOOL_KEY, preferredTool, readTool, saveTool } from './tools.js';
 import { sessionState } from '../attention.js';
+import { sessionJobId, sessionTool, canContinueTool } from '../jobId.js';
+export { sessionJobId };
 
 // The kit's team: what "Install the team" asks for (the server skips what is installed already)
 export const TEAM_KEYS = Object.freeze([
@@ -30,7 +32,16 @@ export const TEAM_KEYS = Object.freeze([
   'agent:debugger',
   'agent:scout',
 ]);
-export const JOB_MAX = 300;
+// The job box holds several lines (review U06): at most the server's JOB_MAX (server/fit.mjs normalizeJob)
+export const JOB_MAX = 2000;
+const FIT_READ = 300;
+// The count shows its limit near the end of the room only, so it never reads as a goal. It counts as the box's
+// maxlength does (UTF-16 units: an emoji takes two), so it reaches the limit where typing stops; the server, counting
+// characters, never cuts what the box let through
+export const jobCountText = (text) => {
+  const n = String(text || '').length;
+  return n >= JOB_MAX * 0.8 ? t('jobCount', { n, max: JOB_MAX }) : '';
+};
 const STEPS = ['plan', 'build', 'check', 'finish'];
 // Team states: install (confirm, busy, done, plan, failed) and update (checking, update, updating, updated, current,
 // update-failed)
@@ -51,11 +62,21 @@ export function teamInstalled(fitData) {
   return o ? !!o.installed : null;
 }
 
-// One plain sentence for where the job is (pure)
-export function jobNowText(d) {
+// No AI works in the project now (pure): no live session there and no AI tab of it running in SiberSentez's terminal
+export function aiIdleIn({ sessions = [], projectId, dock = [] } = {}) {
+  if (!projectId) return false;
+  return ![...sessions].some((s) => s?.live && s.projectId === projectId) && !(dock || []).some((x) => x && x.projectId === projectId);
+}
+
+// One plain sentence for where the job is (pure). idle: no AI works in the project now (aiIdleIn)
+export function jobNowText(d, { idle = false } = {}) {
   if (!d || d.step === 'none') return '';
   const task = d.current ? `${d.current.id} ${d.current.title}`.trim() : '';
-  if (d.step === 'plan') return t('jobNowPlan');
+  // No plan of this job yet: the AI is still writing it (or asks something in the terminal first, as a tool's "trust
+  // this folder?"); "waiting for your approval" then sent the person looking for a plan that was not there (seen when
+  // using the app, 2026-10-08). With no AI at work it is not being written either: the tool closed before it began
+  // (the trust question cancelled): said so, with what to do. An approved plan without tasks is being cut into tasks.
+  if (d.step === 'plan') return t(!d.plan ? (idle ? 'jobNowPlanIdle' : 'jobNowPlanWriting') : d.plan.approved ? 'jobNowPlanSlicing' : 'jobNowPlan');
   if (d.step === 'build') {
     // Without a task name (the Building's example, a plan without ids) the sentence leaves it out: "Working on ." before
     const counts = { task, done: d.tasks?.done ?? 0, total: d.tasks?.total ?? 0 };
@@ -88,6 +109,52 @@ export function stoppedSession(sessions, projectId, now = Date.now(), since = nu
   return last;
 }
 
+// The app job a Claude session was started for: jobId.js sessionJobId (re-exported above)
+
+// The session that can go on with the shown job, or null (docs/development-plan-2026-10-07.md F1). The Building, its
+// next step and the drawer ask this one function, so they never disagree.
+//   - An AI tool of the project still runs in SiberSentez's terminal (dock: terminalDock.running()): nothing stopped.
+//   - The job's own tool (its marker's tool, Claude Code before markers) decides: only that tool's sessions continue
+//     it, with that tool's resume; a tool whose sessions are not read (jobId.js canContinueTool) has none.
+//   - A session that names this job (its first prompt) is the one; a session that names another job never is.
+//   - A session that names no job (started by hand, or a job from before job ids): the last closed one, only when it
+//     was at work around the job's last change (stoppedSession's 15-minute rule, the conservative fallback).
+// No session of the project may still run (stoppedSession).
+export function resumeCandidate({ sessions, projectId, now = Date.now(), job = null, dock = [] } = {}) {
+  if (!projectId || !job || job.step === 'done') return null;
+  if ((dock || []).some((x) => x && x.projectId === projectId && x.ai !== false)) return null;
+  const tool = job.tool || 'claude';
+  if (!canContinueTool(tool)) return null;
+  // The job's own tool's sessions only (server/toolLogs.mjs reads other tools' logs too)
+  const own = [...sessions].filter((s) => s.projectId === projectId && sessionTool(s) === tool);
+  const last = stoppedSession(own, projectId, now, null);
+  if (!last) return null; // one still runs, or none
+  if (job.jobId) {
+    const named = own.filter((s) => sessionJobId(s) === job.jobId).sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0))[0];
+    if (named) return named;
+  }
+  const loose = own.filter((s) => !sessionJobId(s));
+  return stoppedSession(loose, projectId, now, job.updatedAt ?? null);
+}
+
+// The session of the shown job in its own tool, live or closed, or null (pure; review U08: "Go to this job's AI
+// session").
+// A session that names the job is the one; else the project's newest session that names no job, only when it was at
+// work around the job's last change (resumeCandidate's rule). A job of a tool whose sessions are not read has none.
+export function jobSession({ sessions, projectId, job = null } = {}) {
+  const tool = job?.tool || 'claude';
+  if (!projectId || !job || !canContinueTool(tool)) return null;
+  const byNewest = (a, b) => (b.lastAt || 0) - (a.lastAt || 0);
+  const own = [...sessions].filter((s) => s.projectId === projectId && sessionTool(s) === tool);
+  if (job.jobId) {
+    const named = own.filter((s) => sessionJobId(s) === job.jobId).sort(byNewest)[0];
+    if (named) return named;
+  }
+  const loose = own.filter((s) => !sessionJobId(s)).sort(byNewest)[0] || null;
+  if (loose && job.updatedAt && (loose.lastAt || 0) < job.updatedAt - JOB_SESSION_SLACK_MS) return null;
+  return loose;
+}
+
 // The same project somewhere else: a folder with the same name that holds real files (the move's new place)
 export function realTwin(projects, p) {
   if (!p) return null;
@@ -110,12 +177,12 @@ export function stoppedStepsHtml(d, session) {
 }
 
 // The four steps with done and now marked, and one plain sentence on where the job stands (the drawer and the Building)
-export function stepsHtml(d) {
+export function stepsHtml(d, { idle = false } = {}) {
   if (!d || !(STEPS.includes(d.step) || d.step === 'done')) return '';
   // done: the person accepted the result, every step is ticked
   const at = d.step === 'done' ? STEPS.length : STEPS.indexOf(d.step);
   const items = STEPS.map((s, i) => `<li class="${i < at ? 'done' : i === at ? 'now' : ''}"${i === at ? ' aria-current="step"' : ''}>${esc(t(`jobStep_${s}`))}</li>`).join('');
-  return `<ol class="job-steps" aria-label="${esc(t('jobStepsLabel'))}">${items}</ol><p class="small job-now" role="status">${esc(jobNowText(d))}</p>`;
+  return `<ol class="job-steps" aria-label="${esc(t('jobStepsLabel'))}">${items}</ol><p class="small job-now" role="status">${esc(jobNowText(d, { idle }))}</p>`;
 }
 
 // The team's items as the install request names them ({ kind, name })
@@ -157,27 +224,9 @@ function teamHtml(team, ui, dis, updates = 0) {
   return `<div class="job-team"><p class="small">${esc(t('jobTeamMissing'))}</p><button type="button" class="act-btn" data-job-act="team" data-fk="job:team"${dis}>${icon('plugin')}<span>${esc(t('jobTeamInstall'))}</span></button></div>`;
 }
 
-// The tool a job starts with (docs/simplify.md): the one chosen in the Settings when it is installed, else Claude Code,
-// else the first one found (pure). tools: installedTools(...); stored: the chosen tool's id
-export const TOOL_KEY = 'sibersentez.aiTool';
-export function preferredTool(found, stored = readTool()) {
-  const list = Array.isArray(found) ? found : [];
-  return list.find((x) => x.id === stored) || list.find((x) => x.id === 'claude') || list[0] || null;
-}
-export function readTool() {
-  try {
-    return globalThis.localStorage?.getItem(TOOL_KEY) || '';
-  } catch {
-    return '';
-  }
-}
-export function saveTool(id) {
-  try {
-    globalThis.localStorage?.setItem(TOOL_KEY, String(id || ''));
-  } catch {
-    /* not kept: this page only */
-  }
-}
+// The tool a job starts with: tools.js preferredTool (the tools panel shows it first too), kept here by name for the
+// pages that import it from the job
+export { TOOL_KEY, preferredTool, readTool, saveTool };
 
 // What a job sets up before it starts (pure): the team, then the helpers the server chose for this job's words
 // (selected, installable, not in the project yet), within the server's limit of one request
@@ -193,20 +242,23 @@ export function jobKeys(fit) {
 // turnOn: actions can be turned on from here (the desktop app), so Start stays pressable while they are off and asks
 // once; asking: that question is on screen.
 // next: the follow-ups a finished job offers ('change', 'try', 'deploy'); each only fills the box, Start stays the person's
-export function jobSectionHtml(p, data, { mode = 'off', tools = toolsState(), text = '', stopped = null, turnOn = false, asking = false, next = [] } = {}) {
+// asNew: the job's result is waiting above (review U07): the box is a plain "New job" after it, without the job's steps
+// and with a secondary Start, so it never looks like the way to answer the job
+export function jobSectionHtml(p, data, { mode = 'off', tools = toolsState(), text = '', stopped = null, turnOn = false, asking = false, next = [], asNew = false, idle = false } = {}) {
   if (!p || !p.path || p.exists === false || p.broad || p.tmpOnly || p.kind === 'hub') return '';
   const on = mode === 'dry' || mode === 'live';
   const tool = preferredTool(installedTools(tools));
   const oneStep = mode === 'off' && turnOn && !!tool;
   const dis = on || oneStep ? '' : ' aria-disabled="true"';
   const pid = esc(p.id);
-  const input = `<label class="sr-only" for="job-${pid}">${esc(t('jobLabel'))}</label><input type="text" id="job-${pid}" class="job-text" data-job-text="${pid}" data-fk="job:text" maxlength="${JOB_MAX}" value="${esc(text)}" placeholder="${esc(t('jobPlaceholder'))}" autocomplete="off">`;
+  // Several lines: Enter is a new line, Ctrl+Enter (or the button) starts; the count near the limit
+  const input = `<label class="sr-only" for="job-${pid}">${esc(t('jobLabel'))}</label><textarea id="job-${pid}" class="job-text" data-job-text="${pid}" data-fk="job:text" rows="3" maxlength="${JOB_MAX}" placeholder="${esc(t('jobPlaceholder'))}" autocomplete="off" aria-describedby="jobKeys-${pid}">${esc(text)}</textarea><p class="small muted job-keys" id="jobKeys-${pid}"><span>${esc(t('jobKeyHint'))}</span> <span class="job-count" data-job-count="${pid}" aria-live="polite">${esc(jobCountText(text))}</span></p>`;
   // While the tools are still being looked for, say so (not "no tool yet")
   const looking = tools.status === 'idle' || tools.status === 'loading';
   const btn = looking
     ? `<p class="small" role="status">${esc(t(tools.status === 'error' ? 'aiLoadFailed' : 'aiLoading'))}</p>`
     : tool
-    ? `<button type="button" class="act-btn primary job-go" data-job-act="start" data-job-tool="${esc(tool.id)}" data-fk="job:start" aria-describedby="jobWhy"${dis}>${icon('spark')}<span>${esc(t('jobGo'))}</span></button>`
+    ? `<button type="button" class="act-btn${asNew ? '' : ' primary'} job-go" data-job-act="start" data-job-tool="${esc(tool.id)}" data-fk="job:start" aria-describedby="jobWhy"${dis}>${icon('spark')}<span>${esc(t('jobGo'))}</span></button>`
     : `<p class="small">${esc(t('jobNoTool'))}</p><button type="button" class="act-btn primary" data-ai-act="tools" data-fk="job:tools">${icon('plugin')}<span>${esc(t('aiInstallOne'))}</span></button>`;
   const why = !tool ? '' : mode === 'live' ? t('jobGoWith', { tool: tool.name }) : mode === 'dry' ? t('jobWhyDry') : oneStep ? t('jobWhyOffOne') : t('jobWhyOff');
   // "Turn actions on and start?": the switch's own title, what On means for this job, yes / cancel
@@ -214,7 +266,8 @@ export function jobSectionHtml(p, data, { mode = 'off', tools = toolsState(), te
     ? `<div class="flow-confirm" role="group" aria-labelledby="jobQ"><p id="jobQ"><b>${esc(t('actionsSwitchConfirmTitle'))}</b> ${esc(t('jobTurnOnAsk', { tool: tool.name }))}</p><div class="flow-btns"><button type="button" class="act-btn primary" data-job-act="start-on" data-fk="job:start-on">${esc(t('jobTurnOnYes'))}</button><button type="button" class="act-btn" data-job-act="start-no" data-fk="job:start-no">${esc(t('jobTeamNo'))}</button></div></div>`
     : '';
   const follow = data?.step === 'done' ? nextHtml(next) : '';
-  return `<section class="dr-sec job" data-sec="job" aria-labelledby="jobH"><h3 id="jobH">${icon('spark')} ${esc(t('jobAsk'))}</h3>${stopped && data && STEPS.includes(data.step) && mode === 'live' ? stoppedStepsHtml(data, stopped) : stepsHtml(data)}${follow}<div class="job-row">${input}${btn}</div>${ask}${why && !ask ? `<p class="small muted flow-why" id="jobWhy">${esc(why)}</p>` : ''}${historyHtml(data?.history)}</section>`;
+  const steps = asNew ? '' : stopped && data && STEPS.includes(data.step) && mode === 'live' ? stoppedStepsHtml(data, stopped) : stepsHtml(data, { idle });
+  return `<section class="dr-sec job" data-sec="job" aria-labelledby="jobH"><h3 id="jobH">${icon('spark')} ${esc(t(asNew ? 'jobAskNew' : 'jobAsk'))}</h3>${steps}${follow}<div class="job-row">${input}${btn}</div>${ask}${why && !ask ? `<p class="small muted flow-why" id="jobWhy">${esc(why)}</p>` : ''}${historyHtml(data?.history)}</section>`;
 }
 
 // Earlier jobs of the project (server/team.mjs jobHistory), folded: what was done before, newest first (pure)
@@ -251,6 +304,19 @@ export function teamSectionHtml(p, { mode = 'off', team = null, teamUi = '', upd
   return body ? `<section class="dr-sec job-team-sec" data-sec="team" aria-labelledby="teamH"><h3 id="teamH">${icon('users')} ${esc(t('jobTeamSec'))}</h3><p class="small muted">${esc(t('jobIntro'))}</p>${body}</section>` : '';
 }
 
+// Where a job's team and helpers go (pure): the folder the job's own tool reads (server/install.mjs TARGETS). Claude
+// Code reads .claude/skills; every other tool reads the shared .agents/skills (checked in each tool's adapter or
+// package, 2026-10-07: Codex, Gemini CLI, Antigravity, Copilot, Cursor, Qwen Code, OpenCode). A project Claude Code
+// worked in keeps .claude as well, so both tools see the team. Before, a new project's Codex job got .claude only.
+// Its agents go to .claude always (Claude Code, Copilot CLI and Cursor CLI read it) and, converted, to the agents folder
+// of Gemini CLI, Qwen Code, OpenCode or Codex when the job runs with one of them (server/agentFormats.mjs).
+const AGENT_TARGET = Object.freeze({ gemini: 'gemini', qwen: 'qwen', opencode: 'opencode', codex: 'codex' });
+export function jobTargets(toolId, via = []) {
+  if (!toolId || toolId === 'claude') return ['claude'];
+  const out = Array.isArray(via) && via.includes('claude-code') ? ['claude', 'agents'] : ['agents'];
+  return AGENT_TARGET[toolId] ? [...out, AGENT_TARGET[toolId]] : out;
+}
+
 // Give a job (the drawer's Start and the building's box): the team and the helpers that fit this job are set up in
 // one request (live mode; the server skips what is there and never touches an item the project changed), then the AI
 // tool starts with the job as its first message (the same path as every start: a restore point first). deps: { mode,
@@ -265,14 +331,17 @@ export async function giveJob(p, text, deps) {
     toast({ tone: 'ok', title: t('jobAsk'), body: t('jobPreparing') });
     let fit = null;
     try {
-      fit = await fetchFit(p.id, job);
+      // The fit reads the first FIT_READ characters only (IDEA_MAX in server/fit.mjs); a long job in the URL could pass
+      // the header limit and the fit would be lost
+      fit = await fetchFit(p.id, Array.from(job).slice(0, FIT_READ).join(''));
     } catch {
       fit = null;
     }
     const keys = jobKeys(fit);
-    const r = await runAction({ action: 'skills-apply', projectId: p.id, keys });
+    const r = await runAction({ action: 'skills-apply', projectId: p.id, keys, targets: jobTargets(tool.id, p.via) });
     const count = (Number(r?.result?.copied) || 0) + (Number(r?.result?.updated) || 0);
-    toast({ tone: r?.ok ? 'ok' : 'warn', title: t('jobAsk'), body: r?.ok ? t('jobPrepared', { count }) : t('jobPrepareSkipped') });
+    // Nothing to copy: the team and its helpers are there already ("0 helpers set up" read like a failure, 2026-10-08)
+    toast({ tone: r?.ok ? 'ok' : 'warn', title: t('jobAsk'), body: r?.ok ? (count ? t('jobPrepared', { count }) : t('jobPreparedAlready')) : t('jobPrepareSkipped') });
   }
   const it = { id: `start-ai:${tool.id}`, label: t('jobStartWith', { tool: tool.name }), action: 'start-ai', payload: { projectId: p.id, tool: tool.id, job }, name: p.name, toolName: tool.name };
   const openSkills = (x) => openDrawer?.({ ...x, section: 'skills' });
@@ -280,8 +349,8 @@ export async function giveJob(p, text, deps) {
 }
 
 // The fit of a project for a job's words (GET /api/projects/<id>/fit, read-only)
-export async function fetchFitFor(projectId, idea) {
-  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/fit?idea=${encodeURIComponent(idea)}`, { cache: 'no-store', credentials: 'same-origin' });
+export async function fetchFitFor(projectId, idea, { signal } = {}) {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/fit?idea=${encodeURIComponent(idea)}`, { cache: 'no-store', credentials: 'same-origin', ...(signal ? { signal } : {}) });
   if (!res.ok) throw new Error(String(res.status));
   return res.json();
 }

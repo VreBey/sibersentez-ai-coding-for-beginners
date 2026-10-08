@@ -152,6 +152,8 @@ export function teamSummary({ plan, tasks, review, currentJob = null, updatedAt 
     current: current ? { id: current.id, title: current.title, owner: current.owner, status: current.status } : null,
     review: reviewOf(tasks, review, plan?.jobId || null),
     reviewIssue: plan && !legacyAccepted(plan, currentJob) && (!validJobId(plan.jobId) || (review && review.jobId !== plan.jobId)) ? 'job-identity' : null,
+    // The tool the app started this job with (its marker), when the plan is this job's
+    tool: currentJob?.tool && plan?.jobId && plan.jobId === currentJob.jobId ? currentJob.tool : null,
     updatedAt,
     history,
   };

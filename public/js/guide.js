@@ -23,6 +23,20 @@ export const GUIDE_STEPS = Object.freeze(
   ].map((s) => Object.freeze(s)),
 );
 
+// The words the app uses, each said plainly once (review U11): the guide's "What do these words mean?" opens them.
+// gl_<id>_t is the word as the screens show it (the technical name in brackets), gl_<id>_d its meaning.
+export const GLOSSARY = Object.freeze(['tool', 'project', 'job', 'plan', 'session', 'skill', 'agent', 'actions', 'restore', 'building']);
+
+export function glossaryHtml() {
+  const rows = GLOSSARY.map((id) => `<dt>${esc(t(`gl_${id}_t`))}</dt><dd>${esc(t(`gl_${id}_d`))}</dd>`).join('');
+  return `<div class="guide-head"><span class="guide-ic">${icon('list')}</span><span class="guide-count">${esc(t('guideWordsCount', { n: GLOSSARY.length }))}</span>
+      <button type="button" class="icon-btn guide-x" data-guide="close" aria-label="${esc(t('guideClose'))}">${icon('close')}</button></div>
+    <h2 id="guideTitle">${esc(t('guideWordsTitle'))}</h2>
+    <p id="guideBody">${esc(t('guideWordsIntro'))}</p>
+    <dl class="guide-words-list">${rows}</dl>
+    <div class="guide-foot"><div class="guide-nav"><button type="button" class="chip chip-btn guide-next" data-guide="words-back">${esc(t('guideWordsBack'))}</button></div></div>`;
+}
+
 export function clampStep(i) {
   const n = Number.isInteger(i) ? i : 0;
   return Math.min(GUIDE_STEPS.length - 1, Math.max(0, n));
@@ -76,6 +90,7 @@ export function stepHtml(i, { mode = 'off', available = () => true } = {}) {
     <p id="guideBody">${esc(body)}</p>
     ${go}
     ${i === 0 ? `<p class="guide-again">${esc(t('guideAgain'))}</p>` : ''}
+    <button type="button" class="guide-words" data-guide="words">${esc(t('guideWordsLink'))}</button>
     <div class="guide-foot"><div class="guide-dots">${dots}</div>
       <div class="guide-nav">${i === 0 ? `<button type="button" class="chip chip-btn" data-guide="close">${esc(t('guideSkip'))}</button>` : `<button type="button" class="chip chip-btn" data-guide="back">${esc(t('guideBack'))}</button>`}
       <button type="button" class="chip chip-btn guide-next" data-guide="${last ? 'close' : 'next'}">${esc(t(last ? 'guideDone' : 'guideNext'))}</button></div></div>`;
@@ -123,6 +138,16 @@ export function createGuide({ go = {}, getMode = () => 'off', storage = globalTh
     render();
   }
 
+  // The glossary in the same box; Back returns to the step it was opened from. Opened from outside (the palette), it
+  // opens the guide first.
+  function showWords() {
+    if (root.hidden) show(step);
+    spot?.classList.remove('guide-spot');
+    spot = null;
+    box.innerHTML = glossaryHtml();
+    box.querySelector('[data-guide="words-back"]')?.focus({ preventScroll: true });
+  }
+
   // Closing in any way (Done, Skip, Esc, the X, a step button) counts as seen
   function hide() {
     if (root.hidden) return;
@@ -155,6 +180,8 @@ export function createGuide({ go = {}, getMode = () => 'off', storage = globalTh
     } else if (b.dataset.guide === 'next') move(1);
     else if (b.dataset.guide === 'back') move(-1);
     else if (b.dataset.guide === 'close') hide();
+    else if (b.dataset.guide === 'words') showWords();
+    else if (b.dataset.guide === 'words-back') render('[data-guide="words"]');
   });
   root.addEventListener('mousedown', (e) => {
     if (e.target === root) hide();
@@ -164,8 +191,10 @@ export function createGuide({ go = {}, getMode = () => 'off', storage = globalTh
     e.stopPropagation();
     if (e.key === 'Escape') {
       e.preventDefault();
-      hide();
-    } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !e.altKey) {
+      // In the words, Esc goes back to the step they were opened from; on a step it closes the guide
+      if (box.querySelector('.guide-words-list')) render('[data-guide="words"]');
+      else hide();
+    } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !e.altKey && !box.querySelector('.guide-words-list')) {
       e.preventDefault();
       move(e.key === 'ArrowRight' ? 1 : -1);
     } else if (e.key === 'Tab') {
@@ -180,11 +209,11 @@ export function createGuide({ go = {}, getMode = () => 'off', storage = globalTh
 
   // The actions mode arrives after the first render (and changes later): draw the open step again, focus kept in place
   function refresh() {
-    if (root.hidden) return;
+    if (root.hidden || box.querySelector('.guide-words-list')) return;
     const a = doc.activeElement;
     const keep = !box.contains(a) || a.classList.contains('guide-next') ? '.guide-next' : a.dataset.guide ? `[data-guide="${a.dataset.guide}"]` : a?.dataset?.guideStep ? `[data-guide-step="${a.dataset.guideStep}"]` : '.guide-next';
     render(keep);
   }
 
-  return { show, hide, refresh, isOpen: () => !root.hidden, step: () => step };
+  return { show, hide, refresh, showWords, isOpen: () => !root.hidden, step: () => step };
 }

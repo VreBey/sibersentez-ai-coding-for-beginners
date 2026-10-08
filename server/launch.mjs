@@ -59,11 +59,34 @@ export function launchPrompt(fileName) {
 }
 
 // Arguments that start a tool interactively with the prompt (null: no prompt). tool.prompt: 'arg' or an option.
-// A job (docs/simplify.md) starts Claude Code in plan mode: it reads and plans first and asks the person to approve
-// the plan in its own prompt (which also offers to accept edits from then on). SiberSentez never answers that question
-// itself. Other tools have no such mode: they start as usual.
-export function jobArgs(tool) {
-  return tool?.id === 'claude' ? ['--permission-mode', 'plan'] : [];
+// A job (docs/simplify.md) starts the tool in its own plan mode when it has one (tools.mjs plan: Claude Code, Gemini
+// CLI): it reads and plans first and asks the person to approve the plan in its own prompt. SiberSentez never answers
+// that question itself. A tool without a known plan mode starts as usual (the job file asks it for the plan first).
+export function jobArgs(tool, version = null) {
+  if (!Array.isArray(tool?.plan)) return [];
+  if (tool.planMin && !(versionAtLeast(version, tool.planMin))) return [];
+  return [...tool.plan];
+}
+
+// The arguments that continue a session of that tool (server/tools.mjs resume): the id after them, or joined to the
+// last one when it ends with "=" (Copilot CLI's optional value: --resume=<id>)
+export function resumeArgs(tool, id) {
+  const r = Array.isArray(tool?.resume) ? [...tool.resume] : [];
+  if (!r.length || typeof id !== 'string' || !id) return [];
+  const last = r[r.length - 1];
+  return last.endsWith('=') ? [...r.slice(0, -1), `${last}${id}`] : [...r, id];
+}
+
+// "0.61.2" >= "0.61.0" (the numbers of a version text, in order); false when either has none
+export function versionAtLeast(version, min) {
+  const a = String(version || '').match(/\d+(?:\.\d+)*/)?.[0]?.split('.').map(Number);
+  const b = String(min || '').match(/\d+(?:\.\d+)*/)?.[0]?.split('.').map(Number);
+  if (!a || !b) return false;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] || 0) - (b[i] || 0);
+    if (d) return d > 0;
+  }
+  return true;
 }
 
 export function toolArgs(tool, prompt) {
@@ -105,8 +128,8 @@ export function firstMessageText(idea) {
   ].join('\n');
 }
 
-// The first message of "Do a job" (docs/kit-in-app.md): the job the person typed (cleaned like an idea, at most 300
-// characters), quoted, and the team flow of the SiberSentez kit (docs/kit-v2.md §3). The tool uses the orchestrate
+// The first message of "Do a job" (docs/kit-in-app.md): the job the person typed (fit.mjs normalizeJob: its lines
+// kept, at most JOB_MAX characters), each line quoted, and the team flow of the SiberSentez kit (docs/kit-v2.md §3). The tool uses the orchestrate
 // skill when it is installed; otherwise it follows the same steps itself. SiberSentez writes nothing into the project's
 // own files: the tool may offer the starter lines of agent-rules, and adds them only after the person's yes.
 export function jobMessageText(job, jobId = newJobId()) {
@@ -201,6 +224,14 @@ export const newLauncherName = (rand = crypto.randomBytes) => `${rand(6).toStrin
 // that remains open after the tool: a program in the project folder is started there as .\name.
 export const NO_CWD_SEARCH_LINE = '@set NoDefaultCurrentDirectoryInExePath=1';
 
+// The tool ended, the shell stays open (docs/embedded-terminal.md §7): the launcher leaves <launcher>.ended next to
+// itself once the tool's line returns, and the desktop shell sees it, so an open tab is never taken for a working AI.
+// The path is taken before any cd (relative mode), so the mark never lands in the project. Ctrl+C answered "Y" at
+// "Terminate batch job" skips it: the tab then still counts as running (the safe side for a restore).
+export const ENDED_SUFFIX = '.ended';
+export const ENDED_PATH_LINE = '@set "SIBERSENTEZ_ENDED=%~f0.ended"';
+export const ENDED_MARK_LINE = '@type nul>"%SIBERSENTEZ_ENDED%" 2>nul';
+
 // The launcher text (pure). tool: the found install ({ file, ext }); args: toolArgs(); cdDir: the folder to change
 // to first (relative mode) or null. { ok: true, text } or { ok: false, error: 'tool-path-unsafe' | 'folder-path-unsafe' }.
 // Every line starts with @ (no echo; "@echo off" would hide the prompt of the shell that stays open after the tool).
@@ -208,16 +239,17 @@ export const NO_CWD_SEARCH_LINE = '@set NoDefaultCurrentDirectoryInExePath=1';
 export function launcherText({ toolName, file, ext, args, cdDir = null, env }) {
   const exe = batchPath(file, env);
   if (!exe.ok) return { ok: false, error: 'tool-path-unsafe' };
-  const lines = [NO_CWD_SEARCH_LINE, `@rem SiberSentez: starts ${String(toolName).replace(/[^A-Za-z0-9 .-]/g, '')} in the project folder (docs/ai-start.md). Removed after 24 hours.`];
+  const lines = [NO_CWD_SEARCH_LINE, `@rem SiberSentez: starts ${String(toolName).replace(/[^A-Za-z0-9 .-]/g, '')} in the project folder (docs/ai-start.md). Removed after 24 hours.`, ENDED_PATH_LINE];
   if (cdDir) {
     const dir = batchPath(cdDir, env);
     if (!dir.ok) return { ok: false, error: 'folder-path-unsafe' };
     lines.push(`@cd /d "${dir.expr}" || exit /b 1`);
   }
-  for (const a of args) if (!PROMPT_SAFE_RE.test(a) && !/^-{1,2}[a-z]+$/.test(a)) return { ok: false, error: 'tool-path-unsafe' };
+  // An option, or an option with a session's UUID joined to it (Copilot CLI's --resume=<id>), or a safe word
+  for (const a of args) if (!PROMPT_SAFE_RE.test(a) && !/^-{1,2}[a-z]+(?:=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$/.test(a)) return { ok: false, error: 'tool-path-unsafe' };
   const tail = args.map((a) => (/^-/.test(a) ? a : `"${a}"`)).join(' ');
   const call = ext === '.exe' ? '' : 'call ';
-  lines.push(`@${call}"${exe.expr}"${tail ? ' ' + tail : ''}`);
+  lines.push(`@${call}"${exe.expr}"${tail ? ' ' + tail : ''}`, ENDED_MARK_LINE);
   const text = lines.join('\r\n') + '\r\n';
   if (!/^[\x20-\x7e\r\n]*$/.test(text)) return { ok: false, error: 'tool-path-unsafe' };
   return { ok: true, text };
@@ -353,7 +385,8 @@ export function cleanupLaunchers(dir, { now = Date.now(), maxAgeMs = 24 * 60 * 6
     return 0;
   }
   for (const n of names) {
-    if (!LAUNCHER_NAME_RE.test(n)) continue;
+    // A launcher, or the mark it left when its tool ended (ENDED_SUFFIX): both go after a day
+    if (!LAUNCHER_NAME_RE.test(n) && !(n.endsWith(ENDED_SUFFIX) && LAUNCHER_NAME_RE.test(n.slice(0, -ENDED_SUFFIX.length)))) continue;
     const f = path.join(dir, n);
     try {
       const st = xfs.lstatSync(f);

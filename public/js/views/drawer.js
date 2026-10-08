@@ -12,9 +12,11 @@ import { sessionState } from '../attention.js';
 import { createProjectUsage, setPeriod, dateText } from '../usage.js';
 import { aiStartSectionHtml, bindAiStart, ideaPref, needTools, toolsState, installedTools } from './tools.js';
 import { createRunHint, bindRunHint } from '../runHint.js';
-import { createJob, TEAM_KEYS, TEAM_ITEMS, teamInstalled, teamUpdates, giveJob, fetchFitFor, stoppedSession, realTwin, toolsOnlyHtml, nextFor, NEXT_KEYS } from './job.js';
+import { sessionToolName } from '../jobId.js';
+import { createJob, TEAM_KEYS, TEAM_ITEMS, teamInstalled, teamUpdates, giveJob, fetchFitFor, resumeCandidate, aiIdleIn, jobSession, stepsHtml, jobCountText, realTwin, toolsOnlyHtml, nextFor, NEXT_KEYS } from './job.js';
 import { createChanges } from '../changes.js';
-import { createRestore } from '../restore.js';
+import { createRestore, startPointOf, askJobPoint } from '../restore.js';
+import { createJobResult } from '../jobResult.js';
 import { apiErrorHtml, projectApiError, liveApiError } from '../apiError.js';
 import { permModeChip, permModeLine } from '../permMode.js';
 
@@ -40,10 +42,21 @@ const startAsk = new Set();
 const changes = createChanges({ onData: (projectId) => rerenderUsage(projectId) });
 // "Restore points" (restore.js, docs/restore.md): the same way
 const restore = createRestore({ onData: (projectId) => rerenderUsage(projectId) });
+// "This job's result" (jobResult.js): what changed since the job's own start copy, the checks apart, going back
+const jobResult = createJobResult({ onData: (projectId) => rerenderUsage(projectId) });
 // A project's fit arrived (set by createDrawer from its onFit option): the project list badge follows it
 let fitArrived = () => {};
 // Whether "Turn actions on and install" can be offered (set by createDrawer: it has turnActionsOn)
 let canTurnOn = false;
+
+// Where Tab goes while the drawer is open (pure; tested in node): 'first', 'last' or null (the browser's own move).
+// Inside, Tab and Shift+Tab go round. Outside, only focus that fell to the page body (a redraw) comes back: the terminal
+// dock sits over the drawer and is used while it is open, so its Tab (completion) and Shift+Tab (Claude Code's mode
+// switch) stay its own, and so do the notices' buttons (review 2026-10-07, round 2)
+export function drawerTabTarget({ shift = false, inside = false, atFirst = false, atLast = false, onBody = false } = {}) {
+  if (inside) return shift ? (atFirst ? 'last' : null) : atLast ? 'first' : null;
+  return onBody ? (shift ? 'last' : 'first') : null;
+}
 
 // Options (all optional): toast shows action results; openActionsChooser opens the desktop shell's actions chooser
 // (or explains where the mode is changed); onFit(projectId, fit) hears every fit the drawer loaded; keepIdea(projectId,
@@ -73,6 +86,31 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
     if (text) liveTimer = setTimeout(() => (live.textContent = text), 60);
   }
   drawerEl.inert = true;
+  // A dialog over the page (review U02, the owner's choice: it stays one, as it looks): while it is open the page
+  // behind takes no focus and no screen-reader cursor (inert), Tab and Shift+Tab go round inside it, Escape closes
+  // it (main.js) and focus goes back to what opened it (close)
+  drawerEl.setAttribute('role', 'dialog');
+  // The actions chooser sits in the page's header, behind this dialog: the drawer closes first, so it can be used
+  const chooseActions = () => {
+    close();
+    openActionsChooser?.();
+  };
+  const pageEl = () => document.querySelector('.app');
+  const focusables = () => [...drawerEl.querySelectorAll('button, [href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')].filter((el) => !el.disabled && !el.closest('[hidden]') && !el.closest('[inert]') && el.getClientRects().length > 0);
+  // On the document while open (capture): focus that fell to the page body after a redraw is brought back too
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab' || drawerEl.inert) return;
+    // Another dialog over the drawer (the search, the guide, the tools panel) keeps its own keyboard
+    const over = document.activeElement?.closest?.('[role="dialog"], [role="alertdialog"]');
+    if (over && over !== drawerEl) return;
+    const list = focusables();
+    if (!list.length) return;
+    const at = document.activeElement;
+    const to = drawerTabTarget({ shift: e.shiftKey, inside: drawerEl.contains(at), atFirst: at === list[0], atLast: at === list[list.length - 1], onBody: !at || at === document.body || at === document.documentElement });
+    if (!to) return;
+    e.preventDefault();
+    (to === 'first' ? list[0] : list[list.length - 1]).focus();
+  }, true);
 
   // target.section: scroll to 'skills' (project: suggested skills) or 'install' (roster: install into a project)
   function open(target) {
@@ -90,6 +128,9 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
     drawerEl.inert = false;
     drawerEl.classList.add('open');
     drawerEl.setAttribute('aria-hidden', 'false');
+    drawerEl.setAttribute('aria-modal', 'true');
+    const page = pageEl();
+    if (page) page.inert = true;
     scrimEl.hidden = false;
     body.scrollTop = 0;
     body._html = null;
@@ -114,8 +155,12 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
     current = null;
     drawerEl.classList.remove('open');
     drawerEl.setAttribute('aria-hidden', 'true');
-    // A closed drawer takes no focus and stays out of the Tab order
+    drawerEl.removeAttribute('aria-modal');
+    // A closed drawer takes no focus and stays out of the Tab order; the page behind takes them again (before focus
+    // goes back to the opener, which is in it)
     drawerEl.inert = true;
+    const page = pageEl();
+    if (page) page.inert = false;
     scrimEl.hidden = true;
     announce('');
     // The temporary results of the flows (trial, output, message, confirmation) must not go stale until the next opening
@@ -134,7 +179,18 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
   scrimEl.addEventListener('click', close);
   // "Then: start with AI" (docs/ai-start.md): the idea choice, the tools panel, redraw when the tools answer
   bindAiStart(body, { rerender: () => rerender() });
-  bindRunHint(body, { projectOf: () => (current?.type === 'project' ? current.id : null) });
+  // A sentence goes into the open project's job box, the keyboard after it; Start stays the person's. In sight: while a
+  // result waits the box is at the drawer's end (review U07)
+  const fillJob = (projectId, text) => {
+    if (current?.type !== 'project' || current.id !== projectId) return;
+    job.setText(projectId, text);
+    render();
+    const input = body.querySelector('[data-fk="job:text"]');
+    input?.focus({ preventScroll: true });
+    input?.scrollIntoView?.({ block: 'nearest' });
+    input?.setSelectionRange?.(input.value.length, input.value.length);
+  };
+  bindRunHint(body, { projectOf: () => (current?.type === 'project' ? current.id : null), asJob: fillJob });
   body.addEventListener('click', (e) => {
     // Usage section: a period button (the choice is shared with the strip; main.js redraws both)
     const up = e.target.closest('[data-usage-period]');
@@ -149,14 +205,7 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
     if (ja) return jobAct(ja);
     // A finished job's follow-up: its sentence goes into the job box; Start stays the person's
     const jn = e.target.closest('[data-job-next]');
-    if (jn && current?.type === 'project' && NEXT_KEYS.includes(jn.dataset.jobNext)) {
-      job.setText(current.id, t(`jobNextText_${jn.dataset.jobNext}`));
-      render();
-      const input = body.querySelector('[data-fk="job:text"]');
-      input?.focus();
-      input?.setSelectionRange?.(input.value.length, input.value.length);
-      return;
-    }
+    if (jn && current?.type === 'project' && NEXT_KEYS.includes(jn.dataset.jobNext)) return fillJob(current.id, t(`jobNextText_${jn.dataset.jobNext}`));
     const ra = e.target.closest('[data-rst-act]');
     if (ra) return restoreAct(ra);
     const ma = e.target.closest('[data-menu-act]');
@@ -205,7 +254,19 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
   // "Do a job" (views/job.js, docs/kit-in-app.md): the typed job is kept per project; nothing is sent while typing
   body.addEventListener('input', (e) => {
     const box = e.target.closest?.('[data-job-text]');
-    if (box) job.setText(box.dataset.jobText, box.value);
+    if (!box) return;
+    job.setText(box.dataset.jobText, box.value);
+    // The count near the limit, in place (no redraw while typing)
+    const count = body.querySelector(`[data-job-count="${CSS.escape(box.dataset.jobText)}"]`);
+    if (count) count.textContent = jobCountText(box.value);
+  });
+  // Ctrl+Enter (Cmd+Enter on a Mac) in the job box starts it, as its button does; Enter alone is a new line
+  body.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+    const box = e.target.closest?.('[data-job-text]');
+    if (!box) return;
+    e.preventDefault();
+    box.closest('section')?.querySelector('[data-job-act="start"]')?.click();
   });
 
   // "Restore points": "Go back to this" asks for the plan (restore-preview, nothing written), the question shows it;
@@ -214,7 +275,7 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
     if (current?.type !== 'project') return;
     const p = store.projects.get(current.id);
     if (!p) return;
-    if (btn.getAttribute('aria-disabled') === 'true') return openActionsChooser?.();
+    if (btn.getAttribute('aria-disabled') === 'true') return chooseActions();
     if (btn.disabled) return;
     const act = btn.dataset.rstAct;
     const mode = actionsState().mode;
@@ -292,11 +353,13 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
     if (!p) return;
     const act = btn.dataset.jobAct;
     const mode = actionsState().mode;
-    if (btn.getAttribute('aria-disabled') === 'true') return openActionsChooser?.();
+    if (btn.getAttribute('aria-disabled') === 'true') return chooseActions();
     // A moved project's old folder: open the real one instead
     if (act === 'open-twin' && btn.dataset.jobTwin) return void open({ type: 'project', id: btn.dataset.jobTwin });
     // The job stopped (its terminal was closed): the last session goes on where it stopped, in the terminal below
     if (act === 'resume' && btn.dataset.jobSession) return void window.dispatchEvent(new CustomEvent('hq-action', { detail: { action: 'resume-session', sessionId: btn.dataset.jobSession, projectId: p.id } }));
+    // The result waits: the job's AI session, as the Building's result card goes there (main.js open-ai-terminal)
+    if (act === 'open-ai') return void window.dispatchEvent(new CustomEvent('hq-action', { detail: { action: 'open-ai-terminal', projectId: p.id, sessionId: btn.dataset.jobSession || null } }));
     if (act === 'start') {
       const text = job.text(p.id).trim();
       if (!text) {
@@ -627,7 +690,7 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
   // selected library items in a trial folder (nothing is installed).
   async function fitAct(btn) {
     const act = btn.dataset.fitAct;
-    if (act === 'chooser') return openActionsChooser?.();
+    if (act === 'chooser') return chooseActions();
     if (btn.getAttribute('aria-disabled') === 'true') return;
     const fkey = btn.closest('[data-flow]')?.dataset.flow || '';
     if (!fkey.startsWith('fit:')) return;
@@ -926,10 +989,25 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
     job.setText(projectId, text);
     if (canTurnOn) startAsk.add(projectId);
     open({ type: 'project', id: projectId });
-    focusFk(canTurnOn ? 'job:start-on' : 'job:start');
+    const k = canTurnOn ? 'job:start-on' : 'job:start';
+    focusFk(k);
+    // While a result waits the box is at the drawer's end (review U07): the question is brought into sight
+    body.querySelector(`[data-fk="${k}"]`)?.scrollIntoView?.({ block: 'nearest' });
   }
 
-  return { open, close, refresh, rerender, escape, askStart, isOpen: () => !!current };
+  // A new project made from an idea (review U05): its drawer opens with the idea in the job box and Start focused;
+  // nothing starts until the person presses it (actions off: Start asks its one question as always)
+  function openWithJob(projectId, text) {
+    if (!store.projects.get(projectId)) return;
+    job.setText(projectId, text);
+    open({ type: 'project', id: projectId });
+    // No Start yet (the AI tools are still being looked for, or none is installed): the box itself
+    const k = body.querySelector('[data-fk="job:start"]') ? 'job:start' : 'job:text';
+    focusFk(k);
+    body.querySelector(`[data-fk="${k}"]`)?.scrollIntoView?.({ block: 'nearest' });
+  }
+
+  return { open, close, refresh, rerender, escape, askStart, openWithJob, isOpen: () => !!current };
 }
 
 // Clear the temporary parts of the flows (when the actions mode or token changes and when the drawer closes).
@@ -1805,6 +1883,28 @@ function isWebRun(data) {
   return !!data?.plans?.some((pl) => pl?.kind === 'static' || (pl?.kind === 'node' && (pl.steps || []).some((s) => s?.id === 'address')));
 }
 
+// "This job's result" once the job reached it; its start copy as the job box knows it (asked for after a reload).
+// While the result waits (finish) it comes first with the job's steps and the way to the job's AI session (review
+// U07, U08): an AI tab of the project in SiberSentez's terminal, or the job's own session (job.js jobSession)
+function jobResultSection(p) {
+  const d = job.get(p.id).data;
+  const jobId = d?.plan?.jobId || null;
+  if (jobId) askJobPoint(p.id, jobId);
+  const waiting = d?.step === 'finish';
+  const session = waiting ? jobSession({ sessions: store.sessions.values(), projectId: p.id, job: { jobId, tool: d.tool || null, updatedAt: d.updatedAt ?? null } }) : null;
+  const tab = waiting && (store.dockRunning?.() || []).some((x) => x && x.projectId === p.id);
+  // Its AI no longer runs (no tab, its session closed): said before the click, as the job box said it before
+  const go = waiting ? { session: session?.id || null, tab, stopped: !tab && !!session && sessionState(session) === 'closed' } : null;
+  return jobResult.html(p, d, jobId ? startPointOf(p.id, jobId) : null, waiting ? { steps: stepsHtml(d), go } : {});
+}
+
+// The session that can go on with the project's job: the Building's own answer (job.js resumeCandidate)
+function drawerResume(projectId) {
+  const d = job.get(projectId).data;
+  const shown = d && d.step && d.step !== 'none' ? { step: d.step, jobId: d.plan?.jobId || null, tool: d.tool || null, updatedAt: d.updatedAt ?? null } : null;
+  return resumeCandidate({ sessions: store.sessions.values(), projectId, job: shown, dock: store.dockRunning?.() || [] });
+}
+
 function projectHtml(id) {
   const p = store.projects.get(id);
   if (!p) return `<div class="empty-state">${esc(t('shProjNotFound'))}</div>`;
@@ -1815,17 +1915,23 @@ function projectHtml(id) {
   const st = p.busy ? 'busy' : p.live ? 'idle' : null;
   // Once the job is built (being checked, or done), "How to run it" leaves the Details and stands under the job: the
   // result is something to open (docs/run-hint.md)
-  const built = ['check', 'done'].includes(job.get(p.id).data?.step);
+  // "How to run it" once the work is built: in the check, at the result (finish) and after
+  const built = ['check', 'finish', 'done'].includes(job.get(p.id).data?.step);
+  // The result waits (finish): it comes first, the job box is a secondary "New job" at the end (review U07)
+  const resultFirst = job.get(p.id).data?.step === 'finish';
+  const jobBox = job.html(p, { mode: actionsState().mode, turnOn: canTurnOn, asking: startAsk.has(p.id), next: nextFor({ web: isWebRun(runHint.get(p.id).data) }), stopped: drawerResume(p.id), asNew: resultFirst, idle: aiIdleIn({ sessions: store.sessions.values(), projectId: p.id, dock: store.dockRunning?.() || [] }) });
   return `${head(p.name, `${esc(projectKindText(p))}${p.path ? ` · <code>${esc(p.path)}</code><button type="button" class="icon-btn dr-copy" data-copy data-fk="copy:path" aria-label="${esc(t('shCopyPath'))}" title="${esc(t('shCopyPath'))}">${icon('copy')}</button>` : ''}`, projectColor(id), st ? stateBadge(st) : '')}
     ${folderMissingHtml(p)}
     ${toolsOnlyHtml(p, realTwin(store.projects.values(), p))}
     ${apiErrorHtml(projectApiError(store.sessions.values(), p.id)?.e)}
     ${shownDescription(p.description) ? `<p class="dr-desc">${esc(shownDescription(p.description))}</p>` : ''}
     ${offBannerHtml(actionsState().mode)}
-    ${job.html(p, { mode: actionsState().mode, turnOn: canTurnOn, asking: startAsk.has(p.id), next: nextFor({ web: isWebRun(runHint.get(p.id).data) }), stopped: stoppedSession(store.sessions.values(), p.id, Date.now(), job.get(p.id).data?.updatedAt) })}
+    ${resultFirst ? '' : jobBox}
     ${permModeLine(store.sessions.values(), p.id)}
+    ${jobResultSection(p)}
     ${built ? runHint.html(p) : ''}
     ${restore.html(p, { mode: actionsState().mode })}
+    ${resultFirst ? jobBox : ''}
     <details class="dr-more" data-more="${esc(p.id)}"${moreOpen.has(p.id) ? ' open' : ''}><summary><b>${esc(t('drMore'))}</b><span class="small muted">${esc(t('drMoreHint'))}</span></summary>
     ${fitSection(p)}
     ${startNextHtml(p, flows.get(`fit:${p.id}`), actionsState().mode)}
@@ -1848,7 +1954,7 @@ function projectHtml(id) {
     <section class="dr-sec"><h3>${icon('prompt')} ${esc(t('shSecSessions'))} <span>${sessions.length}</span></h3>
       <ul class="dlist">${sessions
         .slice(0, 30)
-        .map((s) => `<li data-session="${esc(s.id)}" tabindex="0"><i class="sdot s-${s.live ? s.live.status : 'closed'}"></i><span class="dl-main">${esc(store.sessionLabel(s))}</span><span class="dl-meta">${modelName(s.model)} · ${t('shToolsN', { n: num(s.toolCalls) })} · ${ago(s.lastAt)}</span></li>`)
+        .map((s) => `<li data-session="${esc(s.id)}" tabindex="0"><i class="sdot s-${s.live ? s.live.status : 'closed'}"></i><span class="dl-main">${esc(store.sessionLabel(s))}</span>${sessionToolTag(s)}<span class="dl-meta">${modelName(s.model)} · ${t('shToolsN', { n: num(s.toolCalls) })} · ${ago(s.lastAt)}</span></li>`)
         .join('') || `<li class="muted">${esc(t('shNoSessions'))}</li>`}</ul></section>
     <section class="dr-sec"><h3>${icon('agent')} ${esc(t('shSecAgents'))} <span>${agents.length}</span></h3>
       <ul class="dlist">${agents
@@ -1880,11 +1986,16 @@ export function waitingNoteHtml(s, now = Date.now()) {
   return `<div class="dr-waiting" role="note"><b>${esc(t('attnState_waiting'))}</b><p>${esc(what)}</p><p class="small">${esc(t('drWaitingWhere'))}</p></div>`;
 }
 
+// The AI tool a session belongs to (server/toolLogs.mjs reads Codex's and Gemini CLI's logs too): its name, and a
+// tag for any tool but Claude Code (whose sessions were the only ones before)
+// (jobId.js sessionToolName)
+export const sessionToolTag = (s) => ((s?.tool || 'claude') === 'claude' ? '' : `<span class="tag">${esc(sessionToolName(s))}</span>`);
+
 function sessionHtml(d) {
   const p = store.projects.get(d.projectId);
   const st = d.live ? d.live.status : 'closed';
   const title = d.title || d.lastPrompt || d.firstPrompt || t('shSessionDefault');
-  return `${head(title, `${p ? esc(p.name) + ' · ' : ''}<code>${esc(d.id.slice(0, 8))}</code>${permModeChip(d.permissionMode)}`, projectColor(d.projectId), stateBadge(st))}
+  return `${head(title, `${p ? esc(p.name) + ' · ' : ''}<code>${esc(d.id.slice(0, 8))}</code>${sessionToolTag(d)}${permModeChip(d.permissionMode)}`, projectColor(d.projectId), stateBadge(st))}
     ${waitingNoteHtml(store.sessions.get(d.id))}
     ${apiErrorHtml(liveApiError(store.sessions.get(d.id)))}
     ${actionRow({ type: 'session', id: d.id }, t('shSessionActions'))}
@@ -1902,7 +2013,7 @@ function sessionHtml(d) {
       [t('shKDuration'), dur(d.lastAt - d.startedAt)],
       [t('shKFolder'), d.cwd ? `<code>${esc(d.cwd)}</code>` : ''],
       [t('shKBranch'), d.branch ? esc(d.branch) : ''],
-      ['Claude Code', d.version ? esc(d.version) : ''],
+      [sessionToolName(d), d.version ? esc(d.version) : ''],
       [t('shKCompactions'), d.compacts ? t('shTimes', { n: num(d.compacts) }) : ''],
       [t('shKSkills'), Object.keys(d.skills || {}).length ? Object.entries(d.skills).map(([k, v]) => `<span class="tag">${esc(k)} <b>${num(v)}</b></span>`).join('') : ''],
     ])}

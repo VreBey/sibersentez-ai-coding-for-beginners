@@ -283,3 +283,53 @@
 /* The side menu's shortcut keys (1-5) read as counts at rest: shown only on hover and keyboard focus (2026-10-02) */
 .side kbd { opacity: 0; transition: opacity 120ms var(--ease-out, ease-out); }
 .side-nav button:hover kbd, .side-nav button:focus-visible kbd, .side-foot button:hover kbd, .side-foot button:focus-visible kbd { opacity: 0.5; }
+
+/* A narrow window keeps the header on one line (review U15): the search, "nobody waits" and New project become icons,
+   the actions indicator keeps its mode's name ("● Off"); full names stay in the tooltips and for screen readers. The
+   theme's narrow rules wrapped the header onto two or three lines. */
+@media (max-width: 980px) {
+  .main-col .topbar { flex-wrap: nowrap !important; gap: 8px !important; min-height: 56px !important; padding-top: 8px !important; padding-bottom: 8px !important; margin-bottom: 18px !important; }
+  .topbar .search-btn { order: 0 !important; flex: 0 0 auto !important; flex-basis: auto !important; min-width: 0 !important; max-width: none !important; }
+  .topbar .search-btn span, .topbar .search-btn kbd { display: none !important; }
+  .topbar .wait-chip:not(.on) span { display: none; }
+  .topbar .new-proj span { display: none; }
+  .topbar .act-mode .asw-pre, .topbar .act-mode .asw-state { display: none; }
+  .topbar-right { margin-left: auto !important; gap: 8px !important; }
+}
+/* A browser window narrower than the app's own minimum: the waiting chip keeps its dot (its name stays for screen
+   readers), so the one line never overflows */
+@media (max-width: 620px) {
+  .topbar .wait-chip.on b { display: none; }
+}
+
+/* Reading text has a 13.5–14 px floor (review U16): the screens' subtitles, helper sentences, descriptions and the
+   Building's cards and hints. Short secondary marks (chips, kinds, counts, key hints) stay at 11–12 px. Loaded last,
+   after the theme and the Workshop. */
+.small { font-size: 13.5px; }
+.screen-subtitle { font-size: 14px; line-height: 1.5; }
+.pdesc, .rdesc, .fit .fit-desc, .sg-desc { font-size: 13.5px; line-height: 1.5; }
+.ws-head p { font-size: 14px; }
+.ws-card p { font-size: 14px; line-height: 1.5; }
+.ws-card > button:not(.close) { font-size: 13px; }
+.ws-note, .ws-subtle, .ws-quota-note { font-size: 13px; }
+.ws-hint, .ws-inbox-item span, .ws-timeline-head [data-ws="event-text"] { font-size: 12.5px; }
+.ws .ws-sign, .ws-card h3 { font-size: 12px; }
+.ws-tooltip { font-size: 13px; }
+@media (max-width: 560px) {
+  .ws-head p { font-size: 13.5px; }
+  .ws-hint, .ws-timeline-labels { font-size: 11px; }
+  .ws .ws-sign { font-size: 11px; }
+}
+
+/* Contrast floor (an accessibility pass with axe-core, 2026-10-08): small text that fell under 4.5:1 on its background.
+   A project's initials take a lighter tint of its colour (6.6:1), the feed's session, kind and time and the roster's
+   "Other" source a brighter grey (6.1:1 and 5.6:1); the kind is no longer dimmed further. */
+.pmark { color: color-mix(in srgb, var(--pc) 60%, #fff); }
+.ev-meta, .ev time { color: #93a1b5; }
+.ev-kind { opacity: 1; }
+.s-other { --sc: #a3abbc; }
+/* Empty until the first data arrives (the waiting chip) or until there is something to list (the Building's recent
+   projects): not shown, so no blank pill is seen and no nameless button or unlabelled region is read out */
+.wait-chip:empty, .today-recent:empty { display: none; }
+/* The feed's quieter rows (live, compact, title) stay quieter, but no longer under 4.5:1: 0.85 instead of 0.75 */
+.ev.k-live, .ev.k-compact, .ev.k-title { opacity: 0.85; }

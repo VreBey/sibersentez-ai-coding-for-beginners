@@ -51,24 +51,24 @@ test('"Go on where it stopped" only with a session that ran when the job last ch
 
   const projects = [
     { id: 'desk', name: 'arena game', path: 'C:\\Users\\u\\Desktop\\arena game', exists: true, toolsOnly: true },
-    { id: 'd', name: 'Arena Game', path: 'D:\\Projeler\\arena game', exists: true, toolsOnly: false },
+    { id: 'd', name: 'Arena Game', path: 'D:\\Work\\arena game', exists: true, toolsOnly: false },
     { id: 'gone', name: 'arena game', path: 'E:\\x', exists: false },
   ];
   assert.equal(realTwin(projects, projects[0]).id, 'd', 'same name, real files, the folder is there');
   const html = toolsOnlyHtml(projects[0], realTwin(projects, projects[0]));
   assert.match(html, /data-job-act="open-twin" data-job-twin="d"/);
-  assert.match(html, /D:\\Projeler\\arena game/);
+  assert.match(html, /D:\\Work\\arena game/);
   assert.equal(toolsOnlyHtml(projects[1], null), '', 'a real project says nothing');
 });
 
 test('wiring: the drawer, the cards, the Building and its job box', () => {
   const read = (f) => fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
   const drawer = read('public/js/views/drawer.js');
-  for (const s of ['${toolsOnlyHtml(p, realTwin(store.projects.values(), p))}', "act === 'open-twin'", 'p.toolsOnly && !toolsOnlyAsked.has(p.id)', 'job.get(p.id).data?.updatedAt']) assert.ok(drawer.includes(s), s);
+  for (const s of ['${toolsOnlyHtml(p, realTwin(store.projects.values(), p))}', "act === 'open-twin'", 'p.toolsOnly && !toolsOnlyAsked.has(p.id)', 'updatedAt: d.updatedAt ?? null']) assert.ok(drawer.includes(s), s);
   assert.ok(read('public/js/views/projects.js').includes("p.toolsOnly ? t('jobToolsOnlyTag')"));
   const ws = read('public/js/views/workshop.js');
   assert.ok(ws.includes('(list.find((x) => !x.p.toolsOnly) || list[0])?.p'), 'never picked by itself');
-  assert.ok(ws.includes('scene?.job?.updatedAt'));
+  assert.ok(ws.includes('resumeCandidate({ sessions: store.sessions.values(), projectId, job: scene?.job,'), "the job's own time and identity decide");
   assert.ok(read('public/js/main.js').includes('if (p.toolsOnly) {'), 'the job box opens the drawer instead');
   assert.ok(read('server/views.mjs').includes('toolsOnly: !!p.toolsOnly,'));
 });
