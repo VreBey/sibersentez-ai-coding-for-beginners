@@ -10,7 +10,7 @@ import { scanProject, createPoint, listPoints, planRestore, applyRestore, safeRe
 
 const require_ = createRequire(import.meta.url);
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-restore-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 let n = 0;
 function world() {
   const base = path.join(TMP, `w${++n}`);

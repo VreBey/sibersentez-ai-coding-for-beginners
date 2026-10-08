@@ -16,7 +16,7 @@ import { initialSwitch, switchStep } from '../public/js/actionsSwitch.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-live-mode-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 
 const PORT = 45999;
 const fakeRes = () => ({ headersSent: false, writeHead(code) { this.code = code; }, end(b) { this.body = b; } });

@@ -19,7 +19,7 @@ import { snapshot, rosterView, hubView } from '../server/views.mjs';
 import { baseName, copyKey, libraryCounts, foldersOf, folderGroupOf, matchesFolder, matchesFilter, folderIndex, folderCounts, folderGroups, parseFolder, sourceFolder, FOLDER_GROUPS } from '../public/js/rosterModel.js';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-catalog-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const FAKE_ENV = Object.freeze({});
 
 const write = (file, text) => {

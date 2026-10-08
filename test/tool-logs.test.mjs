@@ -11,7 +11,7 @@ import { sessionView } from '../server/views.mjs';
 import { classifyForeign, codexPromptText, codexPermission, codexToolCall, geminiToolCall, geminiPromptText } from '../server/toolLogs.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'sib-toollogs-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const CODEX = path.join(ROOT, 'codex', 'sessions');
 const GEMINI = path.join(ROOT, 'gemini', 'tmp');
 const QWEN = path.join(ROOT, 'qwen', 'projects');

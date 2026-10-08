@@ -57,7 +57,7 @@ import { STRINGS, formatString, getStrings } from '../electron/strings.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-electron-test-'));
 const WIN = { skip: process.platform !== 'win32' && 'Windows paths' };
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 
 function listen(server, port = 0) {
   return new Promise((resolve, reject) => {

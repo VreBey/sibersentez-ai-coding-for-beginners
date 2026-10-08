@@ -12,7 +12,7 @@ import { launcherText, launchPrompt, ENDED_SUFFIX, cleanupLaunchers } from '../s
 
 const WIN = process.platform === 'win32';
 const ROOT = WIN ? fs.mkdtempSync(path.join(os.tmpdir(), 'ss-launcher-cmd-')) : null;
-after(() => ROOT && fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => ROOT && fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const CMD = WIN ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe') : '';
 
 // Runs the launcher as the dock's fallback way does (relative to the launcher folder), but with /c so it returns

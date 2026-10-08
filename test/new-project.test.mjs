@@ -47,7 +47,7 @@ import { STRINGS, setLanguage, t } from '../public/js/i18n.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-new-project-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const textOf = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8').replace(/\r\n/g, '\n');
 // A function's body in a source file (up to its closing brace at the start of a line)
 const bodyOf = (src, name) => {

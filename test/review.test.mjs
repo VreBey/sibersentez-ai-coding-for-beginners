@@ -9,7 +9,7 @@ import path from 'node:path';
 import { reviewItem, scanText, reviewFrontmatter, broadShell, licenseFromText, licenseFromLine, repoLicense, itemLicense, PATTERNS, ORDER, LICENSE_FAMILY, REVIEW_LIMITS } from '../server/review.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-review-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 let n = 0;
 const write = (file, text) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });

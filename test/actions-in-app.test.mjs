@@ -47,7 +47,7 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-actions-in-app-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 after(() => setLanguage('en'));
 // Source text with LF line ends (the working tree may use CRLF), so a function body ends at its own closing brace
 const textOf = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8').replace(/\r\n/g, '\n');

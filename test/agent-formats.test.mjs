@@ -61,7 +61,7 @@ test("each tool's shape: only the keys it accepts (Gemini's schema is strict), t
 
 test('installed for a Codex and a Gemini job: .claude as it is, .codex and .gemini converted; the record keeps the source apart; removed cleanly', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sib-agents-'));
-  after(() => fs.rmSync(root, { recursive: true, force: true }));
+  after(() => fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
   const hub = path.join(root, 'hub');
   fs.mkdirSync(path.join(hub, 'registry'), { recursive: true });
   const src = path.join(root, 'lib', 'backend-builder.md');

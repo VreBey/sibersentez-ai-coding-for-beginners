@@ -23,7 +23,7 @@ import { IDEA_PROJECTS_DIR, checkProjectFolder, createIdeaProject, plannedFolder
 import { getStrings } from '../electron/strings.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-journey-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const touch = (file, text = '') => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);

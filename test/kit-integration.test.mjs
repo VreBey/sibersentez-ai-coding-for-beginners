@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-kit-int-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 // The kit of this process (install.mjs reads it through defaultKitDir, the way config.mjs names KIT_DIR): a copy, so
 // a test may change it
 const KIT = path.join(ROOT, 'kit');

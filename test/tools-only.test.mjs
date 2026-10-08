@@ -11,7 +11,7 @@ import { teamFacts } from '../server/team.mjs';
 import { stoppedSession, realTwin, toolsOnlyHtml, JOB_SESSION_SLACK_MS } from '../public/js/views/job.js';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-toolsonly-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const dir = (name, entries) => {
   const d = path.join(TMP, name);
   fs.mkdirSync(d, { recursive: true });

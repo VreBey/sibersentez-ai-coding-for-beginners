@@ -12,7 +12,7 @@ import { killTree, taskkillPath, runQuiet } from '../server/tools.mjs';
 import * as usage from '../server/usage.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-hardening-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const PUBLIC_JS = path.join(import.meta.dirname, '..', 'public', 'js');
 const js = (rel) => fs.readFileSync(path.join(PUBLIC_JS, ...rel.split('/')), 'utf8');
 

@@ -58,7 +58,7 @@ import { ACTION_FIELDS, actionBody } from '../public/js/actions.js';
 import { githubRows, githubSelectable, githubPicks, installGroups, githubItems, originRepo } from '../public/js/rosterModel.js';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-github-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const HOME = path.join(ROOT, 'home');
 const CLAUDE = path.join(HOME, '.claude');
 fs.mkdirSync(CLAUDE, { recursive: true });

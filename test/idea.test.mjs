@@ -23,7 +23,7 @@ import { esc } from '../public/js/format.js';
 
 // ---------------- fake world ----------------
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-idea-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const HOME = path.join(ROOT, 'home');
 const CLAUDE = path.join(HOME, '.claude');
 fs.mkdirSync(CLAUDE, { recursive: true });

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { createPoint, listPoints, LABEL_MAX } from '../server/restore.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-label-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 let clock = Date.UTC(2026, 9, 2, 12, 0, 0);
 const tick = () => (clock += 1000);
 

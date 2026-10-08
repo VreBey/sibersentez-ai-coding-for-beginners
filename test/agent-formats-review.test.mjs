@@ -11,7 +11,7 @@ import { planInstall, executeInstall, planRemove, executeRemove, readInstalls } 
 import { RESTORE_SKIP_TOP } from '../server/restore.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'sib-agents-review-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const agentText = (desc, body = 'Do the task.\n') => `---\nname: helper\ndescription: "${desc}"\n---\n\n${body}`;
 
 function setup(name) {

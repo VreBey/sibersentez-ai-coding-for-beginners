@@ -26,7 +26,7 @@ import { snapshot } from '../server/views.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-adapters-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const DAY = 86400000;
 
 // ---------------- fixture helpers ----------------

@@ -67,7 +67,7 @@ const DANGEROUS = [
 ];
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-kit-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 
 // ---------------------------------------------------------------------------------------------------------------
 // Reading the kit

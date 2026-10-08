@@ -14,7 +14,7 @@ import { createProjectChannel } from '../server/memory.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-term-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
 
 function fakePty() {

@@ -62,7 +62,7 @@ const RETIRED_PAGE_PATH = '/__shell/actions-mode';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-actions-toggle-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 
 let n = 0;
 // A fresh world: app folder (sibersentez.json), home folder, hub folder (absent until asked for)

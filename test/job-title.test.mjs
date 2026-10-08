@@ -14,7 +14,7 @@ import { sessionView } from '../server/views.mjs';
 import { localSession } from '../public/js/store.js';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-job-title-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const J = 'J764b5cd98f2fd06dfaf205c587fb8833';
 const project = (name, text) => {
   const dir = path.join(TMP, name);

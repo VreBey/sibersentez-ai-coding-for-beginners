@@ -89,7 +89,7 @@ test('a stale approval explains the need for a fresh check in both UI languages'
 });
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-job-id-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 
 test('the marker is atomic and rejects links, unknown contents and write failures', () => {
   const folder = path.join(ROOT, 'marker');

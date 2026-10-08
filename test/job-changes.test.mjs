@@ -9,7 +9,7 @@ import path from 'node:path';
 import { createPoint, recordJobPoint, projectJobChanges, pointsDir, JOB_CHANGES_MAX } from '../server/restore.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-job-changes-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const J = 'J' + '0123456789abcdef'.repeat(2);
 const K = 'J' + 'fedcba9876543210'.repeat(2);
 // The copies' clock runs in the past: every file these tests make is born after its job started (as in real use)

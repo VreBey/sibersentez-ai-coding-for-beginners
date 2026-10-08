@@ -17,7 +17,7 @@ import { PUBLIC_DIR } from '../server/config.mjs';
 
 // ---------------- fake world ----------------
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-actions-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const mkdir = (...parts) => {
   const d = path.join(ROOT, ...parts);
   fs.mkdirSync(d, { recursive: true });

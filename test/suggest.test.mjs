@@ -13,7 +13,7 @@ import { initHub } from '../server/hub.mjs';
 import { projectSignals, registrySignals, rankItems, projectSuggestions, NPM_SIGNALS, MAX_SUGGESTIONS } from '../server/suggest.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-suggest-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const write = (file, text) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);

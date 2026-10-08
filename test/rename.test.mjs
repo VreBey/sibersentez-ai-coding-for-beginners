@@ -17,7 +17,7 @@ const old = OLD.toLowerCase();
 const OLDU = OLD.toUpperCase();
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-rename-'));
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 
 test('names: the new product name everywhere, the old one only where old data is read', () => {
   assert.equal(HUB_DIR_NAME, 'SiberSentez');

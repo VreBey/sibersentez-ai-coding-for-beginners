@@ -10,7 +10,7 @@ import { historyHtml, jobSectionHtml } from '../public/js/views/job.js';
 import { setLanguage, STRINGS } from '../public/js/i18n.js';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-history-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 setLanguage('en');
 const write = (file, text) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });

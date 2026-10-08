@@ -7,7 +7,7 @@ import path from 'node:path';
 import { parsePlan, parseTasks, parseVerdict, reviewOf, teamStep, teamSummary, teamFacts, projectTeam } from '../server/team.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-team-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 
 const PLAN = '# Plan: Sign-in page\n\nSize: small\nGoal: users sign in\n\n## Approval\nApproved: yes\nDate: 2026-09-30\n';
 const TASKS = [

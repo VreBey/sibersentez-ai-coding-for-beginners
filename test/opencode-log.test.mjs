@@ -11,7 +11,7 @@ import { Ingest } from '../server/ingest.mjs';
 import { opencodeText, opencodeToolCall, opencodeTokens } from '../server/toolLogs.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'sib-opencode-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const DB = path.join(ROOT, 'opencode.db');
 const PROJECT = path.join(ROOT, 'work', 'menu-site');
 const JOB = 'J' + '0123456789abcdef'.repeat(2);

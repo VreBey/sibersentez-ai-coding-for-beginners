@@ -92,7 +92,7 @@ test('whole-job task coverage includes jobs with more than fifty tasks', () => {
 });
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-review-gate-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 
 test('the project endpoint reads changing review files without retaining a stale approval', () => {
   const dir = path.join(ROOT, 'project');

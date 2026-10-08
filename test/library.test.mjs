@@ -16,7 +16,7 @@ import { CATEGORIES, CATEGORY_KEYWORDS, LIMITS, OVER_LIMIT, LEFTOVER_RE, listLib
 import { sweepLeftovers } from '../server/install.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-library-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const HOME = path.join(ROOT, 'home');
 fs.mkdirSync(path.join(HOME, '.claude'), { recursive: true });
 

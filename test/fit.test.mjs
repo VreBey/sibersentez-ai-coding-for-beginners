@@ -21,7 +21,7 @@ import { CENSUS, CENSUS_SKIP, SELECT_CAPS, LIBRARY_SIG_MS, SCORE, HIGH_SCORE, ME
 
 // ---------------- fake world ----------------
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-fit-'));
-after(() => fs.rmSync(ROOT, { recursive: true, force: true }));
+after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const HOME = path.join(ROOT, 'home');
 const CLAUDE = path.join(HOME, '.claude');
 fs.mkdirSync(CLAUDE, { recursive: true });
