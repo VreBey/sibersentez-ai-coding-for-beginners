@@ -8,9 +8,8 @@ import { indicatorModel, indicatorPartsHtml } from '../public/js/actionsSwitch.j
 import { setLanguage } from '../public/js/i18n.js';
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-// The text of a small piece of markup: the tags taken out, then any angle bracket left over (the indicator's text has
-// none of its own, its markup escapes them)
-const strip = (html) => html.replace(/<[^>]+>/g, '').replace(/[<>]/g, '');
+// The text of a small piece of markup, read only in this test: the pieces between its tags, joined
+const strip = (html) => html.split(/<[^>]*>/).join('');
 
 test('the indicator in parts: the same text as its accessible name, the mode name in a part of its own', () => {
   for (const lang of ['en', 'tr']) {
