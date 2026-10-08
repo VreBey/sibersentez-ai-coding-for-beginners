@@ -17,6 +17,9 @@ import fs from 'node:fs';
 
 const [port, cmd, arg, arg2] = process.argv.slice(2);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// A value written into the code the page runs: JSON, with the characters that could end a string or a script escaped
+const UNSAFE = { '<': '\\u003C', '>': '\\u003E', '/': '\\u002F', '\b': '\\b', '\f': '\\f', '\n': '\\n', '\r': '\\r', '\t': '\\t', '\0': '\\0', '\u2028': '\\u2028', '\u2029': '\\u2029' };
+const literal = (v) => JSON.stringify(String(v)).replace(/[<>/\b\f\n\r\t\0\u2028\u2029]/g, (c) => UNSAFE[c]);
 let targets = [];
 for (let i = 0; i < 40; i++) {
   try {
@@ -65,8 +68,8 @@ if (cmd === 'shot') {
 } else if (cmd === 'click' || cmd === 'clicktext') {
   const find =
     cmd === 'click'
-      ? `(() => { const els = [...document.querySelectorAll(${JSON.stringify(arg)})].filter((e) => e.getClientRects().length); const e = els[${Number(arg2 || 0)}]; if (!e) return null; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, what: (e.innerText || e.value || e.ariaLabel || e.tagName).slice(0, 60) }; })()`
-      : `(() => { const want = ${JSON.stringify(arg)}; const els = [...document.querySelectorAll('button, a, [role=button], [role=menuitem], [role=tab], [role=option], label, summary, li, [tabindex]')].filter((e) => e.getClientRects().length && (e.innerText || e.ariaLabel || '').includes(want)); els.sort((a, b) => (a.innerText || '').length - (b.innerText || '').length); const e = els[${Number(arg2 || 0)}]; if (!e) return null; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, what: (e.innerText || e.ariaLabel || e.tagName).slice(0, 60) }; })()`;
+      ? `(() => { const els = [...document.querySelectorAll(${literal(arg)})].filter((e) => e.getClientRects().length); const e = els[${Number(arg2 || 0)}]; if (!e) return null; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, what: (e.innerText || e.value || e.ariaLabel || e.tagName).slice(0, 60) }; })()`
+      : `(() => { const want = ${literal(arg)}; const els = [...document.querySelectorAll('button, a, [role=button], [role=menuitem], [role=tab], [role=option], label, summary, li, [tabindex]')].filter((e) => e.getClientRects().length && (e.innerText || e.ariaLabel || '').includes(want)); els.sort((a, b) => (a.innerText || '').length - (b.innerText || '').length); const e = els[${Number(arg2 || 0)}]; if (!e) return null; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, what: (e.innerText || e.ariaLabel || e.tagName).slice(0, 60) }; })()`;
   const at = await evaluate(find);
   if (!at || typeof at !== 'object') console.log('NOT FOUND', arg);
   else {
