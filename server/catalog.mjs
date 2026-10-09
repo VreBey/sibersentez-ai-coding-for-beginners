@@ -666,7 +666,8 @@ export class Catalog {
     }
     for (const [k, p] of this.adhoc) if (k !== n && p.id === plain) taken = true;
     if (!taken) return plain;
-    return `${plain}-${crypto.createHash('sha1').update(n).digest('hex').slice(0, 6)}`;
+    // SHA-256 (code scanning #15); a short tag only, never a secret. adhocId above keeps SHA-1: ids stored so far
+    return `${plain}-${crypto.createHash('sha256').update(n).digest('hex').slice(0, 6)}`;
   }
 
   tmpAdhoc(embedded) {
