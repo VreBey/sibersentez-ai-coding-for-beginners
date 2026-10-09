@@ -1,6 +1,6 @@
 // "How to run it" (server/runhint.mjs, public/js/runHint.js): the folder's names and small manifests give plain steps;
 // commands are built from fixed words; nothing is run; an empty, unknown or unreadable folder says so.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -9,8 +9,13 @@ import { runFacts, runPlans, projectRun } from '../server/runhint.mjs';
 import { runSectionHtml, createRunHint } from '../public/js/runHint.js';
 import { STRINGS, setLanguage } from '../public/js/i18n.js';
 
+// Every temporary folder this file makes is removed when it ends (2026-10-09: tens of thousands were left in TEMP)
+const made = [];
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
+
 function folder(files, dirs = []) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-run-'));
+  made.push(dir);
   for (const d of dirs) fs.mkdirSync(path.join(dir, d), { recursive: true });
   for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), text);
   return dir;

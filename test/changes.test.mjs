@@ -1,6 +1,6 @@
 // "What changed" (server/changes.mjs, public/js/changes.js): git status entries and the files of the last 24 hours,
 // newest first; heavy and hidden folders are not walked; a repository's own file system monitor never runs.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,7 +11,14 @@ import { GIT_SAFE_ARGS, repoConfigSafe, configNamesSafe, configNames, repoCheck,
 import { changesSectionHtml, createChanges } from '../public/js/changes.js';
 import { STRINGS, setLanguage } from '../public/js/i18n.js';
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ork-chg-'));
+// Every temporary folder this file makes is removed when it ends (2026-10-09: tens of thousands were left in TEMP)
+const made = [];
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
+const tmp = () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-chg-'));
+  made.push(d);
+  return d;
+};
 const hasGit = (() => {
   try {
     execFileSync('git', ['--version'], { stdio: 'ignore', windowsHide: true });

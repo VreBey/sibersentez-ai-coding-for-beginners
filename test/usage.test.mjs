@@ -2,7 +2,7 @@
 // API route, the patch and the page's pure helpers. Days are local: the tests run in Europe/Istanbul (UTC+3, no DST).
 process.env.TZ = 'Europe/Istanbul';
 
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -24,7 +24,14 @@ const iso = (t) => new Date(t).toISOString();
 const U = (o = {}) => ({ input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0, ...o });
 const msg = (id, req, t, usage, model = 'claude-opus-5-5') => ({ timestamp: typeof t === 'number' ? iso(t) : t, ...(req ? { requestId: req } : {}), message: { id, model, usage } });
 const ledgerAt = (now = NOW, opts = {}) => new UsageLedger({ now: () => now, log: () => {}, debounceMs: 0, ...opts });
-const tmpDir = (name) => fs.mkdtempSync(path.join(os.tmpdir(), `sibersentez-usage-${name}-`));
+// Every temporary folder this file makes is removed when it ends (2026-10-09: tens of thousands were left in TEMP)
+const made = [];
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
+const tmpDir = (name) => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), `sibersentez-usage-${name}-`));
+  made.push(d);
+  return d;
+};
 
 test('usage values: cache writes split into 5-minute and 1-hour parts; without the split the whole write is 5-minute', () => {
   assert.deepEqual(usageValues({ input_tokens: 3, cache_creation_input_tokens: 100, cache_creation: { ephemeral_5m_input_tokens: 40, ephemeral_1h_input_tokens: 60 }, cache_read_input_tokens: 1000, output_tokens: 7 }), [3, 40, 60, 1000, 7]);
