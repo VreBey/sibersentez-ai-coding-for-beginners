@@ -150,8 +150,7 @@ spreads a patch into a call. Still open:
 - **Decided 2026-10-06: open source, free app, donations.** From the next version the app is under the GNU GPL
   version 3 or later (`LICENSE`) and the kit under the MIT License (`kit/LICENSE.md`); the name and the logo are kept by
   the project (`TRADEMARKS.md`). The source goes to the public GitHub repository. Why: donations go mostly to open
-  source projects, the open source funds (Open Source Collective, FLOSS/fund) and free code signing for open source
-  (SignPath Foundation) need an OSI license, and a beginner can trust a program whose source anyone can read.
+  source projects, the open source funds (Open Source Collective, FLOSS/fund) need an OSI license, and a beginner can trust a program whose source anyone can read.
   Development is supported by GitHub Sponsors (Settings → Help, `sibersentez.com/destek`). Replaces the closed source
   decision below.
 - **(Replaced) Decided 2026-10-05: closed source, free app.** From 0.14.0 SiberSentez and its kit are under the SiberSentez

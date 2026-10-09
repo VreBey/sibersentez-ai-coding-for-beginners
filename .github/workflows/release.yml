@@ -1,10 +1,8 @@
 name: Release build
 
 # The installer is built here, from the source in this repository, so anyone can check that a published installer
-# comes from this code (SignPath Foundation's terms ask for it; docs/code-signing.md). Started by hand or by a version
-# tag. Without the SignPath settings it stops at the unsigned installer; with them it sends the installer to SignPath,
-# where every release waits for an approval by hand, and keeps the signed one. Nothing is published here: the release
-# is made by hand from the artifact.
+# comes from this code. Started by hand or by a version tag. Nothing is published here: the release is made by hand
+# from the artifact.
 on:
   workflow_dispatch:
   push:
@@ -30,40 +28,17 @@ jobs:
         env:
           TEMP: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
-      # No certificate on the runner: electron-builder builds the installer unsigned; SignPath signs it below. It
-      # never publishes on its own (on CI it would try to): the release is made by hand
+      # No certificate on the runner: electron-builder builds the installer unsigned. It never publishes on its own (on
+      # CI it would try to): the release is made by hand
       - run: npm run dist -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Installer SHA-256
         shell: pwsh
         run: Get-FileHash dist\SiberSentez-Setup-*.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $(Split-Path -Leaf $_.Path)" }
-      - id: unsigned
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
-          name: SiberSentez-Setup-unsigned
+          name: SiberSentez-Setup
           path: dist/SiberSentez-Setup-*.exe
-          if-no-files-found: error
-          retention-days: 30
-      # Set in the repository settings once SignPath Foundation has accepted the project: the variable
-      # SIGNPATH_ORGANIZATION_ID and the secret SIGNPATH_API_TOKEN (a CI user with submitter rights only)
-      - id: sign
-        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
-        uses: signpath/github-action-submit-signing-request@v2
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: sibersentez
-          signing-policy-slug: release-signing
-          artifact-configuration-slug: installer
-          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
-          wait-for-completion: true
-          wait-for-completion-timeout-in-seconds: 3600
-          output-artifact-directory: signed
-      - if: ${{ steps.sign.outcome == 'success' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: SiberSentez-Setup-signed
-          path: signed/*.exe
           if-no-files-found: error
           retention-days: 30

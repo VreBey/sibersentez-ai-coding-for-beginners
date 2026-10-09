@@ -198,8 +198,7 @@ Exercise install → upgrade → first launch → uninstall with user data retai
 The backlog still says installer testing never happened, whereas `docs/direction.md` records an older install/upgrade
 smoke test; reconcile those records by version and scope rather than treating either as proof of the current release.
 
-Keep the existing manual publication/signing boundaries. Signing status in `docs/code-signing.md` is local project
-documentation, not newly verified provider eligibility. No publication or certificate purchase is proposed here.
+Keep the existing manual publication/signing boundaries. No publication or certificate purchase is proposed here.
 
 ## Work deliberately deferred
 
