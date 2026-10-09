@@ -1,3 +1,4 @@
+// @ts-check
 // Other AI tools' own session logs (2026-10-07): Codex CLI and Gemini CLI write a log per session on this computer,
 // as Claude Code does in ~/.claude/projects. server/ingest.mjs reads them with the same session model, so their
 // sessions, prompts, model, tokens, tool calls and permission mode show up like Claude Code's. This module holds the
@@ -17,7 +18,6 @@
 // ingest, never the AI's answers or the files it read.
 import path from 'node:path';
 
-export const FOREIGN_TOOLS = Object.freeze(['codex', 'gemini', 'qwen', 'copilot', 'opencode', 'cursor']);
 
 const UUID_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i;
 

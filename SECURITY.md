@@ -20,7 +20,8 @@ You will get an answer within a week. When a fix is ready, the release notes nam
 - A way around the actions mode (Off / Preview / On), the confirmation for On, or the folder rules (broad folders,
   links, the hub, the program folder).
 - A path, a user name, an API key or a token reaching the page, a log or a file where it should not.
-- The local server answering anything other than `127.0.0.1`, or a request from another origin.
+- The local server answering anything other than `127.0.0.1`, a request from another origin, or an `/api` request
+  without the per-launch session key (another program, or another Windows account on the same computer).
 
 Out of scope: the AI tools themselves (Claude Code, Codex CLI, ...), what an AI tool does inside the terminal you
 started, and problems that need someone who already controls your Windows account (see *Privacy and security* in the

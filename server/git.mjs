@@ -1,3 +1,4 @@
+// @ts-check
 // Git state of registered projects: branch, changed/untracked file counts, latest commits.
 // Truly read-only: with --no-optional-locks, git status does not refresh .git/index and
 // does not take index.lock (agents' concurrent commits are not disturbed). Every two minutes, one after another.
@@ -6,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFile, spawn } from 'node:child_process';
 import { truncate, redact } from './util.mjs';
+import { findGit } from './github.mjs';
 
 const GIT_ENV = { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
 // A project's own .git/config could name a program as its file system monitor (core.fsmonitor), which git status would
@@ -44,10 +46,11 @@ export function configNamesSafe(names) {
 // The names in one config file, by git's parser (includes not followed); null when git cannot read it, NO_GIT when
 // there is no git to ask. Run from the system's temporary folder, so no repository around the working folder is read.
 export const NO_GIT = 'no-git';
-export function configNames(file, { run = execFile } = {}) {
+export function configNames(file, { run = execFile, exe = gitProgram() } = {}) {
   return new Promise((resolve) => {
+    if (!exe) return resolve(NO_GIT);
     try {
-      run('git', ['config', '--file', file, '--no-includes', '--list', '--name-only', '-z'], { timeout: 5000, windowsHide: true, maxBuffer: 1 << 20, env: GIT_ENV, cwd: os.tmpdir() }, (err, stdout) => {
+      run(exe, ['config', '--file', file, '--no-includes', '--list', '--name-only', '-z'], { timeout: 5000, windowsHide: true, maxBuffer: 1 << 20, env: GIT_ENV, cwd: os.tmpdir() }, (err, stdout) => {
         resolve(err ? (err.code === 'ENOENT' ? NO_GIT : null) : String(stdout).split('\0').filter(Boolean));
       });
     } catch {
@@ -131,9 +134,20 @@ export async function repoConfigSafe(dir, { names = configNames } = {}) {
   }
 }
 
+// git.exe by absolute path (review A7): Windows would look for a bare 'git' in the working folder first. Looked up
+// again after GIT_FIND_TTL_MS, so a Git installed while the app runs is found; null: no git (every call answers null)
+const GIT_FIND_TTL_MS = 5 * 60 * 1000;
+let gitFound = { at: -Infinity, exe: null };
+export function gitProgram(now = Date.now()) {
+  if (now - gitFound.at > GIT_FIND_TTL_MS) gitFound = { at: now, exe: findGit() };
+  return gitFound.exe;
+}
+
 function git(cwd, args) {
   return new Promise((resolve) => {
-    execFile('git', [...GIT_SAFE_ARGS, ...gitDirArgs(cwd), ...args], { timeout: 20000, windowsHide: true, maxBuffer: 4 << 20, env: GIT_ENV }, (err, stdout) => {
+    const exe = gitProgram();
+    if (!exe) return resolve(null);
+    execFile(exe, [...GIT_SAFE_ARGS, ...gitDirArgs(cwd), ...args], { timeout: 20000, windowsHide: true, maxBuffer: 4 << 20, env: GIT_ENV }, (err, stdout) => {
       resolve(err ? null : String(stdout));
     });
   });
@@ -145,7 +159,9 @@ function statusCounts(cwd) {
     let child;
     try {
       // if stderr is not read, a full pipe blocks git: it is discarded
-      child = spawn('git', [...GIT_SAFE_ARGS, ...gitDirArgs(cwd), 'status', '--porcelain=v1', '--ignore-submodules=all'], { windowsHide: true, env: GIT_ENV, stdio: ['ignore', 'pipe', 'ignore'] });
+      const exe = gitProgram();
+      if (!exe) return resolve(null);
+      child = spawn(exe, [...GIT_SAFE_ARGS, ...gitDirArgs(cwd), 'status', '--porcelain=v1', '--ignore-submodules=all'], { windowsHide: true, env: GIT_ENV, stdio: ['ignore', 'pipe', 'ignore'] });
     } catch {
       return resolve(null);
     }

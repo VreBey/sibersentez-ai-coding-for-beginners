@@ -6,6 +6,7 @@ import { detectGit, envFlags, searchDirs, createToolDetector, publicTools } from
 import { diagnose, matchError, pathFix, setupCheckHtml, errorBoxHtml, FIX, NPM_PACKAGES } from '../public/js/setupCheck.js';
 import { normalizeTools } from '../public/js/views/tools.js';
 import { STRINGS, setLanguage } from '../public/js/i18n.js';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 const ENV = {
   Path: 'C:\\Windows\\System32;C:\\Tools',
@@ -31,7 +32,7 @@ const ready = (extra = {}) => ({ status: 'ready', tools: [tool('claude', 'Claude
 const ids = (list) => list.map((p) => p.id);
 
 describe('setup check: what the detection adds', () => {
-  test('Git: a file look-up on PATH, then its installer folders (off PATH); only git.exe counts; no process', () => {
+  test('Git: a file look-up on PATH, then its installer folders (off PATH); only git.exe counts; no process', { skip: WIN_ONLY }, () => {
     const dirs = searchDirs(ENV);
     assert.deepEqual(detectGit(dirs, ENV, (f) => f === 'C:\\Tools\\git.exe'), { installed: true, onPath: true });
     assert.deepEqual(detectGit(dirs, ENV, (f) => f === 'C:\\Program Files\\Git\\cmd\\git.exe'), { installed: true, onPath: false });
@@ -40,7 +41,7 @@ describe('setup check: what the detection adds', () => {
     assert.deepEqual(detectGit(dirs, ENV, () => false), { installed: false, onPath: false });
   });
 
-  test('the API key: presence only, any letter case, blank is not set; its value never reaches the page', async () => {
+  test('the API key: presence only, any letter case, blank is not set; its value never reaches the page', { skip: WIN_ONLY }, async () => {
     assert.deepEqual(envFlags({ ANTHROPIC_API_KEY: 'sk-ant-secret' }), { anthropicKey: true });
     assert.deepEqual(envFlags({ anthropic_api_key: 'x' }), { anthropicKey: true });
     assert.deepEqual(envFlags({ ANTHROPIC_API_KEY: '  ' }), { anthropicKey: false });

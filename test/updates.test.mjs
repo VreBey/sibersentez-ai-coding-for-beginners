@@ -137,6 +137,7 @@ test('wiring: GET only; the start of the page asks only through checkUpdates (ne
   assert.match(STRINGS.tr.updText, /hiçbir şey göndermez, hiçbir şey indirmez/);
   const server = read('server/update.mjs');
   assert.doesNotMatch(server, /createWriteStream|child_process|spawn\(/, 'nothing downloaded, nothing run');
-  assert.equal((server.match(/writeFileSync\(/g) || []).length, 1, 'one write: the last answer, small JSON, in the hub');
-  assert.ok(server.includes("fs.writeFileSync(tmp, JSON.stringify(a), { flag: 'wx' });"));
+  assert.equal((server.match(/writeFileSync\(|writeFile\(/g) || []).length, 0, 'no write of its own');
+  assert.equal((server.match(/writeFileAtomic\(/g) || []).length, 1, 'one write: the last answer, small JSON, in the hub');
+  assert.ok(server.includes('writeFileAtomic(file, JSON.stringify(a));'));
 });

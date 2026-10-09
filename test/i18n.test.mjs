@@ -50,7 +50,7 @@ test('index.html: every data-i18n key has a text in every language, and the page
 
 test('error codes: every code the server sends has a text in every language', () => {
   const codes = new Set();
-  for (const file of ['actions.mjs', 'app.mjs']) {
+  for (const file of ['actions.mjs', 'actionInput.mjs', 'app.mjs']) {
     const src = read('server', file);
     // reject(status, 'code'), { error: 'code' } and the checkDir messages
     for (const m of src.matchAll(/(?:reject\(\d+, |error: |checkDir\([^,]+, )'([a-z][a-z-]*)'/g)) codes.add(m[1]);
@@ -136,6 +136,8 @@ test('why a session waits, in the page language: its plan, its question, or Clau
     assert.equal(waitWhat({ lastAction: { tool: 'AskUserQuestion' }, live: { status: 'waiting', waitingFor: 'input needed' } }), 'sorusuna yanıt');
     assert.equal(waitWhat({ lastAction: { tool: 'Bash' }, live: { status: 'waiting', waitingFor: 'Dialog Open' } }), 'bir onay penceresi açık');
     assert.equal(waitWhat({ live: { status: 'waiting', waitingFor: 'input needed' } }), 'yanıtın');
+    // Claude Code 2.1.295 (seen on Linux, 2026-10-09: "seni bekliyor (permission prompt)")
+    assert.equal(waitWhat({ live: { status: 'waiting', waitingFor: 'permission prompt' } }), 'iznin');
     assert.equal(waitWhat({ live: { status: 'waiting', waitingFor: '' } }), '');
     assert.equal(waitPhrase('something new'), 'something new');
   } finally {

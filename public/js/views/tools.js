@@ -6,16 +6,19 @@
 // after bindAiStart() (the drawer, in the browser) switched them on.
 import { esc, ago, num } from '../format.js';
 import { icon } from '../icons.js';
-import { t } from '../i18n.js';
+import { t, tOs, setPagePlatform } from '../i18n.js';
 import { argvSummary, actionsState } from '../actions.js';
 import { ADAPTER_OF_TOOL } from '../toolTags.js';
 import { store } from '../store.js';
 import { setupCheckHtml, errorBoxHtml, matchError } from '../setupCheck.js';
 import { wizardState, wizardHtml } from './setupWizard.js';
+import { everyVisible } from '../whileVisible.js';
 
 // What the page knows about each tool: how to install it (the official commands; SiberSentez never runs them: the
 // person runs them, typed into the setup terminal or copied; the setup wizard, views/setupWizard.js, walks through them), what
 // account it needs, and whether an install command needs Node.js (node: 'npm' = only the npm command).
+// install: Windows' commands; installOn: Linux' and macOS' (plan G4), each from the tool's own docs (checked 2026-10-09:
+// its install script, Homebrew, npm). installsFor picks the list for the platform the server runs on.
 export const TOOL_INFO = Object.freeze({
   claude: Object.freeze({
     name: 'Claude Code',
@@ -23,6 +26,7 @@ export const TOOL_INFO = Object.freeze({
       { how: 'powershell', cmd: 'irm https://claude.ai/install.ps1 | iex' },
       { how: 'winget', cmd: 'winget install Anthropic.ClaudeCode' },
     ],
+    installOn: { linux: [{ how: 'shell', cmd: 'curl -fsSL https://claude.ai/install.sh | bash' }], darwin: [{ how: 'shell', cmd: 'curl -fsSL https://claude.ai/install.sh | bash' }, { how: 'brew', cmd: 'brew install --cask claude-code' }] },
     docs: 'https://code.claude.com/docs/en/setup',
   }),
   codex: Object.freeze({
@@ -31,25 +35,37 @@ export const TOOL_INFO = Object.freeze({
       { how: 'powershell', cmd: 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"' },
       { how: 'npm', cmd: 'npm i -g @openai/codex' },
     ],
+    installOn: { linux: [{ how: 'shell', cmd: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' }, { how: 'npm', cmd: 'npm i -g @openai/codex' }], darwin: [{ how: 'shell', cmd: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' }, { how: 'brew', cmd: 'brew install --cask codex' }, { how: 'npm', cmd: 'npm i -g @openai/codex' }] },
     docs: 'https://github.com/openai/codex',
   }),
-  gemini: Object.freeze({ name: 'Gemini CLI', install: [{ how: 'npm', cmd: 'npm install -g @google/gemini-cli' }], docs: 'https://geminicli.com/docs/get-started/installation' }),
+  gemini: Object.freeze({ name: 'Gemini CLI', install: [{ how: 'npm', cmd: 'npm install -g @google/gemini-cli' }], installOn: { linux: [{ how: 'npm', cmd: 'npm install -g @google/gemini-cli' }, { how: 'brew', cmd: 'brew install gemini-cli' }], darwin: [{ how: 'brew', cmd: 'brew install gemini-cli' }, { how: 'npm', cmd: 'npm install -g @google/gemini-cli' }] }, docs: 'https://geminicli.com/docs/get-started/installation' }),
   copilot: Object.freeze({
     name: 'GitHub Copilot CLI',
     install: [
       { how: 'winget', cmd: 'winget install GitHub.Copilot' },
       { how: 'npm', cmd: 'npm install -g @github/copilot' },
     ],
+    installOn: { linux: [{ how: 'shell', cmd: 'curl -fsSL https://gh.io/copilot-install | bash' }, { how: 'npm', cmd: 'npm install -g @github/copilot' }], darwin: [{ how: 'shell', cmd: 'curl -fsSL https://gh.io/copilot-install | bash' }, { how: 'brew', cmd: 'brew install copilot-cli' }, { how: 'npm', cmd: 'npm install -g @github/copilot' }] },
     docs: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli',
   }),
-  cursor: Object.freeze({ name: 'Cursor CLI', install: [{ how: 'powershell', cmd: "irm 'https://cursor.com/install?win32=true' | iex" }], docs: null }),
-  qwen: Object.freeze({ name: 'Qwen Code', install: [{ how: 'npm', cmd: 'npm i -g @qwen-code/qwen-code@latest' }], docs: null }),
-  opencode: Object.freeze({ name: 'OpenCode', install: [{ how: 'npm', cmd: 'npm i -g opencode-ai' }], docs: null }),
+  cursor: Object.freeze({ name: 'Cursor CLI', install: [{ how: 'powershell', cmd: "irm 'https://cursor.com/install?win32=true' | iex" }], installOn: { linux: [{ how: 'shell', cmd: 'curl https://cursor.com/install -fsS | bash' }], darwin: [{ how: 'shell', cmd: 'curl https://cursor.com/install -fsS | bash' }] }, docs: 'https://cursor.com/docs/cli/installation' }),
+  qwen: Object.freeze({ name: 'Qwen Code', install: [{ how: 'npm', cmd: 'npm i -g @qwen-code/qwen-code@latest' }], installOn: { linux: [{ how: 'shell', cmd: 'curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash' }, { how: 'npm', cmd: 'npm i -g @qwen-code/qwen-code@latest' }], darwin: [{ how: 'shell', cmd: 'curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash' }, { how: 'brew', cmd: 'brew install qwen-code' }, { how: 'npm', cmd: 'npm i -g @qwen-code/qwen-code@latest' }] }, docs: null }),
+  opencode: Object.freeze({ name: 'OpenCode', install: [{ how: 'npm', cmd: 'npm i -g opencode-ai' }], installOn: { linux: [{ how: 'shell', cmd: 'curl -fsSL https://opencode.ai/install | bash' }, { how: 'npm', cmd: 'npm i -g opencode-ai' }], darwin: [{ how: 'shell', cmd: 'curl -fsSL https://opencode.ai/install | bash' }, { how: 'brew', cmd: 'brew install anomalyco/tap/opencode' }, { how: 'npm', cmd: 'npm i -g opencode-ai' }] }, docs: 'https://opencode.ai/docs/' }),
 });
+
+// The platforms the server can name (GET /api/tools platform); an older server's answer has none: Windows
+export const PAGE_PLATFORMS = Object.freeze(['win32', 'linux', 'darwin']);
+export const platformOfState = (st) => (PAGE_PLATFORMS.includes(st?.platform) ? st.platform : 'win32');
+
+// A tool's install commands on a platform (pure)
+export function installsFor(info, platform = 'win32') {
+  const own = platform !== 'win32' ? info?.installOn?.[platform] : null;
+  return Array.isArray(own) ? own : Array.isArray(info?.install) ? info.install : [];
+}
 export const TOOL_ORDER = Object.freeze(Object.keys(TOOL_INFO));
-const VIAS = new Set(['native', 'npm', 'winget', 'scoop', 'store', 'other']);
+const VIAS = new Set(['native', 'npm', 'winget', 'scoop', 'store', 'brew', 'other']);
 const READY = new Set(['yes', 'no', 'unknown']);
-const PATH_DIRS = new Set(['localBin', 'npm', 'winget', 'scoop']);
+const PATH_DIRS = new Set(['localBin', 'npm', 'winget', 'scoop', 'brew', 'system', 'nvm', 'own']);
 const VERSION_RE = /^[0-9A-Za-z.+-]{1,40}$/;
 const STALE_MS = 5 * 60 * 1000;
 const RETRY_MS = 30 * 1000;
@@ -111,7 +127,7 @@ export function normalizeTools(d) {
   // git and env are absent from an older server's answer: null (the setup check says nothing about them)
   const git = d?.git && typeof d.git === 'object' ? { installed: d.git.installed === true, onPath: d.git.onPath === true } : null;
   const env = d?.env && typeof d.env === 'object' ? { anthropicKey: d.env.anthropicKey === true } : null;
-  return { tools, node, git, env, at: Number(d?.at) || 0 };
+  return { tools, node, git, env, at: Number(d?.at) || 0, platform: PAGE_PLATFORMS.includes(d?.platform) ? d.platform : 'win32' };
 }
 
 // GET /api/tools (refresh: ?refresh=1, check again). One request at a time; resolves to the new state.
@@ -128,7 +144,8 @@ export function loadTools({ refresh = false } = {}) {
       const d = normalizeTools(await res.json());
       // at: when the server looked (shown as "checked … ago"); gotAt: when this page got it (what "five minutes old"
       // counts from, so a server answer that is already old is not asked for again at once)
-      setState({ status: 'ready', tools: d.tools, node: d.node, git: d.git, env: d.env, at: d.at || Date.now(), gotAt: Date.now(), checking: false, failedAt: 0 });
+      setPagePlatform(d.platform);
+      setState({ status: 'ready', tools: d.tools, node: d.node, git: d.git, env: d.env, platform: d.platform, at: d.at || Date.now(), gotAt: Date.now(), checking: false, failedAt: 0 });
     } catch {
       setState({ status: state.status === 'ready' ? 'ready' : 'error', checking: false, failedAt: Date.now() });
     } finally {
@@ -303,7 +320,17 @@ function seenLine(x, seen = []) {
 }
 
 // chosen: the tool jobs start with (marked, and where to change it said)
-function toolCardHtml(x, node, seen = [], chosen = false) {
+// What SiberSentez does with the tool (plan D4, server/tools.mjs capabilities), one honest line; '' from an older server
+const CAP_KEYS = Object.freeze(['plan', 'resume', 'live', 'usage', 'signIn']);
+const CAP_VALUES = new Set(['yes', 'no', 'unknown', 'file']);
+export function capsLine(caps) {
+  if (!caps || typeof caps !== 'object') return '';
+  const min = (k) => (caps[k] === 'yes' && typeof caps[`${k}Min`] === 'string' && /^[\d.]{1,20}$/.test(caps[`${k}Min`]) ? ` (${t('aiCapMin', { version: caps[`${k}Min`] })})` : '');
+  const parts = CAP_KEYS.filter((k) => CAP_VALUES.has(caps[k])).map((k) => `<span class="ai-cap ${caps[k]}">${esc(t(`aiCap_${k}`))}: ${esc(t(`aiCapV_${caps[k]}`))}${esc(min(k === 'plan' ? 'plan' : k === 'resume' ? 'resume' : ''))}</span>`);
+  return parts.length ? `<p class="small ai-caps"><span class="muted">${esc(t('aiCapsTitle'))}</span> ${parts.join(' · ')}</p>` : '';
+}
+
+function toolCardHtml(x, node, seen = [], chosen = false, platform = 'win32') {
   const info = TOOL_INFO[x.id];
   const head = `<div class="ai-card-head"><b translate="no">${esc(info.name)}</b>${chosen ? `<span class="ai-chip chosen">${esc(t('aiChosenChip'))}</span>` : ''}${
     x.installed
@@ -321,16 +348,20 @@ function toolCardHtml(x, node, seen = [], chosen = false) {
   if (x.installed && !x.onPath) lines.push(`<p class="small muted">${esc(t('aiNotOnPath'))}</p>`);
   if (!x.installed && x.app) lines.push(`<p class="small ai-warn">${esc(t('aiCodexApp'))}</p>`);
   if (!x.installed) {
-    const cmds = info.install
+    const list = installsFor(info, platform);
+    const cmds = list
       .map((c) => `<li class="ai-cmd"><span class="ai-how">${esc(t(`aiHow_${c.how}`))}</span><code translate="no">${esc(c.cmd)}</code><button type="button" class="act-btn ai-copy" data-ai-copy>${icon('copy')}<span>${esc(t('aiCopy'))}</span></button></li>`)
       .join('');
-    const npm = info.install.some((c) => c.how === 'npm');
+    const npm = list.some((c) => c.how === 'npm');
     const nodeState = node?.installed ? t('aiNodeHave', { version: node.version ? `Node.js ${node.version}` : 'Node.js' }) : t('aiNodeMissing');
     lines.push(`<p class="small ai-how-h">${esc(t('aiHowInstall'))}</p><ul class="ai-cmds">${cmds}</ul>`);
     lines.push(`<p class="small"><span class="muted">${esc(t('aiAccount'))}:</span> ${esc(t(`aiAcct_${x.id}`))}</p>`);
-    if (npm) lines.push(`<p class="small muted">${esc(t('aiNeedsNode', { state: nodeState }))} ${esc(t('aiPolicyTip'))}</p>`);
+    // The PowerShell tip is Windows'
+    if (npm) lines.push(`<p class="small muted">${esc(t('aiNeedsNode', { state: nodeState }))}${platform === 'win32' ? ` ${esc(t('aiPolicyTip'))}` : ''}</p>`);
     if (info.docs) lines.push(`<p class="small"><a href="${esc(info.docs)}" target="_blank" rel="noopener noreferrer">${esc(t('aiDocs'))}</a></p>`);
   }
+  const caps = capsLine(x.caps);
+  if (caps) lines.push(caps);
   if (chosen) lines.push(`<p class="small muted">${esc(t('aiChosenWhere'))}</p>`);
   return `<li class="ai-card${x.installed ? ' on' : ''}${chosen ? ' chosen' : ''}" data-ai-tool="${esc(x.id)}">${head}${lines.join('')}</li>`;
 }
@@ -367,11 +398,11 @@ export function toolsPanelHtml(st = state, now = Date.now(), seen = store.tools,
     const known = TOOL_ORDER.map((id) => st.tools.find((x) => x.id === id) || { id, installed: false, installs: 0, others: [], ready: 'unknown', app: false, onPath: false });
     const sorted = [...known.filter((x) => x.installed), ...known.filter((x) => !x.installed)];
     const chosen = preferredTool(sorted.filter((x) => x.installed), stored);
-    if (!chosen) list = `<ul class="ai-cards">${sorted.map((x) => toolCardHtml(x, st.node, seen)).join('')}</ul>`;
+    if (!chosen) list = `<ul class="ai-cards">${sorted.map((x) => toolCardHtml(x, st.node, seen, false, platformOfState(st))).join('')}</ul>`;
     else {
       const rest = sorted.filter((x) => x !== chosen);
-      list = `<p class="small ai-chosen-h">${esc(t('aiChosenTitle'))}</p><ul class="ai-cards">${toolCardHtml(chosen, st.node, seen, true)}</ul>${
-        rest.length ? `<details class="ai-more"><summary>${esc(t('aiOtherTools', { count: rest.length }))}</summary><ul class="ai-cards">${rest.map((x) => toolCardHtml(x, st.node, seen)).join('')}</ul></details>` : ''
+      list = `<p class="small ai-chosen-h">${esc(t('aiChosenTitle'))}</p><ul class="ai-cards">${toolCardHtml(chosen, st.node, seen, true, platformOfState(st))}</ul>${
+        rest.length ? `<details class="ai-more"><summary>${esc(t('aiOtherTools', { count: rest.length }))}</summary><ul class="ai-cards">${rest.map((x) => toolCardHtml(x, st.node, seen, false, platformOfState(st))).join('')}</ul></details>` : ''
       }`;
     }
   } else if (st.status === 'error') list = `<p class="ai-status warn" role="status">${esc(t('aiLoadFailed'))}</p>`;
@@ -379,7 +410,7 @@ export function toolsPanelHtml(st = state, now = Date.now(), seen = store.tools,
   const checked = st.status === 'ready' && st.at ? `<span class="small muted">${esc(t('aiPanelChecked', { when: ago(st.at, now) }))}</span>` : '';
   const recheck = `<button type="button" class="act-btn" data-ai-act="recheck"${st.checking ? ' disabled' : ''}>${icon('replay')}<span>${esc(st.checking ? t('aiChecking') : t('aiRecheck'))}</span></button>`;
   return `<header class="ai-panel-head"><h2 id="aiPanelH">${icon('spark')} ${esc(t('aiPanelTitle'))}</h2><button type="button" class="icon-btn ai-panel-close" data-ai-act="close" aria-label="${esc(t('aiPanelClose'))}" title="${esc(t('aiPanelClose'))}">${icon('close')}</button></header>
-    <p class="ai-panel-intro">${esc(t('aiPanelIntro'))}</p>
+    <p class="ai-panel-intro">${esc(tOs('aiPanelIntro', {}, platformOfState(st)))}</p>
     <div class="ai-panel-bar">${recheck}<button type="button" class="act-btn" data-wz="start">${icon('spark')}<span>${esc(t('wzStart'))}</span></button>${checked}</div>
     ${setupCheckHtml(st)}
     ${list}
@@ -461,9 +492,10 @@ function createPanel() {
   let poll = 0;
   const inWizard = () => view === 'wizard' || (view === null && wizardFirst(state));
   const pollFor = (on) => {
-    if (on && !poll) poll = setInterval(() => loadTools({ refresh: true }), WIZARD_POLL_MS);
+    // Not while the window is hidden: once when it shows again (plan D5)
+    if (on && !poll) poll = everyVisible(() => loadTools({ refresh: true }), WIZARD_POLL_MS);
     if (!on && poll) {
-      clearInterval(poll);
+      poll();
       poll = 0;
     }
   };

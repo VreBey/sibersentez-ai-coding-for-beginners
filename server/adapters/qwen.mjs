@@ -1,3 +1,4 @@
+// @ts-check
 // Qwen Code source adapter (see adapters/index.mjs; contract docs/adapters-wave1.md; roadmap F4, 2026-10-08).
 //   root: ~/.qwen
 //   projects: ~/.qwen/projects/<folder>/chats/<uuid>.jsonl. The folder name is the working folder lower-cased with

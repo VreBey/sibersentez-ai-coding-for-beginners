@@ -16,7 +16,7 @@
   background: transparent; color: var(--text-2); font: 550 14px var(--font); text-align: left; cursor: pointer;
 }
 .side-nav button:hover, .side-foot button:hover { background: rgba(var(--tint-rgb), 0.05); color: var(--text); }
-.side-nav button.on, .side-foot button.on { background: rgba(var(--accent-rgb), 0.16); color: #fff; }
+.side-nav button.on, .side-foot button.on { background: rgba(var(--accent-rgb), 0.16); color: var(--text-strong); }
 .side-nav button:focus-visible, .side-foot button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .side .ic { width: 18px; height: 18px; flex: none; }
 .side kbd { margin-left: auto; opacity: 0.45; font-size: 11px; }

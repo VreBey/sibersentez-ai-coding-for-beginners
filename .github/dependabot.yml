@@ -1,0 +1,19 @@
+# Dependency updates (plan A5): a weekly look at npm and a monthly one at the GitHub Actions the workflows use. Each
+# update is a pull request that the tests check; nothing merges by itself, and a release still follows docs/release.md.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      # The terminal's two packages move together
+      xterm:
+        patterns:
+          - '@xterm/*'
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2

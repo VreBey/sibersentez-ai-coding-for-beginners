@@ -1,3 +1,4 @@
+// @ts-check
 // Motion helpers (docs/motion.md): the page's few scripted movements, all skipped when the person asks for reduced
 // motion. CSS does the rest (public/css/motion.css).
 

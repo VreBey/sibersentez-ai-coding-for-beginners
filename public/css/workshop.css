@@ -58,6 +58,14 @@
 .ws-empty { position: absolute; top: 48%; left: 50%; transform: translate(-50%, -50%); max-width: 80%; background: var(--hq-plate); padding: 15px 22px; border: 1px solid var(--hq-line); border-radius: 8px; text-align: center; font-size: 13px; pointer-events: none; }
 /* The keyboard's buttons over the drawing: focusable, not seen (the canvas draws the ring) */
 .ws-nav button { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); padding: 0; border: 0; }
+/* Building / List (review U18): the list shows the people and robots as the keyboard's own buttons; the picture rests */
+.ws-list-empty { margin: 12px 0; color: var(--muted); }
+.ws:not(.ws-list-mode) .ws-list-empty { display: none; }
+.ws-list-mode .ws-stage canvas, .ws-list-mode .ws-sign, .ws-list-mode .ws-hint, .ws-list-mode .ws-rooms { display: none; }
+.ws-list-mode .ws-nav { display: grid; gap: 6px; padding: 12px 0; }
+.ws-list-mode .ws-nav button[data-actor] { position: static; width: auto; height: auto; overflow: visible; clip-path: none; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 8px; text-align: left; background: transparent; color: var(--text); }
+.ws-list-mode .ws-nav button:not([data-actor]) { display: none; }
+.ws-list-mode .ws-stage { min-height: 0; height: auto; }
 
 /* The guide */
 .ws-guide { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: var(--hq-scrim); }
@@ -75,10 +83,13 @@
 /* The job box: first in the header row, beside the project it goes to; the widest item, wraps under it when narrow */
 .ws-give { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 380px; min-width: 0; padding: 8px; background: var(--hq-surface); border: 1px solid var(--hq-border); border-radius: 12px; }
 .ws-give textarea { resize: vertical; min-height: 2.6em; max-height: 12em; line-height: 1.4; }
-.ws-give input, .ws-give textarea { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--text); background: var(--hq-shell); border: 1px solid var(--hq-border); border-radius: 8px; padding: 9px 12px; }
+.ws-give input, .ws-give textarea { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--text); background: var(--hq-shell); border: 1px solid var(--field-border); border-radius: 8px; padding: 9px 12px; }
 .ws-give input:focus-visible, .ws-give textarea:focus-visible { outline: 2px solid var(--hq-focus); outline-offset: 2px; }
 .ws .ws-give button { background: var(--accent); color: var(--hq-shade); border-color: var(--accent); font-weight: 700; min-width: 90px; }
 .ws .ws-give button:disabled { opacity: 0.6; cursor: default; }
+/* One primary action (review B1): when the strip's button is the primary one, Start steps back */
+.ws .ws-give button.quiet { background: transparent; color: var(--text); border-color: var(--line-2); font-weight: 600; }
+.ws-next button.primary { background: var(--accent); color: var(--hq-shade); border-color: var(--accent); }
 
 /* The room tabs */
 .ws-rooms { display: grid; grid-template-columns: repeat(6, 1fr); background: var(--hq-surface); border-top: 1px solid var(--hq-border); }
@@ -156,7 +167,7 @@
 .ws-note { font-size: 11px; color: var(--muted); }
 
 /* The card: over the team while something is chosen */
-.ws-card { position: absolute; inset: 0; z-index: 3; max-height: min(780px, 82vh); box-shadow: var(--shadow); border-color: var(--accent); }
+.ws-card { position: absolute; inset: 0; z-index: 3; max-height: min(780px, 82vh); box-shadow: var(--shadow); border-color: var(--accent); scroll-margin-top: 90px; }
 .ws-card.room-card { bottom: auto; min-height: 320px; }
 .ws-card h2 { padding-top: 8px; font-size: 18px; line-height: 1.4; margin: 8px 0; clear: both; }
 .ws-card h3 { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; margin: 18px 0 8px; }

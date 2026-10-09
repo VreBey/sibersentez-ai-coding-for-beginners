@@ -1,3 +1,4 @@
+// @ts-check
 // Hub library (docs/skills-flow.md §2). The library folders are the source of truth:
 //   <hub>/library/<category>/skills/<folder>/SKILL.md   (a skill: the whole folder)
 //   <hub>/library/<category>/agents/<file>.md            (an agent: one file)
@@ -13,9 +14,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { normPath, readFrontmatter, truncate } from './util.mjs';
 import { libraryFile, registryFile, readLibrary } from './hub.mjs';
+import { writeFileAtomic } from './atomic.mjs';
+import { PLATFORM, isFsRoot, isLocalAbsolute, normalizeDir } from './platform.mjs';
 
 export const CATEGORIES = Object.freeze(['web', 'mobile', 'desktop', 'game', 'data', 'ai', 'devops', 'testing', 'security', 'design', 'docs', 'general']);
-export const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 export const CATEGORY_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
 // One item (a skill folder or an agent file): maxBytes, maxFiles (links and other special entries are counted apart
 // against the same number), maxItemDirs folders, entries at most maxItemDepth levels below the item.
@@ -94,13 +97,14 @@ const realpath = realPath;
 
 // A user-supplied path with a ':' after the drive letter. 'C:\x::$INDEX_ALLOCATION' (an alternate data stream of
 // the folder) opens the folder itself while every name comparison sees another path, so such a path is refused.
-export function hasStreamColon(p) {
-  return typeof p === 'string' && p.indexOf(':', 2) !== -1;
+export function hasStreamColon(p, plat = PLATFORM) {
+  // Windows' alternate data streams; on Linux and macOS a colon is a plain letter of a name
+  return typeof p === 'string' && plat.windows && p.indexOf(':', 2) !== -1;
 }
 
-// A drive root: 'C:', 'C:\', 'c:/'
-export function isDriveRoot(p) {
-  return typeof p === 'string' && /^[A-Za-z]:[\\/]?$/.test(p);
+// A drive root: 'C:', 'C:\', 'c:/'; '/' on Linux and macOS (platform.mjs isFsRoot)
+export function isDriveRoot(p, plat = PLATFORM) {
+  return isFsRoot(p, plat);
 }
 
 // Two tree hashes that name the same content: both real SHA-256 values (OVER_LIMIT, null or a hand-edited record
@@ -133,16 +137,10 @@ export function validName(name) {
 const itemKey = (kind, name) => `${kind}:${name}`.toLowerCase();
 
 // JSON written to a temporary file next to the target, then renamed over it: a reader never sees half a file
+// (atomic.mjs: flushed to the disk, the rename tried again while Windows holds the file for a moment)
 export function writeJsonAtomic(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
-  try {
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmp, file);
-  } catch (e) {
-    fs.rmSync(tmp, { force: true });
-    throw e;
-  }
+  writeFileAtomic(file, JSON.stringify(data, null, 2) + '\n', { tmp: `${file}.tmp-${process.pid}-${crypto.randomBytes(4).toString('hex')}` });
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -428,6 +426,7 @@ const rmTree = (p) => fs.rmSync(p, { recursive: true, force: true });
 // (it was modified meanwhile). Once the new copy is in place, failing to delete the old one is not an error: it is
 // left as .sibersentez-old-<tag> and swept at the next server start. removeTree: how a staging copy is deleted (tests
 // make it fail). vendored: see copyTree. Returns { leftover } (true: the old copy is still there).
+/** @param {string} src @param {string} dest @param {{ replace?: boolean, expectHash?: string | null, limits?: any, stageDir?: string, removeTree?: (p: string) => void, vendored?: string }} [options] */
 export function placeCopy(src, dest, { replace = false, expectHash = null, limits = LIMITS, stageDir, removeTree = rmTree, vendored = 'keep' } = {}) {
   if (typeof stageDir !== 'string' || !stageDir) throw codeError('internal');
   const quietRemove = (p) => {
@@ -590,9 +589,8 @@ const fail = (status, error) => ({ ok: false, status, error });
 export function checkSource(raw, { hubDir = null, homeDir = null } = {}) {
   if (typeof raw !== 'string' || !raw.trim() || raw.length > 260 || CTRL_RE.test(raw)) return fail(400, 'bad-source');
   const s = raw.trim();
-  if (!/^[A-Za-z]:[\\/]/.test(s) || hasStreamColon(s)) return fail(400, 'bad-source');
-  let dir = path.win32.normalize(s);
-  if (dir.length > 3) dir = dir.replace(/[\\/]+$/, '');
+  if (!isLocalAbsolute(s) || hasStreamColon(s)) return fail(400, 'bad-source');
+  const dir = normalizeDir(s);
   if (isDriveRoot(dir)) return fail(409, 'source-is-root');
   if (homeDir && normPath(dir) === normPath(homeDir)) return fail(409, 'source-is-home');
   const st = lstat(dir);
@@ -601,7 +599,7 @@ export function checkSource(raw, { hubDir = null, homeDir = null } = {}) {
   if (!st.isDirectory()) return fail(404, 'source-missing');
   const real = realPath(dir);
   if (!real) return fail(404, 'source-missing');
-  if (!/^[A-Za-z]:[\\/]/.test(real) || hasStreamColon(real)) return fail(400, 'bad-source');
+  if (!isLocalAbsolute(real) || hasStreamColon(real)) return fail(400, 'bad-source');
   if (isDriveRoot(real)) return fail(409, 'source-is-root');
   if (homeDir && normPath(real) === normPath(realPath(homeDir) || homeDir)) return fail(409, 'source-is-home');
   if (hubDir && (withinReal(dir, hubDir) || within(real, realPath(hubDir) || hubDir))) return fail(409, 'source-in-hub');
@@ -724,7 +722,7 @@ export function normRel(p) {
 }
 
 // A category the import may write to: a known one, or a folder the user already made under library/
-export function validCategory(cat, hubDir) {
+function validCategory(cat, hubDir) {
   if (typeof cat !== 'string' || !CATEGORY_RE.test(cat)) return false;
   return CATEGORIES.includes(cat) || isRealDir(path.join(hubDir, 'library', cat));
 }

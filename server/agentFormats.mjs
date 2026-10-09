@@ -1,3 +1,4 @@
+// @ts-check
 // An agent (sub-agent) written for Claude Code, in the shape another AI tool loads (2026-10-07). The kit's and the
 // library's agents are Markdown with YAML frontmatter (name, description, tools in Claude Code's names, license,
 // metadata). Copilot CLI and Cursor CLI read .claude/agents as they are; the others need their own file, each checked

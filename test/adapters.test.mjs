@@ -23,6 +23,7 @@ import { ProjectMemory } from '../server/memory.mjs';
 import { normPath } from '../server/util.mjs';
 import { Ingest } from '../server/ingest.mjs';
 import { snapshot } from '../server/views.mjs';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-adapters-'));
@@ -97,7 +98,7 @@ function allTools(w) {
 }
 
 // ---------------- detect ----------------
-test('detect: every adapter is false on an empty fake home; each tool is found by each of its markers; roots come from ctx.env', () => {
+test('detect: every adapter is false on an empty fake home; each tool is found by each of its markers; roots come from ctx.env', { skip: WIN_ONLY }, () => {
   const empty = world('detect-empty');
   for (const a of ADAPTERS) assert.equal(a.detect(empty.ctx(a)), false, a.id);
   const cases = [
@@ -301,7 +302,7 @@ test('copilot projects: only the top-level cwd: line of session-state/<id>/works
 });
 
 // ---------------- VS Code-style workspaces ----------------
-test('VS Code workspaces: file URIs decoded (%3A, spaces, non-ASCII); remote, virtual and multi-root skipped; Copilot needs chat traces, Cursor and Antigravity do not', () => {
+test('VS Code workspaces: file URIs decoded (%3A, spaces, non-ASCII); remote, virtual and multi-root skipped; Copilot needs chat traces, Cursor and Antigravity do not', { skip: WIN_ONLY }, () => {
   const w = world('vscode');
   const spaced = mkdir(w.work, 'site ve mobil');
   const turkish = mkdir(w.work, 'ÖZ GEÇMİŞ');
@@ -332,7 +333,7 @@ test('VS Code workspaces: file URIs decoded (%3A, spaces, non-ASCII); remote, vi
   assert.equal(folderFromUri(42), null);
 });
 
-test('workspace.json and workspace.yaml are cached by modification time; entries of removed files are dropped', () => {
+test('workspace.json and workspace.yaml are cached by modification time; entries of removed files are dropped', { skip: WIN_ONLY }, () => {
   const w = world('ws-cache');
   const a = mkdir(w.work, 'a');
   const b = mkdir(w.work, 'b');
@@ -539,7 +540,7 @@ test('copilot and cursor: a project whose .claude is the personal folder yields 
 });
 
 // ---------------- cross-tool ----------------
-test('cross-tool: ~/.agents/skills/x reported by four adapters is one roster item with four tools; ~/.claude/skills by three (adapter order)', () => {
+test('cross-tool: ~/.agents/skills/x reported by four adapters is one roster item with four tools; ~/.claude/skills by three (adapter order)', { skip: WIN_ONLY }, () => {
   const w = world('cross-personal');
   allTools(w);
   skill(path.join(w.home, '.agents', 'skills'), 'x');
@@ -559,7 +560,7 @@ test('cross-tool: ~/.agents/skills/x reported by four adapters is one roster ite
   assert.deepEqual(r.roster.get('skill:x').tools, ['cursor', 'copilot', 'gemini-cli', 'codex']);
 });
 
-test('cross-tool: a project .claude/skills/y is counted once for the project with tools claude-code, copilot, cursor; .agents/skills/z has six tools', () => {
+test('cross-tool: a project .claude/skills/y is counted once for the project with tools claude-code, copilot, cursor; .agents/skills/z has six tools', { skip: WIN_ONLY }, () => {
   const w = world('cross-project');
   allTools(w);
   const proj = mkdir(w.work, 'shared proj');
@@ -581,7 +582,7 @@ test('cross-tool: a project .claude/skills/y is counted once for the project wit
 });
 
 // ---------------- snapshot ----------------
-test('snapshot: tools lists every adapter with detected and its project, skill, agent and plugin counts; roster items carry tools, projects carry via', () => {
+test('snapshot: tools lists every adapter with detected and its project, skill, agent and plugin counts; roster items carry tools, projects carry via', { skip: WIN_ONLY }, () => {
   const w = world('snapshot');
   const a = mkdir(w.work, 'a');
   const b = mkdir(w.work, 'b');
@@ -617,7 +618,7 @@ test('snapshot: tools lists every adapter with detected and its project, skill, 
 });
 
 // ---------------- privacy and roots ----------------
-test('privacy: no adapter opens chat or session content or a database, reads a rollout past its first line, or writes anything', () => {
+test('privacy: no adapter opens chat or session content or a database, reads a rollout past its first line, or writes anything', { skip: WIN_ONLY }, () => {
   const w = world('privacy');
   allTools(w);
   const proj = mkdir(w.work, 'proj');
@@ -695,7 +696,7 @@ test('privacy: no adapter opens chat or session content or a database, reads a r
   assert.ok(c.allProjects().some((p) => normPath(p.path) === normPath(proj) && p.via.length === 5), 'the project was found by every tool but Claude Code');
 });
 
-test('env-only roots: adapter sources never use os.homedir() or process.env; CODEX_HOME, COPILOT_HOME and APPDATA are read from the catalog environment', () => {
+test('env-only roots: adapter sources never use os.homedir() or process.env; CODEX_HOME, COPILOT_HOME and APPDATA are read from the catalog environment', { skip: WIN_ONLY }, () => {
   const dir = path.join(REPO, 'server', 'adapters');
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.mjs'))) {
     const code = fs.readFileSync(path.join(dir, f), 'utf8').replace(/(^|\s)\/\/.*$/gm, '$1');
@@ -727,7 +728,7 @@ test('env-only roots: adapter sources never use os.homedir() or process.env; COD
 });
 
 // ---------------- catalog filters ----------------
-test('discovery: the temp folder itself is broad (never a project); a working folder inside it stays a project of its own', () => {
+test('discovery: the temp folder itself is broad (never a project); a working folder inside it stays a project of its own', { skip: WIN_ONLY }, () => {
   const w = world('temp-broad');
   const temp = mkdir(w.home, 'AppData', 'Local', 'Temp');
   const inside = mkdir(temp, 'some-clone');
@@ -852,7 +853,7 @@ test('gemini ids (finding 6b): an id that is a path ("../x", "a/b", "..", ".") i
   assert.deepEqual(found.map((f) => f.lastSeenAt), [0, 0, 0, 0], 'no id that is a path is followed');
 });
 
-test('UNC and WSL paths (finding 2): no adapter reports them (file://host URIs, \\\\server\\share, \\\\wsl.localhost), and the catalog never checks one an adapter or an older memory file gives', () => {
+test('UNC and WSL paths (finding 2): no adapter reports them (file://host URIs, \\\\server\\share, \\\\wsl.localhost), and the catalog never checks one an adapter or an older memory file gives', { skip: WIN_ONLY }, () => {
   assert.equal(folderFromUri('file://wsl.localhost/Ubuntu/home/u/proj'), null);
   assert.equal(folderFromUri('file://server/share/proj'), null);
   assert.equal(folderFromUri('file:///c%3A/x'), 'C:\\x');
@@ -919,7 +920,7 @@ test('codex (finding 3): a rollout is read in 4 KiB chunks, so at most one small
   }
 });
 
-test('copilot (finding 3): workspace.yaml is read only up to its cwd: line (the summary after it is not read); a cwd line longer than a read chunk, CRLF and a BOM work', () => {
+test('copilot (finding 3): workspace.yaml is read only up to its cwd: line (the summary after it is not read); a cwd line longer than a read chunk, CRLF and a BOM work', { skip: WIN_ONLY }, () => {
   const w = world('copilot-yaml-read');
   const proj = mkdir(w.work, 'yaml proj');
   const head = `\ufeffid: s1\r\ncwd: ${proj}\r\n`;
@@ -942,7 +943,7 @@ test('copilot (finding 3): workspace.yaml is read only up to its cwd: line (the 
   assert.equal(workspaceYamlCwd(write(path.join(w.base, 'e.yaml'), 'cwd:\nsummary: C:\\x\n')), null);
 });
 
-test('cross-tool (finding 6a): roster tools follow the adapter order even when a later adapter reported the item first (a personal ~/.cursor/skills/z and a project .agents/skills/z)', () => {
+test('cross-tool (finding 6a): roster tools follow the adapter order even when a later adapter reported the item first (a personal ~/.cursor/skills/z and a project .agents/skills/z)', { skip: WIN_ONLY }, () => {
   const w = world('tools-order');
   allTools(w);
   const proj = mkdir(w.work, 'ordered');
@@ -956,7 +957,7 @@ test('cross-tool (finding 6a): roster tools follow the adapter order even when a
   assert.deepEqual(z.sources, ['personal', 'project']);
 });
 
-test('project spelling (finding 8): a project first reported lower-cased takes the on-disk spelling when a later report gives it; the memory keeps and writes the better spelling', () => {
+test('project spelling (finding 8): a project first reported lower-cased takes the on-disk spelling when a later report gives it; the memory keeps and writes the better spelling', { skip: WIN_ONLY }, () => {
   const w = world('respell');
   const proj = mkdir(w.work, 'My Project');
   const proper = fs.realpathSync.native(proj); // the spelling on disk
@@ -1024,7 +1025,7 @@ test('caches (finding 9): Codex .toml agents are read once and then only when th
   assert.equal(items.find((i) => i.kind === 'plugin').description, 'An extension');
 });
 
-test('shared listing (finding 9): one pass lists a folder once however many adapters read it (.agents/skills, .claude/skills, ~/.agents/skills, ~/.claude/agents) and looks at a SKILL.md once; the next pass lists again and sees changes', () => {
+test('shared listing (finding 9): one pass lists a folder once however many adapters read it (.agents/skills, .claude/skills, ~/.agents/skills, ~/.claude/agents) and looks at a SKILL.md once; the next pass lists again and sees changes', { skip: WIN_ONLY }, () => {
   const w = world('shared-listing');
   allTools(w);
   const proj = mkdir(w.work, 'listed');
@@ -1056,7 +1057,7 @@ test('shared listing (finding 9): one pass lists a folder once however many adap
   assert.ok(c.roster.get('skill:z3'));
 });
 
-test('failed reads (finding 10): a locked Codex rollout, Copilot workspace.yaml, VS Code workspace.json or SKILL.md is not cached; it is read again on the next pass', () => {
+test('failed reads (finding 10): a locked Codex rollout, Copilot workspace.yaml, VS Code workspace.json or SKILL.md is not cached; it is read again on the next pass', { skip: WIN_ONLY }, () => {
   const w = world('io-error');
   allTools(w);
   const pa = mkdir(w.work, 'codex open');

@@ -49,6 +49,12 @@ test('the strip comes first on the building screen, the sign reads the same step
   assert.deepEqual(nextStep({ past: true, planPending: true, waiting: 1 }), { key: 'past', act: 'back-now' }, 'the past\'s plan or waiting session is not offered');
   assert.ok(ws.includes('const { act } = shownNext;'), 'the button does what is on screen');
   for (const act of ["act === 'back-live'", "act === 'open-lead'", "act === 'open-session'", "act === 'resume'", "act === 'give'", "act === 'jobbox'"]) assert.ok(ws.includes(act), act);
+  // The lead's card comes into sight with its first action focused (tried on Linux, 2026-10-09: it sat under the terminal)
+  const lead = ws.slice(ws.indexOf("if (act === 'open-lead') {"), ws.indexOf("if (act === 'open-session')"));
+  assert.ok(lead.includes('selectActor(scene.planPending || scene.resultReady);'));
+  assert.ok(lead.includes("card.scrollIntoView?.({ block: 'start' });"));
+  assert.ok(lead.includes("card.querySelector('button:not(.close), a[href]')?.focus({ preventScroll: true });"));
+  assert.match(read('public/css/workshop.css'), /\.ws-card \{[^}]*scroll-margin-top: 90px;/, 'below the sticky top bar');
   const main = read('public/js/main.js');
   assert.ok(main.includes("d.action === 'new-project') newProject.start();"));
   assert.ok(main.includes("d.action === 'show-terminal' && d.projectId"));

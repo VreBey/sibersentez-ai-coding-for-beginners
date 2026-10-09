@@ -4,7 +4,7 @@
 // Colours come from the theme (public/css/theme.css --hq-* and the state colours); nothing here names a colour.
 import { ART, FLOORS, ROOMS, LIFT_BOX, LIFT_X, baseKind, fixtureList, moveCellRect, actorPose, waitRing, walkingRoute, routePosition, jobLamps } from './hq-scene.js';
 
-const FONT = '"Segoe UI", sans-serif';
+const FONT = '"Segoe UI", "Ubuntu Sans", Ubuntu, Cantarell, "Noto Sans", system-ui, sans-serif';
 const IMAGES = {
   building: 'hq-tower',
   rear: 'hq-rear',
@@ -74,9 +74,10 @@ export class HqRenderer {
     );
   }
 
-  // The theme's colours, read again when the theme changes
+  // The theme's colours as the canvas sees them: the scene is a "dusk" element, so it keeps the dark values in the
+  // light theme too (theme.css)
   readPalette() {
-    const style = getComputedStyle(document.documentElement);
+    const style = getComputedStyle(this.cv);
     for (const name of COLORS) this.palette[name] = style.getPropertyValue(`--${name}`).trim();
     this.buffer = null;
   }

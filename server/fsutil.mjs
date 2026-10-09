@@ -1,8 +1,10 @@
+// @ts-check
 // File system helpers shared by the catalog and the source adapters. Every function swallows file system errors
 // and returns an empty result: a missing or unreadable folder never takes the app down.
 import fs from 'node:fs';
 import path from 'node:path';
 import { normPath } from './util.mjs';
+import { PLATFORM, isLocalAbsolute } from './platform.mjs';
 
 export function exists(p) {
   try {
@@ -12,17 +14,18 @@ export function exists(p) {
   }
 }
 
-// A local drive-letter path ("C:\x", "c:/x"). UNC paths (\\server\share, \\wsl$, \\wsl.localhost) and device paths
-// (\\?\, \\.\) are not: checking them can block on an offline share or wake a WSL distribution (contract §3).
-export function isLocalPath(p) {
-  return typeof p === 'string' && /^[A-Za-z]:[\\/]/.test(p);
+// A local absolute path (platform.mjs). On Windows a drive letter ("C:\x", "c:/x"); UNC paths (\\server\share, \\wsl$,
+// \\wsl.localhost) and device paths (\\?\, \\.\) are not: checking them can block on an offline share or wake a WSL
+// distribution (contract §3). On Linux and macOS one leading slash, never a network path ("//host").
+export function isLocalPath(p, plat = PLATFORM) {
+  return isLocalAbsolute(p, plat);
 }
 
 // exists() for a local drive-letter path only; any other path is never checked and counts as missing
 // A folder that holds nothing but AI tools' own setup (seen 2026-10-01: a project moved to another drive left its old
 // folder with only .claude in it, and a job was started there): true when it has at least one entry and every entry is
 // one of these. A .git folder or any other file makes it a project.
-export const TOOL_ONLY_NAMES = Object.freeze(new Set(['.claude', '.agents', '.codex', '.cursor', '.gemini', '.qwen', '.opencode', '.sibersentez', '.vscode', '.idea', 'claude.md', 'agents.md', 'gemini.md', '.mcp.json', 'desktop.ini', 'thumbs.db']));
+const TOOL_ONLY_NAMES = Object.freeze(new Set(['.claude', '.agents', '.codex', '.cursor', '.gemini', '.qwen', '.opencode', '.sibersentez', '.vscode', '.idea', 'claude.md', 'agents.md', 'gemini.md', '.mcp.json', 'desktop.ini', 'thumbs.db']));
 export function toolsOnly(dir) {
   let names;
   try {
@@ -57,7 +60,7 @@ export function kindOf(dir, d) {
 
 // Entries of a folder: [{ name, kind }], kind 'dir', 'file' or null (a broken link, a device); [] when the folder
 // cannot be listed
-export function readEntries(dir) {
+function readEntries(dir) {
   try {
     return fs.readdirSync(dir, { withFileTypes: true }).map((d) => ({ name: d.name, kind: kindOf(dir, d) }));
   } catch {

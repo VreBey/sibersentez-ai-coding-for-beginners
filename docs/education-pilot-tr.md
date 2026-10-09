@@ -12,8 +12,14 @@ zekâyla çalışan bir şeye dönüştürmeyi** öğrenmesi hedeflenen dersler.
 
 1. Her bilgisayara SiberSentez kurulur. Sol menüde **Yapay zekâ araçları** (ya da başlangıç kartındaki "Bir yapay zekâ
    aracı edin" adımı) açılır; hiç araç kurulu değilse **Bir yapay zekâ aracını hazırla** sihirbazı kendiliğinden gelir.
-2. Araç: ücretsiz başlamak için **Gemini CLI**. Google AI Studio'dan alınan bir API anahtarı ders için yeterlidir;
-   anahtar öğretmenin hesabına bağlıysa öğrencilerle paylaşılmaz, her bilgisayara öğretmen girer.
+2. Araç: ücretsiz başlamak için **GitHub Copilot CLI**. GitHub'ın ücretsiz Copilot planı Copilot CLI'yi küçük bir aylık
+   hakla içerir (GitHub'ın plan sayfası, son bakış 9 Ekim 2026). Hak bir ders için yetebilir ama sınıf boyunca tek
+   hesapla paylaşılırsa çabuk biter: dersten önce bir deneme işi çalıştırıp kalan hakkı kontrol edin. Hesap
+   öğretmenin hesabıysa öğrencilerle paylaşılmaz, her bilgisayara öğretmen girer. Ücretli bir plan (Claude, ChatGPT
+   Plus, Copilot Pro) daha uzun dersler için daha rahattır.
+   *Not:* Daha önce burada önerilen Gemini CLI, 18 Haziran 2026'dan beri yalnız ücretli API anahtarıyla çalışıyor;
+   Google ücretsiz kullanımı yeni aracı Antigravity CLI'ye taşıdı. Ücretsiz haklar sık değişir: her dönem başında
+   aracın kendi sayfasından yeniden bakın.
 3. Ayarlar › Eylemler: ders boyunca **Açık** (yapay zekâ proje klasörüne yazabilsin). Her iş başlamadan önce projenin
    bir kopyası saklanır ve "Önceki hâle dön" onu geri getirir (çok büyük bir projede, binlerce dosyada, kopya
    alınamayabilir; ders projeleri bu sınırın çok altındadır).
@@ -58,3 +64,25 @@ zekâyla çalışan bir şeye dönüştürmeyi** öğrenmesi hedeflenen dersler.
 
 Ölçüler `docs/evidence-<tarih>.md` dosyasına yazılır; gelir kararı (ücretli eğitim paketi olup olmayacağı) bunlara
 göre verilir.
+
+## Okul bilgisayarı için tek sayfa (öğretmen, dersten önce)
+
+Her bilgisayarda bir kez, sırayla:
+
+1. **Windows 10 ya da 11, 64 bit.** Yönetici izni gerekmez; kurulum yalnız o kullanıcıya yapılır.
+2. **SiberSentez'i kur:** sibersentez.com'daki indirme düğmesi. Windows "Bilgisayarınız korundu" derse: "Ek bilgi" →
+   "Yine de çalıştır" (sitedeki SSS "Windows uyarırsa" adımları; isterseniz SHA-256'yı doğrulayın).
+3. **Araç:** SiberSentez açılınca **Yapay zekâ araçları** → sihirbaz. Ücretsiz başlangıç için **GitHub Copilot CLI**
+   (bir GitHub hesabı; ücretsiz planın küçük aylık hakkı vardır). Git ve Node.js gerekirse sihirbaz söyler; komutu
+   sihirbaz terminale yazar, Enter'a öğretmen basar.
+4. **Giriş:** sihirbazın giriş adımı. Hesap öğretmeninse şifre öğrenciye gösterilmez.
+5. **Eylemler:** üstteki **Eylemler** göstergesi → **Açık** (ders boyunca).
+6. **Deneme işi:** Bina'da yeni bir proje aç, iş kutusuna "Başlığı ve kısa bir yazısı olan tek sayfalık bir site yap"
+   yaz, Başlat. Sonuç gelince **Aç** ile tarayıcıda bak, sonra **İşten önceki hâle dön** ile geri al. Bu tur, hesabın
+   ve hakların çalıştığını gösterir.
+7. **Ders sonunda:** projeler `Belgeler › SiberSentez` altında; öğrenci kendi klasörünü USB belleğe alabilir.
+   Bilgisayar ortaksa her öğrenciye ayrı Windows hesabı önerilir: SiberSentez'in her açılışta ürettiği anahtar,
+   başka bir hesabın bu hesabın oturumlarını okumasını engeller.
+
+Sorun olursa: Ayarlar › Yardım › **Tanılama bilgisi · Kopyala** ve **Kayıt dosyaları · Klasörü aç**; ikisi de
+yalnız bu bilgisayarda kalır, istenirse bir soruna eklenir.

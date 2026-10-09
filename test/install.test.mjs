@@ -20,6 +20,7 @@ import { defaultTargets, planInstall, executeInstall, planRemove, executeRemove,
 import { skillTargets, libraryInstallable, suggestFlowView, installTargets, itemInstallView, defaultSuggestSelection, selectionKey, planRows, skillErrorText, importBatches } from '../public/js/contextmenu.js';
 import { initActions, runAction, actionBody, _resetActionsForTest } from '../public/js/actions.js';
 import { STRINGS as PAGE_STRINGS, setLanguage } from '../public/js/i18n.js';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 // ---------------- fake world ----------------
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-install-'));
@@ -427,7 +428,7 @@ test('remove: a record that points at another folder (the project moved) never d
 });
 
 // ---------------- destinations and reparse points ----------------
-test('destinations stay inside <p>/.claude or <p>/.agents (resolved): a name that would climb out is skipped, nothing is written outside', () => {
+test('destinations stay inside <p>/.claude or <p>/.agents (resolved): a name that would climb out is skipped, nothing is written outside', { skip: WIN_ONLY }, () => {
   const w = world();
   const p = w.dir('cc');
   const src = path.join(w.lib, 'web', 'skills', 'alpha-skill');
@@ -449,6 +450,21 @@ test('destinations stay inside <p>/.claude or <p>/.agents (resolved): a name tha
     assert.equal(path.dirname(d.dest), path.join(p, t === 'claude' ? '.claude' : '.agents', 'skills'));
   }
   assert.equal(destination(p, 'agent', 'a', 'claude').dest, path.join(p, '.claude', 'agents', 'a.md'));
+});
+
+// The same on every computer (review G): a name with a slash that would climb out of the project
+test('destinations stay inside the project on every platform: "../escape" and a nested name are skipped, nothing is written', () => {
+  const w = world();
+  const p = w.dir('cc');
+  const src = path.join(w.lib, 'web', 'skills', 'alpha-skill');
+  const library = [
+    { kind: 'skill', name: '../escape', path: src, rel: 'x' },
+    { kind: 'skill', name: 'sub/inner', path: src, rel: 'z' },
+  ];
+  const plan = planInstall({ project: { id: 'cc' }, dir: p, items: library.map(({ kind, name }) => ({ kind, name })), targets: ['claude', 'agents'], library, installs: [] });
+  assert.deepEqual(plan.map((e) => `${e.op}:${e.reason}`), Array(plan.length).fill('skip:outside-project'));
+  executeInstall({ plan, project: { id: 'cc' }, hubDir: w.hub, installs: [] });
+  assert.ok(!exists(path.join(p, '.claude')) && !exists(path.join(path.dirname(p), 'escape')), 'nothing written');
 });
 
 test('reparse points: a junction as .claude, as .claude/skills or as the destination itself is refused; the junction target is never written or deleted', async () => {
@@ -510,7 +526,7 @@ test('copies never follow links: a junction inside a library skill is skipped (t
 });
 
 // ---------------- projects ----------------
-test('project rules: unknown, broad, missing, not local, inside the hub, the personal Claude folder -> refused before anything is read', async () => {
+test('project rules: unknown, broad, missing, not local, inside the hub, the personal Claude folder -> refused before anything is read', { skip: WIN_ONLY }, async () => {
   const w = world();
   const env = await startServer(w);
   try {
@@ -1223,7 +1239,7 @@ test('record: rows this version cannot use are kept, in place, when an install o
   assert.deepEqual(rows, odd, 'kept after a remove');
 });
 
-test('project rules: a ":" after the drive letter is not-local; a broad folder is broad through its real path (8.3 short name, stream form) too', async (t) => {
+test('project rules: a ":" after the drive letter is not-local; a broad folder is broad through its real path (8.3 short name, stream form) too', { skip: WIN_ONLY }, async (t) => {
   const w = world();
   const cc = w.dir('cc');
   const longHome = path.join(w.base, 'longhomefolder');

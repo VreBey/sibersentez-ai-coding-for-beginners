@@ -29,6 +29,7 @@ import { lstat, isRealDir, codeError, writeJsonAtomic, scanDir, publicScanItems,
 import { reviewItem, itemLicense, repoLicense } from './review.mjs';
 import { findKitItem } from './kit.mjs';
 import { killTree } from './tools.mjs';
+import { PLATFORM, isLocalAbsolute } from './platform.mjs';
 
 // ---------------------------------------------------------------------------------------------------------------
 // Limits
@@ -39,23 +40,23 @@ import { killTree } from './tools.mjs';
 export const REPO_LIMITS = Object.freeze({ maxArchiveBytes: 200 * 1024 * 1024, maxBytes: 500 * 1024 * 1024, maxFiles: 50000, maxDirs: LIMITS.maxDirs, maxEntryBytes: 100 * 1024 * 1024, maxPath: 400, maxDepth: 40, maxMetaBytes: 1024 * 1024 });
 // watchMs: how often the git download's folder is measured; killWaitMs: how long an ended process tree is waited for
 // before its folder is deleted
-export const TIMEOUTS = Object.freeze({ cloneMs: 300000, lsRemoteMs: 60000, apiMs: 30000, downloadMs: 300000, watchMs: 1000, killWaitMs: 5000 });
+const TIMEOUTS = Object.freeze({ cloneMs: 300000, lsRemoteMs: 60000, apiMs: 30000, downloadMs: 300000, watchMs: 1000, killWaitMs: 5000 });
 // Failures of the archive path after which git is tried (when it is here): the archive could not be reached or read.
 // Not after not-public, ref-not-found, a size limit or an unsafe archive: git would answer the same.
 // A broken archive is not among them: a repository could otherwise steer the download to git, whose size is only
 // measured once a second (review round 2, advisory)
 const TAR_FALLBACK = new Set(['network', 'timeout', 'fetch-failed', 'redirect-refused', 'rate-limited']);
 // Downloads older than this are removed (a leftover .tmp- folder after an hour)
-export const INCOMING_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
-export const TMP_MAX_AGE_MS = 3600 * 1000;
-export const MAX_REDIRECTS = 3;
+const INCOMING_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+const TMP_MAX_AGE_MS = 3600 * 1000;
+const MAX_REDIRECTS = 3;
 export const GITHUB_HOSTS = Object.freeze(['github.com', 'codeload.github.com', 'api.github.com']);
 const USER_AGENT = 'SiberSentez';
 
 const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const REPO_RE = /^[A-Za-z0-9._-]{1,100}$/;
 const REF_RE = /^[A-Za-z0-9._/+-]{1,200}$/;
-export const FULL_SHA_RE = /^[0-9a-f]{40}$/;
+const FULL_SHA_RE = /^[0-9a-f]{40}$/;
 // A download's id: <owner>-<repo (at most 40 characters)>-<6 hex of the name>@<12 hex of the commit> (fetchIdOf). The
 // older form <owner>-<repo>@<7 hex> is still recognized, so its downloads are cleaned up.
 export const FETCH_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,90}@[0-9a-f]{7,40}$/;
@@ -190,7 +191,16 @@ const envValue = (env, name) => {
 
 // git.exe by absolute path: the absolute folders of PATH in order (a relative entry such as '.' is skipped, so git
 // is never looked up in the working folder or a project), then the usual install folders. null: no git.
-export function findGit({ env = process.env, isFile = realFile } = {}) {
+export function findGit({ env = process.env, isFile = realFile, plat = PLATFORM } = {}) {
+  // Linux and macOS: the absolute folders of PATH, then the system's own (git is a system package there)
+  if (!plat.windows) {
+    const posix = [...String(envValue(env, 'PATH') || '').split(':').map((d) => d.trim()).filter((d) => isLocalAbsolute(d, plat) && !CTRL_RE.test(d)), '/usr/bin', '/usr/local/bin', '/opt/homebrew/bin'];
+    for (const d of posix) {
+      const exe = plat.path.join(d, 'git');
+      if (isFile(exe)) return exe;
+    }
+    return null;
+  }
   const dirs = [];
   for (const d of String(envValue(env, 'PATH') || '').split(';')) {
     const x = d.trim().replace(/^"|"$/g, '');
@@ -696,7 +706,7 @@ export function extractTarGz(input, dest, { limits = REPO_LIMITS, timeoutMs = TI
 // ---------------------------------------------------------------------------------------------------------------
 
 // One request, no redirect followed: resolves { status, headers, stream }
-export function defaultRequest(url, { headers = {}, timeoutMs = TIMEOUTS.apiMs } = {}) {
+function defaultRequest(url, { headers = {}, timeoutMs = TIMEOUTS.apiMs } = {}) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers, timeout: timeoutMs }, (res) => resolve({ status: res.statusCode, headers: res.headers, stream: res }));
     req.on('timeout', () => req.destroy(codeError('timeout')));
@@ -1127,7 +1137,7 @@ export function planDownloadImport({ hubDir, repoDir, picks, limits = LIMITS }) 
 // Provenance: <hub>/registry/sources.json
 // ---------------------------------------------------------------------------------------------------------------
 
-export function sourcesFile(hubDir) {
+function sourcesFile(hubDir) {
   return path.join(hubDir, 'registry', 'sources.json');
 }
 

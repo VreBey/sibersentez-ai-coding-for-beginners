@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of "what needs you" (docs/attention.md): the four states of a session or project, the header's waiting
 // counter and its list. Same keys in en and tr; placeholders use {name}. Merged into STRINGS by ../i18n.js.
 export default {
@@ -53,6 +54,7 @@ export default {
     waitQuestion: 'an answer to its question',
     waitDialog: 'a confirmation window is open',
     waitInput: 'your answer',
+    waitPermission: 'your permission',
     drWaitingTurn: 'It finished its turn and waits for your answer.',
     drFolderMissingTitle: 'This folder is gone',
     drFolderMissingBody: 'It was moved, renamed or deleted, so nothing can start here. Put it back and SiberSentez finds it again within a minute; a copy elsewhere shows up as a new project.',
@@ -110,6 +112,7 @@ export default {
     waitQuestion: 'sorusuna yanıt',
     waitDialog: 'bir onay penceresi açık',
     waitInput: 'yanıtın',
+    waitPermission: 'iznin',
     drWaitingTurn: 'Cevabını bitirdi, senden yanıt bekliyor.',
     drFolderMissingTitle: 'Bu klasör artık yok',
     drFolderMissingBody: 'Taşınmış, adı değişmiş ya da silinmiş; bu yüzden burada hiçbir şey başlatılamaz. Klasörü geri koyarsan SiberSentez bir dakika içinde yeniden bulur; başka bir yere taşıdıysan orası yeni bir proje olarak görünür.',

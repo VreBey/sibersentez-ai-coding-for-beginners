@@ -60,7 +60,7 @@
 .us-chart { margin: 12px 0 0; }
 .us-chart figcaption { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
 .us-bars { display: flex; align-items: flex-end; gap: 3px; height: 96px; padding-bottom: 2px; border-bottom: 1px solid var(--line-2); }
-.us-bar { flex: 1 1 0; min-width: 0; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, #8fb0ff, rgba(var(--accent-rgb), 0.55)); }
+.us-bar { flex: 1 1 0; min-width: 0; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, var(--text-strong)), rgba(var(--accent-rgb), 0.55)); }
 .us-bar.zero { height: 1px !important; background: var(--line-2); }
 .us-bar:hover { background: var(--gold); }
 .us-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; }

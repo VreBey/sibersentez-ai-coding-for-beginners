@@ -246,7 +246,7 @@ export function qaProjectBridge(answer, firstProject = () => null) {
 }
 
 // ---------- "Getting started" card ----------
-export const START_CARD_KEY = 'sibersentez.start.hidden';
+const START_CARD_KEY = 'sibersentez.start.hidden';
 // Shown while this many projects or fewer are listed (and the card was not hidden)
 export const START_CARD_MAX = 2;
 
@@ -277,7 +277,7 @@ function readHidden() {
 
 // Sort of the Projects tab: 'activity' (open and busy first, then the latest activity) or 'spend' (the last 30 days'
 // API-equivalent dollars, or processed tokens while dollars are hidden; docs/usage.md §6), kept in this browser
-export const SORT_KEY = 'sibersentez.projects.sort';
+const SORT_KEY = 'sibersentez.projects.sort';
 const SORTS = ['activity', 'spend'];
 function readSort() {
   try {

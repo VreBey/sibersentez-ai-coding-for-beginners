@@ -1,3 +1,4 @@
+// @ts-check
 // Formatting, colors and labels (the UI's shared vocabulary). Labels come from the i18n tables (strings/common.js).
 import { t, language } from './i18n.js';
 
@@ -85,7 +86,7 @@ export const KIND = {
 export { SOURCE, sourceLabel } from './rosterModel.js';
 
 // 'hub': the fixed hub project older servers added (current servers do not)
-export const PROJECT_KIND = {
+const PROJECT_KIND = {
   get hub() {
     return t('fmtProj_hub');
   },
@@ -154,7 +155,7 @@ const ACTION_VERB = {
   Workflow: 'fmtVerb_workflow',
   ToolSearch: 'fmtVerb_toolSearch',
 };
-export function actionVerb(a) {
+function actionVerb(a) {
   if (!a) return '';
   return ACTION_VERB[a.tool] ? t(ACTION_VERB[a.tool]) : String(a.tool).startsWith('mcp__') ? 'MCP' : a.tool;
 }
@@ -194,7 +195,7 @@ export function agoTag(t, tag = 'time') {
 }
 export function fillAgo(root = document) {
   const now = Date.now();
-  for (const el of root.querySelectorAll('[data-ago]')) {
+  for (const el of /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('[data-ago]'))) {
     const text = ago(Number(el.dataset.ago), now);
     if (el.textContent !== text) el.textContent = text;
   }
@@ -338,9 +339,9 @@ export function projectNames(projects) {
 }
 
 // Why a session waits, in the page's language (docs/attention.md): its plan or its question (the tool it called last:
-// Claude Code's plan mode, a question with choices), else what Claude Code said ("dialog open", "input needed"; known
-// phrases translated, others as they are). '' when nothing is known.
-const WAIT_PHRASES = Object.freeze({ 'dialog open': 'waitDialog', 'input needed': 'waitInput' });
+// Claude Code's plan mode, a question with choices), else what Claude Code said ("dialog open", "input needed",
+// "permission prompt" since 2.1.29x; known phrases translated, others as they are). '' when nothing is known.
+const WAIT_PHRASES = Object.freeze({ 'dialog open': 'waitDialog', 'input needed': 'waitInput', 'permission prompt': 'waitPermission' });
 export function waitPhrase(text) {
   const w = String(text || '').trim();
   const key = WAIT_PHRASES[w.toLowerCase()];

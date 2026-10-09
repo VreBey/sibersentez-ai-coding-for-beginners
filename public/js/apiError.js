@@ -1,3 +1,4 @@
+// @ts-check
 // When the AI stops on an error (docs/attention.md): Claude Code wrote a limit, sign-in, connection or length error in
 // place of an answer (server/apierror.mjs). The page says what happened and what to do, in the page's language.
 // Pure (tested in node): which error of a project still counts, and its words.

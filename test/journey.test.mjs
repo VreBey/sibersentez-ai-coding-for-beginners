@@ -154,7 +154,8 @@ test('a beginner\'s journey: new project from an idea → a job in the app\'s te
     assert.equal(target.ok, true, JSON.stringify(target));
     assert.equal(target.dir, dir);
     assert.equal(target.jobId, jobId);
-    assert.equal(target.program.file, cmdExe);
+    // Windows: the Command Prompt runs the launcher; Linux and macOS: sh (plan G1)
+    assert.equal(target.program.file, process.platform === 'win32' ? cmdExe : '/bin/sh');
     assert.equal(call({ type: 'terminal-target', launchId }).ok, false, 'a launch is redeemed once');
     assert.equal(call({ type: 'terminal-state', sessions: [{ id: 't1', projectId, ai: true, tool: 'claude', jobId, running: true }] }).ok, true);
 

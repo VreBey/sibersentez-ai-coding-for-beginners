@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the shared page vocabulary and the older views: formatting words (format.js), the stage (stage.js), the
 // command palette, notifications, the feed, the timeline, the projects tab and the roster's source texts (rosterModel.js).
 // Same keys in en and tr; placeholders use {name}. Merged into STRINGS by ../i18n.js.
@@ -130,6 +131,7 @@ export default {
     nfyDesktop: 'Desktop notification',
     nfyDesktopNote: '(while the window is in the background)',
     nfyDenied: 'Windows may have turned notifications off for this app; turn them on in Windows Settings > System > Notifications.',
+    nfyDenied_unix: 'The system may have turned notifications off for this app; turn them on in its notification settings.',
     nfySound: 'Sound',
     nfyAgents: 'Also notify when agents finish',
     nfyAlways: 'Always: when a session finishes its turn and starts waiting for you, and when a workflow finishes.',
@@ -351,6 +353,7 @@ export default {
     nfyDesktop: 'Masaüstü bildirimi',
     nfyDesktopNote: '(pencere arka plandayken)',
     nfyDenied: 'Windows bu uygulamanın bildirimlerini kapatmış olabilir; Windows Ayarları > Sistem > Bildirimler’den açabilirsin.',
+    nfyDenied_unix: 'Sistem bu uygulamanın bildirimlerini kapatmış olabilir; sistemin bildirim ayarlarından açabilirsin.',
     nfySound: 'Ses',
     nfyAgents: 'Ajan bitişlerini de bildir',
     nfyAlways: 'Her zaman: bir oturum turunu bitirip seni beklemeye geçince ve bir iş akışı bitince.',

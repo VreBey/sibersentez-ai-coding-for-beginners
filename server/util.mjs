@@ -1,6 +1,12 @@
+// @ts-check
 // Shared helpers: JSON reading, path normalisation, secret masking, incremental line reading.
 import fs from 'node:fs';
 import { open } from 'node:fs/promises';
+
+// A project's id in the registry: a letter or digit, then letters, digits, dots, underscores and dashes, at most 100
+// characters. One rule for the server, its routes and the desktop shell (plan D9; it was written out thirteen times)
+export const PROJECT_ID_SRC = '[A-Za-z0-9][A-Za-z0-9._-]{0,99}';
+export const PROJECT_ID_RE = new RegExp(`^${PROJECT_ID_SRC}$`);
 
 export function readJson(file) {
   try {

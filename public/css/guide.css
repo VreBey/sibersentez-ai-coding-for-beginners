@@ -1,6 +1,6 @@
 /* First-run guide (docs/first-run.md): a centered card over a dim page, and a soft ring on the part of the page the
    current step talks about. Motion follows motion.css; reduced motion turns it off there. */
-.guide-wrap { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(4, 5, 9, 0.4); }
+.guide-wrap { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: var(--scrim-soft); }
 .guide-wrap[hidden] { display: none; }
 .guide { width: min(460px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 18px 20px 16px; border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; }
 .guide-head { display: flex; align-items: center; gap: 10px; }
@@ -23,7 +23,7 @@
 .guide-words-list { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
 .guide-words-list dt { margin-top: 8px; font-size: 13.5px; font-weight: 600; color: var(--text); }
 .guide-words-list dd { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); }
-.guide-next { color: #fff; background: rgba(var(--accent-rgb), 0.22); border-color: rgba(var(--accent-rgb), 0.55); }
+.guide-next { color: var(--text-strong); background: rgba(var(--accent-rgb), 0.22); border-color: rgba(var(--accent-rgb), 0.55); }
 
 /* The page part the step points at: a ring that still reads through the light dim layer (the header and the tabs
    are their own stacking contexts, so a z-index here could not lift it above the layer) */

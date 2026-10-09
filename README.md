@@ -28,7 +28,7 @@ things up so the tool you chose can help you well, and keeps you safe while it w
   connection) a card says what to do, and a notice tells you when a limit is open again. A small badge shows how freely
   the AI may act (plan only, asks every step, edits files itself, ...).
 - **Set-up check.** It finds the AI tools on this computer and says in plain words what is missing or broken.
-- **Turkish and English**, dark theme, keyboard friendly.
+- **Turkish and English**, dark and light themes, keyboard friendly.
 
 How it works: install → **New project** → write your idea → in the **Building**, write the job in the box and press
 **Start** → approve the plan in the terminal → open or run the result → accept it or go back.
@@ -51,8 +51,9 @@ How it works: install → **New project** → write your idea → in the **Build
 
 ## Requirements
 
-- Windows 10 or Windows 11 (64-bit).
-- Optional: an AI coding tool. Live sessions and token usage are read from Claude Code. Projects, skills, agents and plugins are found for Claude Code, Codex, Gemini CLI, GitHub Copilot (CLI and VS Code Chat), Cursor and Antigravity (see [Roster sources](#roster-sources)). **Start with AI** starts Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor CLI, Qwen Code or OpenCode. Without any of them the program still opens; there is simply nothing to show.
+- Windows 10 or Windows 11 (64-bit), or Linux (64-bit, x86_64; an AppImage, since 0.18.0). macOS is experimental
+  and not released. What differs between them and what has been tried is in [docs/platforms.md](docs/platforms.md).
+- Optional: an AI coding tool. Live sessions are read from the session logs of Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Cursor CLI and OpenCode, token usage from all of them but Cursor (see [Privacy and security](#privacy-and-security)). Projects, skills, agents and plugins are found for Claude Code, Codex, Gemini CLI, GitHub Copilot (CLI and VS Code Chat), Cursor and Antigravity (see [Roster sources](#roster-sources)). **Start with AI** starts Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor CLI, Qwen Code or OpenCode. Without any of them the program still opens; there is simply nothing to show.
 - Optional: git, for GitHub downloads. Without it SiberSentez downloads the repository as an archive.
 
 You do not need to install Node.js or anything else to use the program.
@@ -65,6 +66,17 @@ You do not need to install Node.js or anything else to use the program.
 
 > **"Windows protected your PC" warning:** the installer is not code-signed yet, so Windows SmartScreen may warn you the first time.
 > If you downloaded the file from the project's own page, click **More info**, then **Run anyway**.
+
+### Linux
+
+1. Download `SiberSentez-<version>-x86_64.AppImage` from the **Releases** page.
+2. Make it executable (in the file's properties, or `chmod +x SiberSentez-*.AppImage` in a terminal) and open it. Nothing
+   is installed: the AppImage is the whole program. Some distributions need `libfuse2` for AppImages.
+3. The tray icon depends on the desktop: KDE shows it; GNOME needs the AppIndicator extension. Without a tray,
+   starting the AppImage again brings the window back. **Start at login** writes `~/.config/autostart/sibersentez.desktop`.
+
+The Linux version was tried on Ubuntu (WSL with its own window), from setting up Claude Code to an accepted result;
+a GNOME or KDE desktop with its tray and notifications has not been tried yet ([docs/platforms.md](docs/platforms.md)).
 
 On first start SiberSentez creates an **empty hub folder** (see below) and scans the last 14 days of Claude Code logs; this can take a few seconds.
 
@@ -122,11 +134,11 @@ The project is remembered in the program's own project memory, `registry\discove
 The **Building** is the main screen (menu: **Building**, **Projects**, and under a small *Advanced* label **Skills & agents** and **Feed**; AI tools, Guide and Settings at the foot). Three decisions are yours, all in the Building: give the job, approve the plan, accept or undo the result (details: [docs/simplify.md](docs/simplify.md), [docs/kit-in-app.md](docs/kit-in-app.md)).
 
 - **Give the job.** Write it in the box at the top (at most 300 characters; the project it goes to is chosen beside it) and press **Start**; the command palette (`Ctrl+K`) has **Give a job** too. Under the box there are examples that only fill it ("Fix a problem", "What is the next step?", "Make it look better"; first, while the project has an idea but no job yet, "Start with my idea"). With actions Off, **Start** asks once to turn them on (see [Actions](#actions)). With no AI tool installed it says so and opens the AI tools panel.
-- **What Start does.** In one go it takes a restore point (see below), sets up the team and the helpers the server chose for your words, and starts Claude Code in plan mode (another tool starts as usual) in SiberSentez's own terminal, with your job as its first message.
+- **What Start does.** In one go it takes a restore point (see below), sets up the team and the helpers the server chose for your words, and starts the tool in its plan mode when it has one (see the table in [Start with AI](#start-with-ai); another tool starts as usual) in SiberSentez's own terminal, with your job as its first message.
 - **Approve the plan.** The Building shows the plan; **Approve** takes you to the AI's own plan prompt in the terminal. SiberSentez never answers the AI's question for you.
 - **Follow the job.** A bar shows Plan → Build → Check → Finish with one plain sentence on where the job stands ("working on T2, 1 of 3 tasks done"). A separate reviewer checks the work before you accept it. If you close the terminal tab, the box says where the job stopped and offers **Go on where it stopped**.
 - **Open or run the result.** The result card has **Open / run it**, **What changed** and **Undo**. **How to run it** says in numbered steps how to start what was built (copy buttons; in the desktop app **Type in terminal** writes the command for you, you press Enter). For a plain web page there is **Open in the browser**; when a dev server prints a local address in the terminal (for example `localhost:5173`), **Open in the browser** also appears at the terminal's bottom right. SiberSentez runs none of these commands itself.
-- **Accept it and go on.** A finished job shows **What next?** ("Change something"; for a web project also "Try it like a user" and "Put it online"; each only fills the job box), and finished jobs are kept under **Earlier jobs**.
+- **Accept it and go on.** A finished job shows **What next?** ("Change something"; for a web project also "Try it like a user" and "Put it online"; each only fills the job box; "Put it online" first looks through the project for keys, .env files, passwords and personal numbers that should not go online and then writes the steps for GitHub Pages: [docs/publish.md](docs/publish.md)), and finished jobs are kept under **Earlier jobs**.
 - **Go back.** Before each start SiberSentez copies the project's files into the hub (`restore\`; at most five points, up to 3,000 files and 50 MB; over that a lean copy without files over 2 MB and logs, up to 6,000 files and 150 MB; git folders, `node_modules` and build output are always left out). The start notice says whether the copy is full, lean (and how many files it left out) or could not be made; the job box says it next to that job, after a reload too (the restore points in the project drawer list every copy). A point is named after the job ("Before “Add a menu page”"). **Undo** shows what would change and goes back; going back takes a new point first, so it can be undone too (details: [docs/restore.md](docs/restore.md)).
 
 **What needs you** (details: [docs/attention.md](docs/attention.md)): the header counts the sessions waiting for you and says what each asks for ("approval of its plan", "an answer to its question"). When Claude Code stops on an error, a card in the Building, the drawers and the notices says what happened and what to do: usage limit (type `go on` when it opens again, with the time), not signed in (`/login`), lost connection, conversation too long (`/compact`). When a limit opens again a notice tells you. A small badge on a session shows how freely the AI acts: *Plan only*, *Asks every step*, *Only what is allowed*, *Edits files itself*, *Automatic*, *Asks nothing*. SiberSentez only shows it; it never changes the mode.
@@ -135,15 +147,21 @@ The **Building** is the main screen (menu: **Building**, **Projects**, and under
 
 SiberSentez finds the AI coding tools on this computer, shows whether each one is ready, and starts one in the project folder, with your idea or your job as its first message (details: [docs/ai-start.md](docs/ai-start.md), [docs/embedded-terminal.md](docs/embedded-terminal.md), [docs/simplify.md](docs/simplify.md)). The **Start** of the Building uses the tool chosen in Settings (**AI tool**), else Claude Code, else the first one found. The AI opens in **SiberSentez's own terminal**, a dock at the bottom of the window with one tab per terminal; Windows Terminal is the second choice.
 
-| Tool | Command looked for | Signed in? |
-|---|---|---|
-| Claude Code | `claude` | checked (`claude auth status`) |
-| Codex CLI | `codex` | checked (`codex login status`) |
-| Gemini CLI | `gemini` | not known |
-| GitHub Copilot CLI | `copilot` | not known |
-| Cursor CLI | `cursor-agent`, then `agent` | not known |
-| Qwen Code | `qwen` | not known |
-| OpenCode | `opencode` | not known |
+What SiberSentez does with each tool (one table in `server/tools.mjs`, `capabilities`; the tools panel shows the same
+line on each card):
+
+| Tool | Command looked for | Signed in? | Plan mode | Go on where it stopped | Live status | Usage count |
+|---|---|---|---|---|---|---|
+| Claude Code | `claude` | checked (`claude auth status`) | yes | yes | yes | yes |
+| Codex CLI | `codex` | checked (`codex login status`) | no | 0.160.0 or newer | no | yes |
+| Gemini CLI | `gemini` | from its settings files (a Google sign-in alone: not known) | 0.61.0 or newer | 0.61.0 or newer | no | yes |
+| GitHub Copilot CLI | `copilot` | not known | 1.0.93 or newer | 1.0.92 or newer | no | yes |
+| Cursor CLI | `cursor-agent`, then `agent` | checked (`status`) | 2026.10.01 or newer | 2026.10.01 or newer | no | no (its logs carry no tokens) |
+| Qwen Code | `qwen` | from its settings files | 0.25.0 or newer | 0.25.0 or newer | no | yes |
+| OpenCode | `opencode` | from its settings files | no | 1.18.35 or newer | no | yes |
+
+An older version starts as usual, without that option. Live status (working, waiting for you) comes from Claude Code's
+session files only.
 
 - **Where:** mostly the **Start** button of the **Building** (a job: see [Do a job](#do-a-job)). Also in the project drawer, folded under *Details*: one **Start with *tool*** button per tool found, **Start with my idea (first message ready)** when the project has a saved idea (on by default, remembered per project in this browser), **Plain terminal**, and the links **AI tools on this computer** and **Check again**. The right-click menu of a project or a session has the same **Start with *tool*** items (see [Right-click menu](#right-click-menu)); the **Getting started** card has an **AI tools** button.
 - **Finding the tools** happens only when first needed (a project drawer, the tools panel, a project or session menu), never when SiberSentez starts, and the answer is kept for five minutes (**Check again** asks anew, at most once in ten seconds). A tool is found by looking for its file (`.exe`, `.bat`, `.cmd`) in the folders of `PATH` and in the folders the official installers use (`%USERPROFILE%\.local\bin`, `%APPDATA%\npm`, `%LOCALAPPDATA%\Microsoft\WinGet\Links`, `%USERPROFILE%\scoop\shims`), so a tool installed while SiberSentez runs is found too. Only the tools found this way are run, hidden and with a time limit: for their version and, for Claude Code and Codex, the sign-in check, of which only the exit code is kept (its output, which names your account, is not even read). No path, file name or user name reaches the page. Tools whose sign-in cannot be checked show "Sign-in not known: it asks the first time if needed".
@@ -259,11 +277,12 @@ The program folder it removes is only the one the installer recorded, and it mus
 
 ## Privacy and security
 
-- The panel server binds to **`127.0.0.1` only**; other computers on the network cannot reach it. Requests with a non-local `Host` header or coming from another website are rejected.
+- The panel server binds to **`127.0.0.1` only**; other computers on the network cannot reach it. Requests with a non-local `Host` header or coming from another website are rejected. Every launch makes a new secret key that only SiberSentez's own window sends with its requests, so another program or another Windows account on the same computer cannot read your sessions or start anything through SiberSentez's local server. (A program that already runs as you can read your files anyway: that is outside what SiberSentez can guard, see SECURITY.md.)
 - **Read-only by default:** it never writes to logs, AI tool folders, your project registry (`registry\projects.json`), projects or git. While actions are Off, the only things the program writes are its own settings and log folder, the hub skeleton on first start, its project memory `registry\discovered.json` in the hub (updated when a new project folder, or the real spelling of a remembered one, is seen, and when you add a project or its idea with **New project**), its usage ledger `usage\ledger.json` in the hub and the `actions` key of the hub's `settings.json` when you change the mode (Actions panel, window menu or tray menu; other keys are kept); the only thing it deletes is its own GitHub downloads in `incoming\` once they are seven days old. With actions On, the actions you start write what their sections above describe; in Preview nothing more is written.
 - **Programs it starts without actions:** `git --no-optional-locks` (log and status) in project folders, and, when a project drawer, the AI tools panel or a project or session menu is opened, the AI tools it found (see [Start with AI](#start-with-ai)): each one's version command and, for Claude Code and Codex, the sign-in check, hidden, with fixed arguments and a time limit; the sign-in output is not read and no tool output, path or user name reaches the page.
-- **The window's bridge:** the program's window gets a short fixed list of functions from the program (`window.sibersentezShell`): `setActionsMode(mode)`, `pickProjectFolder()`, `createIdeaProject(name, idea, choose)`, `pickLibraryFolder()`, `setLanguage(lang)`, `saveProjectIdea(projectId, text)` and `setAttention(count, text)`, and the embedded terminal's own (`window.sibersentezTerminal`). The program honours them only from its own main window, from the page's top frame, while that frame shows the program's own local address (never an error page, a subframe or another window); anything but the listed argument types is refused before it reaches the program. Answers carry a result code and a project id, never a path. The page cannot read the mode through it, cannot send anything else and never sees Node or Electron (the window is sandboxed and context-isolated). A page opened in a browser has no bridge at all.
-- **Other AI tools are read for metadata only:** the working folder of a session and the skill, agent and plugin files. Chat and session content (VS Code `chatSessions`, Gemini `chats`, Copilot `events.jsonl` and the session summary in `workspace.yaml`) and the tools' SQLite databases are never opened; of the Gemini chats only the file times are read. A Codex session file is read only up to the end of its first line, in 4 KiB chunks (at most 256 KiB); bytes of the next line that land in the same chunk are never decoded. A Copilot `workspace.yaml` is read only up to its `cwd:` line.
+- **The window's bridge:** the program's window gets a short fixed list of functions from the program (`window.sibersentezShell`): `setActionsMode(mode)`, `pickProjectFolder()`, `createIdeaProject(name, idea, choose)`, `pickLibraryFolder()`, `setLanguage(lang)`, `saveProjectIdea(projectId, text)`, `setAttention(count, text)`, `reportError(text)` (an error of the page itself, written to the program's own log) and `openLogs()` (the program's log folder in File Explorer), and the embedded terminal's own (`window.sibersentezTerminal`). The program honours them only from its own main window, from the page's top frame, while that frame shows the program's own local address (never an error page, a subframe or another window); anything but the listed argument types is refused before it reaches the program. Answers carry a result code and a project id, never a path. The page cannot read the mode through it, cannot send anything else and never sees Node or Electron (the window is sandboxed and context-isolated). A page opened in a browser has no bridge at all.
+- **Other AI tools' session logs are read the way Claude Code's are, and never written:** Codex CLI (`~/.codex/sessions`), Gemini CLI (`~/.gemini/tmp/<project>/chats`), Qwen Code (`~/.qwen/projects/<project>/chats`), GitHub Copilot CLI (`~/.copilot/session-state/<id>/events.jsonl`), Cursor CLI (`~/.cursor/projects/<folder>/agent-transcripts` and the `meta.json` beside its chats) and OpenCode (its database `~/.local/share/opencode/opencode.db`, opened read-only). From them SiberSentez takes a session's working folder, model, token counts, permission mode, what you typed, a short summary of each tool call and the plan an AI shows you for approval, so the live view and the usage page show them as they do Claude Code's. What it keeps is cut short and masked (see below); the AI's other answers and the files it read are not kept. Only the last days of logs are read (14 by default), and nothing leaves the computer.
+- **The project finder reads other tools for metadata only:** the working folder of a session and the skill, agent and plugin files. VS Code's `chatSessions` folders are only checked for being non-empty, never opened; of Copilot's `workspace.yaml` only the `cwd:` line is read; the finder reads a Codex session file only up to the end of its first line, in 4 KiB chunks (at most 256 KiB), and of the Gemini chats only the file times.
 - **Outgoing requests: the GitHub import and, if you turn it on, the new-version look.** SiberSentez goes to the internet in two cases only. Bringing skills from GitHub, and only with actions **On**, only when you press **Fetch** or **Check for update**, and only to `github.com`, `codeload.github.com` and `api.github.com` (redirects to other hosts are refused). It sends no password, token or anything about you, the computer or your projects; update checks happen only when you press the button. And, only if you turn on **Tell me when a new version is out** in Settings (off by default), at most once a day one request to `api.github.com` for the list of SiberSentez's releases; it sends nothing about you, downloads nothing and installs nothing. Nothing else goes out: no web fonts, CDN, analytics or automatic updates; the page itself connects only to its own local address (the download is done by the program, not by the page). The program window loads only its own local address; external links open in your default browser. Details: [Bring skills from GitHub](#bring-skills-from-github).
 - **Bundled content:** only SiberSentez's own kit, written for SiberSentez; no third-party content. SiberSentez downloads only what you fetch from GitHub yourself, runs nothing from it, installs a kit or library item only when you ask for it (actions On) and recommends only what is in the kit, your library and your other projects.
 - **Start with AI** never puts the tool's path or your idea on the terminal's command line: it goes through a small ASCII start file in the hub, and the idea reaches the tool as a file in the project (`.sibersentez\ilk-mesaj.md`) that SiberSentez never overwrites. No permission-skipping option is ever added to a tool, and the install commands shown in the tools panel are never run by SiberSentez.
@@ -345,6 +364,8 @@ npm install        # Electron and electron-builder (development dependencies onl
 npm start          # run SiberSentez in an Electron window (the first run downloads the Electron runtime, about 100 MB, into the Electron cache)
 npm run dist       # build the installer: dist\SiberSentez-Setup-<version>.exe
 npm test           # all tests
+npm run typecheck  # the type check (files with // @ts-check)
+npm run lint       # tools/lint.mjs
 ```
 
 To run only the panel in a browser, without Electron: `node server/index.mjs --open`, or `start.cmd` (with a console window). The server has no dependencies; no `npm install` needed.
@@ -386,14 +407,23 @@ Headless screenshot mode without a live connection: `?qa=1`. Extra parameters:
 
 Example: `?qa=1&usage=30d&cost=0&sort=spend&open=project:<id>` (the usage section of a project with the dollars hidden).
 
-The desktop program has its own QA mode, for the packaged build only together with the `--qa` switch: `SIBERSENTEZ_QA_SHOT` (a PNG of the window, never overwrites), `SIBERSENTEZ_QA_QUIT_MS`, `SIBERSENTEZ_QA_DELAY_MS`, `SIBERSENTEZ_QA_ACTIONS=off|dry` (live is refused), `SIBERSENTEZ_QA_HIDDEN=1` (nothing reaches the screen: the window is never shown, off screen and without a taskbar button, still painting for screenshots; no tray icon, no native dialog, no notification, no external program), `SIBERSENTEZ_QA_PROBES=1` (fixed checks of the bridge, the kit, the actions switch and the Actions panel) and, in a hidden run only, `SIBERSENTEZ_QA_PROJECT_DIR` (a folder the probes add as a project without the folder picker). `qa\electron-qa.ps1` runs the packaged app with a temporary hub and data folder, hidden by default (`-Visible` shows the windows without taking the focus); it stops at once if a window of the app becomes visible.
+The desktop program has its own QA mode, for the packaged build only together with the `--qa` switch: `SIBERSENTEZ_QA_SHOT` (a PNG of the window, never overwrites), `SIBERSENTEZ_QA_QUIT_MS`, `SIBERSENTEZ_QA_DELAY_MS`, `SIBERSENTEZ_QA_ACTIONS=off|dry` (live is refused), `SIBERSENTEZ_QA_HIDDEN=1` (nothing reaches the screen: the window is never shown, off screen and without a taskbar button, still painting for screenshots; no tray icon, no native dialog, no notification, no external program), `SIBERSENTEZ_QA_PROBES=1` (fixed checks of the bridge, the kit, the actions switch and the Actions panel) and, in a hidden run only, `SIBERSENTEZ_QA_PROJECT_DIR` (a folder the probes add as a project without the folder picker). `tools\electron-qa.ps1` runs the packaged app with a temporary hub and data folder, hidden by default (`-Visible` shows the windows without taking the focus); it stops at once if a window of the app becomes visible.
 
 ### Files
 
 ```
 electron/            program shell: window, tray, single instance, start at login, server in a separate process
   main.mjs           wiring to Electron (window, tray, menus, IPC, QA mode)
-  helpers.mjs        every decision of the shell as a pure, tested function
+  helpers.mjs        every decision of the shell as a pure, tested function; since plan D8 it re-exports the
+                     modules below and keeps the UI language and log redaction
+  shell-paths.mjs    ports, folders, the hub path
+  shell-policy.mjs   what the window may open, request and be granted
+  server-process.mjs the server's environment, readiness, restarts, messages, stopping it
+  actions-mode.mjs   the actions mode: tray switch, menus, the in-app request, the confirmation for On
+  new-project.mjs    the folder picker, the folder rules and the idea
+  shell-state.mjs    the shell's own state file
+  qa-window.mjs      QA mode, the hidden QA run and the window's options
+  terminals.mjs      the embedded terminal (node-pty)
   preload.cjs        the window's bridge: setActionsMode, pickProjectFolder, saveProjectIdea
   strings.mjs        tray, menu and dialog texts (English and Turkish)
 build/               icon and packaging resources
@@ -421,7 +451,9 @@ server/
   tools.mjs          AI tool detection for Start with AI and GET /api/tools (file look-up; version and sign-in checks)
   launch.mjs         Start with AI: the first-message file, the start file (launch\) and the terminal command lines
   views.mjs          snapshot and patch objects
-  live.mjs, git.mjs, plan.mjs, util.mjs, actions.mjs, app.mjs
+  actions.mjs        the actions: what each does, the mode and its token, what is running
+  actionInput.mjs    the checks of an action request (fields, ids, folders, skill items), before anything runs
+  live.mjs, git.mjs, plan.mjs, util.mjs, app.mjs
 public/
   index.html, css/app.css, css/<feature>.css
   js/main.js         connection, tabs, top bar, rail, KPI strip, New project, the Actions panel
@@ -435,7 +467,7 @@ public/
   js/views/          projects, roster (with the GitHub tab), timeline, feed, drawer
   js/views/tools.js  Start with AI: the drawer section, the menu items, the AI tools panel
 test/                node --test
-qa/electron-qa.ps1   QA of the packaged program (hidden by default)
+tools/electron-qa.ps1   QA of the packaged program (hidden by default)
 start.cmd            developer launcher (browser)
 ```
 

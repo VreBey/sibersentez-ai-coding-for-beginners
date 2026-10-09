@@ -104,7 +104,7 @@ overwritten. Tests: the lean case in `test/restore.test.mjs`.
 
 **Not holding the server.** The first lean point of that project took 9 s (an unchanged one: 0.2 s). start-ai now
 copies with `createPointAsync` (the same scan, id and manifest as `createPoint`, the reads and writes awaited), so the
-live view and other requests keep moving; going back stays synchronous.
+live view and other requests keep moving. Going back does the same since 2026-10-09 (§10).
 
 ## Points named after their job (2026-10-02)
 
@@ -187,3 +187,50 @@ A file another program keeps locked (an IDE's open database) can no longer hide 
 be read, so a new copy is tried, and while the lock lasts that copy fails (`copy-failed`) and the job box says no copy
 was kept. That is the honest answer: no copy of that file could be made.
 Tests: `test/job-changes.test.mjs` (Z1 reproduced).
+
+## 10. Going back without holding the server; a restore cut off halfway (2026-10-09, plan A2)
+
+Going back used to run in one synchronous piece: every copy it would write was held in memory (up to 150 MB for a
+lean point) and the server answered nothing else until it was done, and a restore cut off halfway (the app closed,
+the computer went off) left no trace of it.
+
+- **One file at a time, awaited.** `applyRestore` is asynchronous. It checks every copy against its digest first and
+  drops the bytes; the point of the present is taken with `createPointAsync`; each copy is read and checked again when
+  it is written. One file is in memory at a time, and the live view and every other request keep moving.
+- **Never together with an AI start.** While a project is being put back, start-ai in it answers 409
+  `restore-running`; while start-ai takes a project's start copy, going back in it answers 409 `ai-working` (as for an
+  AI session still working there). Both are kept in `actions.mjs` (`restoring`, `starting`).
+- **The mark.** Once the point of the present is kept and before the first file is touched, `.restore-running.json`
+  is written next to the points (`{ version: 1, to, before, at }`); it is removed after the last file. If it cannot be
+  written, nothing changes (`backup-failed`). A mark that is still there means going back stopped halfway: GET
+  `/restore` answers `interrupted: { at, to, before, toAvailable, beforeAvailable }`, and the drawer says so first,
+  with two ways out, each a preview like any point: finish going back (`to`) or return to how the project was just
+  before it started (`before`). Pruning never removes the two points a mark names. The next going back that finishes
+  removes the mark.
+- **Still synchronous:** the plan (`planRestore`, also behind the preview) reads the project's files at once, as it
+  did; it reads, never writes.
+
+Tests: `test/restore-async.test.mjs` (the event loop keeps turning, the mark while it runs and after a stop, pruning,
+the two refusals over the real handler, the drawer's notice).
+
+## 11. Points share unchanged files; what they take on disk (2026-10-09, plan D6)
+
+- A new point links a file to the newest point's copy (a hard link) when its path, size and SHA-256 are the same, and
+  writes a fresh copy otherwise. Five points of a project that changed a little take about one copy on disk instead of
+  five. The folder layout is unchanged (`<point>/files/...` and `manifest.json`), so going back, a job's changes and
+  pruning read every point as before.
+- A link is made only when the older copy holds the very bytes just read from the project (review D: a copy damaged
+  at the same size would otherwise spread to every newer point). Never when the file system has no hard links or the
+  hub spans drives: a plain copy then, as before, written to a new name only (`wx`), so a shared file is never opened
+  for writing. Points taken before 2026-10-06 (SHA-1) share nothing.
+- Safe because a point's files are only ever read: going back writes the project from their bytes into a temporary
+  file renamed into place, never moving or linking a file out of the hub. Pruning removes a point's names; a shared
+  file stays while a newer point names it.
+- `GET /api/projects/<id>/restore` carries `disk: { bytes, apart }`: every file counted once by its volume and file id,
+  next to what the copies would take apart (`pointsDisk`, asynchronous so the server keeps answering, kept per set of
+  points since points never change). The
+  drawer says "The copies take 120 MB on this computer", and how much sharing saved when it is at least 1 MB.
+- Known limit: a shared file damaged later in the hub (a disk error, a hand edit) is damaged in every point that names
+  it; going back then says `point-damaged` for that file, as it would for one point before.
+- Tests: `test/restore-share.test.mjs` (shared and fresh copies, going back, pruning, an older copy damaged with a
+  different size or the same size, the answer's disk count, the line).

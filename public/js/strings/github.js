@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of bringing skills and agents from GitHub into the library (docs/github-import.md). Same keys in en and tr; placeholders use {name}. Merged into STRINGS by ../i18n.js.
 export default {
   en: {

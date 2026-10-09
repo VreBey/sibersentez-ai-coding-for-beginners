@@ -1,3 +1,4 @@
+// @ts-check
 // Permission prompt helper (docs/embedded-terminal.md, "What the AI asks"): when an AI tool in an embedded terminal
 // asks the person for something (edit a file, run a command, fetch a page, trust a folder, sign in, accept a plan),
 // a small box beside the terminal says in plain words what it asks and which answer is the safe one. It only
@@ -5,7 +6,7 @@
 // The prompt texts are the tools' own, as of 2026 (Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI); a text
 // the helper does not know shows nothing.
 import { esc } from './format.js';
-import { t } from './i18n.js';
+import { t, tOs } from './i18n.js';
 import { matchError, errorItemsHtml } from './setupCheck.js';
 
 // ANSI escape sequences (colours, cursor moves, OSC titles) and carriage returns out; what is left is the text a
@@ -209,7 +210,7 @@ export function promptHelpHtml(hit) {
     return `<div class="ph-head"><b>${esc(t('phTitle_code'))}</b><button type="button" class="icon-btn ph-close" data-ph="close" aria-label="${esc(t('phHide'))}" title="${esc(t('phHide'))}">×</button></div><code translate="no">${esc(hit.line)}</code><p>${esc(t(`phCode_${hit.kind}`))}</p><button type="button" class="act-btn primary ph-ask" data-ph="ask">${esc(t('phAsk'))}</button><p class="ph-foot">${esc(t('phFoot_code'))}</p>`;
   }
   if (hit.id === 'error') {
-    return `<div class="ph-head"><b>${esc(t('phTitle_error'))}</b><button type="button" class="icon-btn ph-close" data-ph="close" aria-label="${esc(t('phHide'))}" title="${esc(t('phHide'))}">×</button></div>${errorItemsHtml(hit.results)}${hit.results.some((r) => r.fixes?.length) ? `<p class="ph-foot">${esc(t('phFoot_error'))}</p>` : ''}`;
+    return `<div class="ph-head"><b>${esc(t('phTitle_error'))}</b><button type="button" class="icon-btn ph-close" data-ph="close" aria-label="${esc(t('phHide'))}" title="${esc(t('phHide'))}">×</button></div>${errorItemsHtml(hit.results)}${hit.results.some((r) => r.fixes?.length) ? `<p class="ph-foot">${esc(tOs('phFoot_error'))}</p>` : ''}`;
   }
   const detail = hit.detail ? `<code translate="no">${esc(hit.detail.length > 140 ? hit.detail.slice(0, 139) + '…' : hit.detail)}</code>` : '';
   const warn = [hit.risky ? t('phRisky') : '', hit.wide ? t('phWide') : ''].filter(Boolean).map((w) => `<p class="ph-warn">${esc(w)}</p>`).join('');

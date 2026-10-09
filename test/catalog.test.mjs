@@ -17,6 +17,7 @@ import { slugify, normPath } from '../server/util.mjs';
 import { Ingest } from '../server/ingest.mjs';
 import { snapshot, rosterView, hubView } from '../server/views.mjs';
 import { baseName, copyKey, libraryCounts, foldersOf, folderGroupOf, matchesFolder, matchesFilter, folderIndex, folderCounts, folderGroups, parseFolder, sourceFolder, FOLDER_GROUPS } from '../public/js/rosterModel.js';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-catalog-'));
 after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
@@ -370,7 +371,7 @@ test('works with a null hub: registry and library empty; personal, claudeai, pro
   assert.deepEqual(ghost.hub, { path: path.join(ROOT, 'missing-hub'), projects: 0, library: 0 });
 });
 
-test('legacy hub (registry/projeler.json, kutuphane/katalog.json) is read through the adapter with the same result', () => {
+test('legacy hub (registry/projeler.json, kutuphane/katalog.json) is read through the adapter with the same result', { skip: WIN_ONLY }, () => {
   const old = path.join(ROOT, 'legacy-hub');
   write(path.join(old, 'registry', 'projeler.json'), JSON.stringify({ projeler: [{ id: 'registered', ad: 'Registered', yol: P_REG }, { ad: 'no id' }, null, { id: 'registered' }] }));
   write(path.join(old, 'kutuphane', 'katalog.json'), JSON.stringify({ ogeler: [{ ad: 'lib-skill', tur: 'skill', kategori: 'web', aciklama: 'library skill' }, { ad: 'lib-agent', tur: 'agent', kategori: 'design' }, { ad: 'shared', tur: 'skill', kategori: 'general' }] }));
@@ -911,7 +912,7 @@ test('project memory: remembered broad or scratchpad folders (older file, hand e
 const fileUri = (p) => `file:///${p[0].toLowerCase()}%3A/${p.slice(3).split(/[\\/]/).map(encodeURIComponent).join('/')}`;
 const editorRecord = (appData, app, hash, folder) => write(path.join(appData, app, 'User', 'workspaceStorage', hash, 'workspace.json'), JSON.stringify({ folder: fileUri(folder) }));
 
-test('broad folders: <home>\\AppData and every folder below it never become projects from a tool record (not listed, not remembered); the temp rule and the scratchpad rule stay', () => {
+test('broad folders: <home>\\AppData and every folder below it never become projects from a tool record (not listed, not remembered); the temp rule and the scratchpad rule stay', { skip: WIN_ONLY }, () => {
   const hub = path.join(ROOT, 'appdata-hub');
   initHub(hub);
   const w = discoveryWorld('appdata-broad');
@@ -972,7 +973,7 @@ test('broad folders: <home>\\AppData and every folder below it never become proj
   assert.equal(owner.broad, false);
 });
 
-test('project memory: a remembered folder below <home>\\AppData (older file, hand edit) is not listed', () => {
+test('project memory: a remembered folder below <home>\\AppData (older file, hand edit) is not listed', { skip: WIN_ONLY }, () => {
   const hub = path.join(ROOT, 'appdata-hub-2');
   initHub(hub);
   const w = discoveryWorld('appdata-memory');

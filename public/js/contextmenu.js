@@ -8,7 +8,7 @@ import { icon } from './icons.js';
 import { runAction, actionsState, argvSummary } from './actions.js';
 import { isLibraryItem } from './rosterModel.js';
 import { isHiddenProject, setProjectHidden } from './hiddenProjects.js';
-import { t, language } from './i18n.js';
+import { t, tOs, language, pagePlatformNow } from './i18n.js';
 import { sessionTool, sessionToolName, canContinueTool } from './jobId.js';
 // "Start with AI" items, their notice, and asking for the tools on first need (docs/ai-start.md)
 import { aiStartMenuItems, aiStartToast, needTools } from './views/tools.js';
@@ -52,7 +52,7 @@ function clip(s, n) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
-export function sessionTitle(s) {
+function sessionTitle(s) {
   if (!s) return '';
   return s.title || s.lastPrompt || s.firstPrompt || s.live?.name || t('shSessionNew');
 }
@@ -83,12 +83,19 @@ function sessionActionable(s) {
 // Copy and Windows Terminal work with Claude Code sessions only, and their labels say so (strings/terminal.js).
 // Another tool's session (Codex, Gemini CLI, Qwen Code: server/toolLogs.mjs) continues with that tool's own resume
 // arguments through the checked launcher (start-ai with resume, server/tools.mjs resume), never with Claude's.
+// Linux and macOS have no Windows Terminal (plan G4): there a session goes on in SiberSentez's own terminal only, and an
+// item that would need Windows Terminal is not offered
+const outsideTerminal = () => pagePlatformNow() === 'win32';
+const dockReady = () => !!dockOpen && !dockFull?.();
 function continueItem(s, where) {
   if (sessionTool(s) !== 'claude') {
     if (!canContinueTool(sessionTool(s)) || s.live) return [];
+    if (!outsideTerminal() && !dockReady()) return [];
     return [{ id: 'resume', label: t('termResumeTool', { tool: sessionToolName(s) }), hint: where === 'project' ? clip(sessionTitle(s), 30) : dockOpen && !dockFull?.() ? t('termResumeDockHint') : 'Windows Terminal', icon: 'play', action: 'start-ai', payload: { sessionId: s.id, tool: sessionTool(s), resume: true } }];
   }
   if (s.live) {
+    // A copy of a running session opens in Windows Terminal only
+    if (!outsideTerminal()) return [];
     return {
       id: 'fork',
       label: t(where === 'agent' ? 'termForkParent' : 'termFork'),
@@ -108,11 +115,9 @@ function continueItem(s, where) {
   };
   // With the terminal dock: the same session continues in it (start-ai with resume: the checked launcher, docs/ai-start.md)
   // and Windows Terminal is the second item
-  if (!dockOpen || dockFull?.()) return outside;
-  return [
-    { ...outside, hint: where === 'project' ? outside.hint : t('termResumeDockHint'), action: 'start-ai', payload: { sessionId: s.id, tool: 'claude', resume: true } },
-    { ...outside, id: 'resume-outside', label: t('termResumeOutside'), hint: 'Windows Terminal' },
-  ];
+  if (!dockReady()) return outsideTerminal() ? outside : [];
+  const inDock = { ...outside, hint: where === 'project' ? outside.hint : t('termResumeDockHint'), action: 'start-ai', payload: { sessionId: s.id, tool: 'claude', resume: true } };
+  return outsideTerminal() ? [inDock, { ...outside, id: 'resume-outside', label: t('termResumeOutside'), hint: 'Windows Terminal' }] : [inDock];
 }
 
 // Last segment of a folder path (the name a terminal toast shows when the session has no project name)
@@ -136,11 +141,9 @@ export function setDockOpener(fn, isFull = null) {
 }
 function terminalItems(payload, name, here) {
   const outside = terminalItem(payload, name, here);
-  if (!dockOpen) return [outside];
-  return [
-    { id: 'terminal-dock', label: outside.label, hint: outside.hint, icon: 'terminal', dock: payload, name: outside.name },
-    { ...outside, label: t('termOpenOutside'), hint: t('termOpenOutsideHint') },
-  ];
+  if (!dockOpen) return outsideTerminal() ? [outside] : [];
+  const dock = { id: 'terminal-dock', label: outside.label, hint: outside.hint, icon: 'terminal', dock: payload, name: outside.name };
+  return outsideTerminal() ? [dock, { ...outside, label: t('termOpenOutside'), hint: t('termOpenOutsideHint') }] : [dock];
 }
 
 function header(label, hint, mode, note, pathHint = false) {
@@ -217,7 +220,7 @@ function projectMenu(id, d, mode, on) {
     const s = latestSession(d, p.id, canContinueTool);
     if (s && sessionActionable(s)) items.push(...[].concat(continueItem(s, 'project')));
     items.push(SEP());
-    items.push({ id: 'explorer', label: t('shCmOpenFolder'), hint: t('shCmExplorer'), icon: 'folder', action: 'explorer', payload: { projectId: p.id } });
+    items.push({ id: 'explorer', label: t('shCmOpenFolder'), hint: tOs('shCmExplorer'), icon: 'folder', action: 'explorer', payload: { projectId: p.id } });
     items.push({ id: 'vscode', label: t('shCmVscode'), icon: 'code', action: 'vscode', payload: { projectId: p.id } });
     items.push(SEP());
     if (suggestable(p)) items.push({ id: 'skills', label: t('skMenuSuggest'), hint: t('skMenuSuggestHint'), icon: 'grid', flow: { type: 'project', id: p.id } });
@@ -242,7 +245,7 @@ function sessionMenu(id, d, mode, on) {
     // "Start with <tool>" in the session's folder (docs/ai-start.md); the idea is the session's project's
     items.push(...aiStartMenuItems({ sessionId: s.id }, { name: p?.name || folderName(s.cwd), projectId: suggestable(p) ? p.id : null, hasIdea: !!p?.idea }));
     items.push(...terminalItems({ sessionId: s.id }, p?.name || folderName(s.cwd), true));
-    items.push({ id: 'explorer', label: t('shCmOpenFolder'), hint: t('shCmExplorer'), icon: 'folder', action: 'explorer', payload: { sessionId: s.id } });
+    items.push({ id: 'explorer', label: t('shCmOpenFolder'), hint: tOs('shCmExplorer'), icon: 'folder', action: 'explorer', payload: { sessionId: s.id } });
   }
   return tidy([...items, ...tail]);
 }
@@ -292,7 +295,7 @@ export const SKILL_TARGETS = Object.freeze(['claude', 'agents']);
 export const MAX_SKILL_ITEMS = 25;
 export const LIBRARY_CATEGORIES = Object.freeze(['web', 'mobile', 'desktop', 'game', 'data', 'ai', 'devops', 'testing', 'security', 'design', 'docs', 'general']);
 // The server's item name pattern (a trailing dot is refused there too)
-export const SKILL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const SKILL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const AGENTS_TOOLS = ['codex', 'gemini-cli', 'antigravity'];
 
 // Default targets from a project's tools (the server applies the same rule when no target is sent)
@@ -311,7 +314,7 @@ export function libraryInstallable(r) {
   return isLibraryItem(r) && (r.kind === 'skill' || r.kind === 'agent') && SKILL_NAME_RE.test(name) && !name.endsWith('.');
 }
 
-export const skillKey = (it) => `${it.kind}:${it.name}`;
+const skillKey = (it) => `${it.kind}:${it.name}`;
 
 // Same project, items and targets give the same key, whatever the order
 export function selectionKey(projectId, items, targets) {
@@ -327,12 +330,6 @@ function tOr(key, fallback) {
 export const categoryLabel = (c) => tOr(`skCat_${c}`, String(c ?? ''));
 // A skip reason; an error code in a plan (library-adopt names why an item could not be taken) reads as its error text
 export const reasonText = (code) => tOr(`skReason_${code}`, tOr(`skErr_${code}`, String(code ?? '')));
-
-// Short reason of a suggestion: "package.json: react", "registry package: web"
-export function suggestReasonText(reason) {
-  if (!reason || typeof reason !== 'object') return '';
-  return t('skSuggestReason', { from: reason.from === 'registry' ? t('skFromRegistry') : String(reason.from ?? ''), signal: String(reason.signal ?? '') });
-}
 
 // First suggestions not installed yet (at most 5) are selected when the list first arrives
 export function defaultSuggestSelection(items, max = 5) {
@@ -474,7 +471,7 @@ export function resultToast(label, r, item = null) {
     // "Open in browser" runs the explorer action on the project's index.html: the page opens, not the folder (seen when
     // using the app, 2026-10-08: it said "Opening the folder in Explorer")
     const page = res.action === 'explorer' && item?.payload?.open === 'index.html';
-    return { tone: 'ok', title: page ? t('shDone_openPage') : DONE.has(res.action) ? t(`shDone_${res.action}`) : label, body: res.sessionId ? t('shToastSession', { id: String(res.sessionId).slice(0, 8) }) : '' };
+    return { tone: 'ok', title: page ? t('shDone_openPage') : DONE.has(res.action) ? tOs(`shDone_${res.action}`) : label, body: res.sessionId ? t('shToastSession', { id: String(res.sessionId).slice(0, 8) }) : '' };
   }
   return { tone: 'err', title: t('shToastFail', { label }), body: errorText(res) };
 }

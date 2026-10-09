@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the "Open terminal" action and the context menu's launch items (docs/terminal.md). Same keys in en
 // and tr; placeholders use {name}. Merged into STRINGS by ../i18n.js.
 export default {

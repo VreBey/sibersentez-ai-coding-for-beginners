@@ -1,3 +1,4 @@
+// @ts-check
 // Incrementally reads Claude Code session logs (~/.claude/projects) and builds an in-memory state model:
 // sessions, sub-agents, workflow runs, the event feed, tool-call ticks, usage counters.
 // The byte offset reached in each file is kept; only new lines are processed. Heavy lines (attachments,
@@ -33,7 +34,7 @@ function base(p) {
   return p ? String(p).split(/[\\/]/).pop() : '';
 }
 
-export function workflowNameOf(input) {
+function workflowNameOf(input) {
   if (!input) return '';
   if (input.name) return String(input.name);
   const m = /name\s*:\s*['"]([^'"]+)['"]/.exec(input.script || '');
@@ -437,7 +438,20 @@ export class Ingest {
       return;
     }
     if (head.includes('"type":"user"')) {
-      if (head.includes('"content":[{"tool_use_id"') || head.includes('"content":[{"type":"tool_result"')) return;
+      if (head.includes('"content":[{"tool_use_id"') || head.includes('"content":[{"type":"tool_result"')) {
+        // Tool results are skipped, except the one that hands an agent's work back (Claude Code 2.1.29x:
+        // SubagentHandback, marked toolEndsTurn): the agent's last line, so it is done. No end_turn comes then (tried
+        // on Linux, 2026-10-09: finished agents ran on for ten minutes, then counted as stopped). Looked for within this
+        // line only (a subarray, no copy): the buffer holds megabytes of lines after it
+        if (ctx.isAgent && buf.subarray(a, b).includes('"toolEndsTurn":true')) {
+          const o = parseLine(buf, a, b);
+          if (o?.toolEndsTurn === true) {
+            this.touch(ctx, toMs(o.timestamp));
+            ctx.lastStop = 'end_turn';
+          }
+        }
+        return;
+      }
       const o = parseLine(buf, a, b);
       if (o) this.user(ctx, o);
       return;

@@ -69,8 +69,12 @@ export function aiIdleIn({ sessions = [], projectId, dock = [] } = {}) {
 }
 
 // One plain sentence for where the job is (pure). idle: no AI works in the project now (aiIdleIn)
-export function jobNowText(d, { idle = false } = {}) {
+// offline: the page lost its server (the live stream dropped): what it shows is the last state it saw, so a job that is
+// not done yet says so instead of "working" (review B8, UX plan §6.3: a lost connection is never a finish), and "the
+// tool closed" is never guessed from it
+export function jobNowText(d, { idle = false, offline = false } = {}) {
   if (!d || d.step === 'none') return '';
+  if (offline && d.step !== 'done') return t('jobNowOffline');
   const task = d.current ? `${d.current.id} ${d.current.title}`.trim() : '';
   // No plan of this job yet: the AI is still writing it (or asks something in the terminal first, as a tool's "trust
   // this folder?"); "waiting for your approval" then sent the person looking for a plan that was not there (seen when
@@ -177,12 +181,19 @@ export function stoppedStepsHtml(d, session) {
 }
 
 // The four steps with done and now marked, and one plain sentence on where the job stands (the drawer and the Building)
-export function stepsHtml(d, { idle = false } = {}) {
+export function stepsHtml(d, { idle = false, offline = false } = {}) {
   if (!d || !(STEPS.includes(d.step) || d.step === 'done')) return '';
   // done: the person accepted the result, every step is ticked
   const at = d.step === 'done' ? STEPS.length : STEPS.indexOf(d.step);
   const items = STEPS.map((s, i) => `<li class="${i < at ? 'done' : i === at ? 'now' : ''}"${i === at ? ' aria-current="step"' : ''}>${esc(t(`jobStep_${s}`))}</li>`).join('');
-  return `<ol class="job-steps" aria-label="${esc(t('jobStepsLabel'))}">${items}</ol><p class="small job-now" role="status">${esc(jobNowText(d, { idle }))}</p>`;
+  return `<ol class="job-steps" aria-label="${esc(t('jobStepsLabel'))}">${items}</ol><p class="small job-now${offline && d.step !== 'done' ? ' warn' : ''}" role="status">${esc(jobNowText(d, { idle, offline }))}</p>`;
+}
+
+// A plan that waits for the person (review B7): approve it or ask for a change from here, as drafts into the AI's tab
+// (the drawer: resultAct, never with Enter); the plan itself is the AI's, in its tab and in the session. Pure.
+export function planActsHtml(d) {
+  if (d?.step !== 'plan' || !d.plan || d.plan.approved) return '';
+  return `<div class="jr-acts plan-acts" role="group" aria-label="${esc(t('jobPlanActsLabel'))}"><button type="button" class="act-btn primary" data-jr-act="plan-ok" data-fk="job:plan-ok">${icon('check')}<span>${esc(t('jobPlanOk'))}</span></button><button type="button" class="act-btn" data-jr-act="plan-change" data-fk="job:plan-change">${icon('spark')}<span>${esc(t('jobPlanChange'))}</span></button></div><p class="small muted jr-acts-note">${esc(t('jobPlanNote'))}</p>`;
 }
 
 // The team's items as the install request names them ({ kind, name })
@@ -244,10 +255,13 @@ export function jobKeys(fit) {
 // next: the follow-ups a finished job offers ('change', 'try', 'deploy'); each only fills the box, Start stays the person's
 // asNew: the job's result is waiting above (review U07): the box is a plain "New job" after it, without the job's steps
 // and with a secondary Start, so it never looks like the way to answer the job
-export function jobSectionHtml(p, data, { mode = 'off', tools = toolsState(), text = '', stopped = null, turnOn = false, asking = false, next = [], asNew = false, idle = false } = {}) {
+// cost: what a job uses, before it starts (jobCost.js estimateText); '' says nothing
+export function jobSectionHtml(p, data, { mode = 'off', tools = toolsState(), text = '', stopped = null, turnOn = false, asking = false, next = [], asNew = false, idle = false, cost = '', offline = false } = {}) {
   if (!p || !p.path || p.exists === false || p.broad || p.tmpOnly || p.kind === 'hub') return '';
   const on = mode === 'dry' || mode === 'live';
   const tool = preferredTool(installedTools(tools));
+  // A plan waits for the person: its approval is the one primary action, not a new job's Start (review B1, B7)
+  const planWaits = !asNew && !offline && !!planActsHtml(data);
   const oneStep = mode === 'off' && turnOn && !!tool;
   const dis = on || oneStep ? '' : ' aria-disabled="true"';
   const pid = esc(p.id);
@@ -258,7 +272,7 @@ export function jobSectionHtml(p, data, { mode = 'off', tools = toolsState(), te
   const btn = looking
     ? `<p class="small" role="status">${esc(t(tools.status === 'error' ? 'aiLoadFailed' : 'aiLoading'))}</p>`
     : tool
-    ? `<button type="button" class="act-btn${asNew ? '' : ' primary'} job-go" data-job-act="start" data-job-tool="${esc(tool.id)}" data-fk="job:start" aria-describedby="jobWhy"${dis}>${icon('spark')}<span>${esc(t('jobGo'))}</span></button>`
+    ? `<button type="button" class="act-btn${asNew || planWaits ? '' : ' primary'} job-go" data-job-act="start" data-job-tool="${esc(tool.id)}" data-fk="job:start" aria-describedby="jobWhy"${dis}>${icon('spark')}<span>${esc(t('jobGo'))}</span></button>`
     : `<p class="small">${esc(t('jobNoTool'))}</p><button type="button" class="act-btn primary" data-ai-act="tools" data-fk="job:tools">${icon('plugin')}<span>${esc(t('aiInstallOne'))}</span></button>`;
   const why = !tool ? '' : mode === 'live' ? t('jobGoWith', { tool: tool.name }) : mode === 'dry' ? t('jobWhyDry') : oneStep ? t('jobWhyOffOne') : t('jobWhyOff');
   // "Turn actions on and start?": the switch's own title, what On means for this job, yes / cancel
@@ -266,8 +280,8 @@ export function jobSectionHtml(p, data, { mode = 'off', tools = toolsState(), te
     ? `<div class="flow-confirm" role="group" aria-labelledby="jobQ"><p id="jobQ"><b>${esc(t('actionsSwitchConfirmTitle'))}</b> ${esc(t('jobTurnOnAsk', { tool: tool.name }))}</p><div class="flow-btns"><button type="button" class="act-btn primary" data-job-act="start-on" data-fk="job:start-on">${esc(t('jobTurnOnYes'))}</button><button type="button" class="act-btn" data-job-act="start-no" data-fk="job:start-no">${esc(t('jobTeamNo'))}</button></div></div>`
     : '';
   const follow = data?.step === 'done' ? nextHtml(next) : '';
-  const steps = asNew ? '' : stopped && data && STEPS.includes(data.step) && mode === 'live' ? stoppedStepsHtml(data, stopped) : stepsHtml(data, { idle });
-  return `<section class="dr-sec job" data-sec="job" aria-labelledby="jobH"><h3 id="jobH">${icon('spark')} ${esc(t(asNew ? 'jobAskNew' : 'jobAsk'))}</h3>${steps}${follow}<div class="job-row">${input}${btn}</div>${ask}${why && !ask ? `<p class="small muted flow-why" id="jobWhy">${esc(why)}</p>` : ''}${historyHtml(data?.history)}</section>`;
+  const steps = asNew ? '' : stopped && data && STEPS.includes(data.step) && mode === 'live' ? stoppedStepsHtml(data, stopped) : `${stepsHtml(data, { idle, offline })}${offline ? '' : planActsHtml(data)}`;
+  return `<section class="dr-sec job" data-sec="job" aria-labelledby="jobH"><h3 id="jobH">${icon('spark')} ${esc(t(asNew ? 'jobAskNew' : 'jobAsk'))}</h3>${steps}${follow}<div class="job-row">${input}${btn}</div>${ask}${why && !ask ? `<p class="small muted flow-why" id="jobWhy">${esc(why)}</p>` : ''}${cost && tool && !ask ? `<p class="small muted job-cost">${esc(cost)}</p>` : ''}${historyHtml(data?.history)}</section>`;
 }
 
 // Earlier jobs of the project (server/team.mjs jobHistory), folded: what was done before, newest first (pure)

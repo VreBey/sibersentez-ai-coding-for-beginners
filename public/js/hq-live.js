@@ -1,3 +1,4 @@
+// @ts-check
 // The workshop building's live data (docs/hq.md): one project of the store as the snapshot hq-scene.js sceneFrom reads,
 // its events and tool calls, the order of the projects, each project's kind (its main room) and the snapshots kept for
 // the rewind ("What happened?"). The store is a parameter so the tests can pass their own.
@@ -165,6 +166,7 @@ export class KindCache {
 // than none. Returns snapshots in time order, one per `step`, in liveSnapshot's shape.
 export const PAST_ACT_MS = 45000;
 export const PAST_STAY_MS = 5 * 60000;
+/** @param {any} store @param {any} p @param {{ from?: number, to?: number, step?: number, mainRoomKind?: string, label?: (s: any) => string }} [options] */
 export function pastSnapshots(store, p, { from, to, step = 5000, mainRoomKind = 'dev', label = (s) => s.title || '' } = {}) {
   const acts = new Map(); // actor -> sorted times
   const add = (actor, t) => {

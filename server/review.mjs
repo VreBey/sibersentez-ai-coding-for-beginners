@@ -1,3 +1,4 @@
+// @ts-check
 // Review of a skill or agent before it enters the library (docs/github-import.md §4). Three questions per item:
 //   - Is it safe? Script and program files, a broad shell grant in the frontmatter, dangerous command patterns, prompt
 //     injection wording, hidden instructions (HTML comments, invisible characters), network use and key formats.
@@ -15,7 +16,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isVendoredDir } from './library.mjs';
 
-export const LEVELS = Object.freeze(['ok', 'caution', 'danger']);
 const RANK = { ok: 0, caution: 1, danger: 2 };
 // Files read per item, bytes read per file and in all; a text file above maxFileBytes is scanned up to it
 export const REVIEW_LIMITS = Object.freeze({ maxFiles: 500, maxFileBytes: 1024 * 1024, maxTotalBytes: 20 * 1024 * 1024, maxDepth: 16 });
@@ -29,13 +29,13 @@ const BINARY_PROBE = 8000;
 // ---------------------------------------------------------------------------------------------------------------
 
 // Scripts an interpreter runs as they are (a finding: caution)
-export const SCRIPT_EXTS = Object.freeze(['.sh', '.bash', '.zsh', '.fish', '.ksh', '.ps1', '.psm1', '.psd1', '.bat', '.cmd', '.py', '.pyw', '.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.jsx', '.tsx', '.rb', '.pl', '.php', '.lua', '.vbs', '.vbe', '.wsf', '.jse', '.ahk', '.applescript', '.scpt', '.command', '.r', '.tcl', '.awk']);
+const SCRIPT_EXTS = Object.freeze(['.sh', '.bash', '.zsh', '.fish', '.ksh', '.ps1', '.psm1', '.psd1', '.bat', '.cmd', '.py', '.pyw', '.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.jsx', '.tsx', '.rb', '.pl', '.php', '.lua', '.vbs', '.vbe', '.wsf', '.jse', '.ahk', '.applescript', '.scpt', '.command', '.r', '.tcl', '.awk']);
 // Programs and libraries that cannot be read (a finding: danger)
-export const BINARY_EXTS = Object.freeze(['.exe', '.dll', '.msi', '.msp', '.scr', '.com', '.sys', '.cpl', '.ocx', '.so', '.dylib', '.jar', '.class', '.pyc', '.pyo', '.node', '.apk', '.deb', '.rpm', '.pkg', '.dmg', '.app', '.appx', '.msix', '.lnk', '.hta', '.reg']);
+const BINARY_EXTS = Object.freeze(['.exe', '.dll', '.msi', '.msp', '.scr', '.com', '.sys', '.cpl', '.ocx', '.so', '.dylib', '.jar', '.class', '.pyc', '.pyo', '.node', '.apk', '.deb', '.rpm', '.pkg', '.dmg', '.app', '.appx', '.msix', '.lnk', '.hta', '.reg']);
 // Files read as text besides the scripts; any other file is read only when it has no NUL byte in its first bytes
 const TEXT_EXTS = new Set(['.md', '.markdown', '.mdx', '.txt', '.rst', '.adoc', '.yaml', '.yml', '.json', '.jsonc', '.toml', '.ini', '.cfg', '.conf', '.xml', '.html', '.htm', '.csv', '.tsv', '.env', '.properties', '.gradle', '.make', '.mk', '.dockerfile', '.gitignore', '']);
 // Archives and disk images: what they hold cannot be reviewed without unpacking (a finding: caution)
-export const ARCHIVE_EXTS = Object.freeze(['.zip', '.7z', '.rar', '.gz', '.tgz', '.tar', '.cab', '.iso', '.xz', '.bz2', '.tbz', '.tbz2', '.txz', '.zst', '.lz', '.lzma', '.z', '.cpio', '.img', '.vhd', '.vhdx', '.wim']);
+const ARCHIVE_EXTS = Object.freeze(['.zip', '.7z', '.rar', '.gz', '.tgz', '.tar', '.cab', '.iso', '.xz', '.bz2', '.tbz', '.tbz2', '.txz', '.zst', '.lz', '.lzma', '.z', '.cpio', '.img', '.vhd', '.vhdx', '.wim']);
 // Media, fonts and office documents: never read (their bytes say nothing a person reads). Their first bytes are still
 // checked for a program header: a program under an image name is a danger.
 const SKIP_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.tif', '.tiff', '.psd', '.mp3', '.wav', '.ogg', '.flac', '.mp4', '.mov', '.webm', '.avi', '.ttf', '.otf', '.woff', '.woff2', '.eot', '.pdf', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp']);
@@ -96,14 +96,14 @@ export const PATTERNS = Object.freeze([
 // Key formats (a finding: caution; the key would be copied along)
 export const SECRET_RE = /\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{36,}\b|\bgithub_pat_[A-Za-z0-9_]{40,}\b|\bsk-ant-[A-Za-z0-9_-]{20,}|\bsk-(?:proj-)?[A-Za-z0-9]{32,}\b|\bxox[abprs]-[A-Za-z0-9-]{10,}|\bAIza[0-9A-Za-z_-]{35}\b|-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----/;
 // A long base64 run (a caution; decoded and run is encoded-exec, a danger)
-export const BLOB_RE = /[A-Za-z0-9+/]{200,}={0,2}/;
+const BLOB_RE = /[A-Za-z0-9+/]{200,}={0,2}/;
 // Characters that hide text: bidirectional overrides and Unicode tag characters (danger), zero-width ones (caution)
 const HIDDEN_RE = /[\u202A-\u202E\u2066-\u2069]|\uDB40[\uDC00-\uDC7F]/;
 const INVISIBLE_RE = /[\u200B\u2060\u2061\u2062\u2063\u2064\u180E]|(?!^)\uFEFF/;
 // Words that say "do not" (English and Turkish)
 const NEGATION_RE = /\b(?:never|don'?t|do\s+not|must\s+not|should\s+not|shouldn'?t|avoid|forbidden|prohibited|not\s+allowed|refuse|reject|flag|detect|warn|asla|yapma|kullanma|çalıştırma|calistirma|etme|yasak|kaçın|kacin)\b/gi;
 // How far before a danger a negation may stand (characters between the two), and what ends a sentence between them
-export const NEGATION_NEAR = 40;
+const NEGATION_NEAR = 40;
 const SENTENCE_END_RE = /[.!?;](?:\s|$)/;
 // An HTML comment in a document that carries instructions rather than a note
 const COMMENT_RE = /<!--([\s\S]*?)-->/g;
@@ -127,7 +127,7 @@ function quotedAt(line, index, end) {
 
 // A word that says not to do it, right before index in the same sentence: at most NEGATION_NEAR characters between
 // its end and the danger, and no sentence end between them. A negation after the danger softens nothing.
-export function negatedBefore(line, index) {
+function negatedBefore(line, index) {
   const before = line.slice(0, index);
   let last = null;
   NEGATION_RE.lastIndex = 0;
@@ -504,6 +504,7 @@ export const LICENSE_FAMILY = Object.freeze({
 });
 
 // SPDX ids as people write them (in a frontmatter line or a package field), longest first
+/** @type {Array<[string, RegExp]>} */
 const SPDX_WORDS = [
   ['Apache-2.0', /\bapache(?:[- ]license)?[- ,]*(?:version\s*)?2(?:\.0)?\b/i],
   ['BSD-3-Clause', /\bbsd[- ]3(?:[- ]clause)?\b/i],
@@ -569,7 +570,7 @@ export function licenseFromLine(line) {
 const LICENSE_FILE_RE = /^(?:licen[cs]e|copying|unlicen[cs]e)(?:[-_.][a-z0-9-]+)?(?:\.(?:md|markdown|txt|rst))?$/i;
 
 // The license file directly in a folder (real files only, byte order); null when none
-export function licenseFileIn(dir) {
+function licenseFileIn(dir) {
   let ents;
   try {
     ents = fs.readdirSync(dir, { withFileTypes: true }).sort(byName);

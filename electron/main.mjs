@@ -4,10 +4,11 @@
 // http://127.0.0.1:<port>/ only; system tray; logs; QA mode (optionally hidden: nothing reaches the screen).
 // Every decision lives in helpers.mjs as a pure, tested function; this file only wires them to Electron.
 // Security: the window is sandboxed (sandbox + contextIsolation, nodeIntegration off). Its preload
-// (electron/preload.cjs) gives the page exactly seven functions, one IPC channel each, that the shell honours only
+// (electron/preload.cjs) gives the page exactly ten functions, one IPC channel each, that the shell honours only
 // from the main window's top frame on the server origin (bridgeSender): setActionsMode(mode), pickProjectFolder(),
-// createIdeaProject(name, idea, choose), pickLibraryFolder(), setLanguage(lang), saveProjectIdea(projectId, text) and
-// setAttention(count, text); nothing else reaches the renderer (the terminal bridge: test/terminal.test.mjs).
+// createIdeaProject(name, idea, choose), pickLibraryFolder(), setLanguage(lang), saveProjectIdea(projectId, text),
+// setAttention(count, text), reportError(text), openLogs() (review A4) and setTheme(theme) (plan E4); nothing else
+// reaches the renderer (the terminal bridge: test/terminal.test.mjs).
 // Permission requests are denied except notifications and clipboard writes from our own origin; the page may only
 // send network requests to its own origin.
 // New project (docs/start-flow.md, step 2): the folder picker is the shell's; the chosen folder is checked here and
@@ -39,7 +40,7 @@
 //   SIBERSENTEZ_QA_PROBES    1: after the first page load run the fixed QA probes (runQaProbes), then quit
 //   SIBERSENTEZ_QA_PROJECT_DIR  hidden runs only: the folder the probes add as a project (the picker's path, no picker)
 // In a packaged build the SIBERSENTEZ_QA_* variables only work together with the --qa switch.
-import { app, BrowserWindow, Menu, Tray, dialog as electronDialog, ipcMain, nativeImage, session, shell, utilityProcess } from 'electron';
+import { app, BrowserWindow, Menu, Tray, dialog as electronDialog, ipcMain, nativeImage, nativeTheme, session, shell, utilityProcess } from 'electron';
 import { fork as forkNode, spawn as spawnProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -49,8 +50,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import {
   rendererReloadPlan,
+  THEME_IPC_CHANNEL,
+  THEME_CHOICES,
+  WINDOW_BACKGROUND,
   ACTIONS_IPC_CHANNEL,
   ATTENTION_IPC_CHANNEL,
+  PAGE_ERROR_IPC_CHANNEL,
+  LOGS_OPEN_IPC_CHANNEL,
+  pageErrorLine,
   attentionBadgeBitmap,
   attentionPlan,
   attentionRequest,
@@ -62,7 +69,7 @@ import {
   PANEL_HANDOVER_MS,
   PROJECT_IDEA_IPC_CHANNEL,
   IDEA_PROJECT_IPC_CHANNEL,
-  IDEA_PROJECTS_DIR,
+  ideaProjectsBase,
   ideaProjectRequest,
   createIdeaProject,
   PROJECT_PICK_IPC_CHANNEL,
@@ -122,6 +129,7 @@ import {
   readShellState,
   requestActionsMode,
   requestAllowed,
+  withSessionKey,
   resolveHubPath,
   restartDue,
   settingsRestartPlan,
@@ -142,6 +150,8 @@ import {
 } from './helpers.mjs';
 import { createLogger } from './logger.mjs';
 import { createTerminals, TERMINAL_IPC, termOpenRequest, confirmQuitWithTerminals, avoidForkOnKill, taskkillTree } from './terminals.mjs';
+import { PLATFORM, installerDirs } from '../server/platform.mjs';
+import { readAutostart, writeAutostart } from './autostart.mjs';
 import { formatString, getStrings } from './strings.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -191,6 +201,8 @@ const state = {
   port: null,
   origin: null,
   instance: randomBytes(16).toString('hex'), // never logged
+  // Every /api request needs it (review A1); unlike the instance id the server never echoes it. Never logged.
+  sessionKey: randomBytes(32).toString('hex'),
   server: null, // { kind, pid, alive, exited, kill(), forceKill() }
   retired: new Set(), // server processes stopped on purpose that have not exited yet; stopped again when the app quits
   supervisor: initialSupervisor(),
@@ -311,7 +323,7 @@ function pipeLines(stream, prefix) {
 // not work there; utilityProcess always exists in Electron 44, the fallback is for development and old versions.
 function spawnServer(port, onExit) {
   const entry = path.join(app.getAppPath(), 'server', 'index.mjs');
-  const env = buildServerEnv(process.env, { port, hubPath: state.hubPath, instance: state.instance });
+  const env = buildServerEnv(process.env, { port, hubPath: state.hubPath, instance: state.instance, sessionKey: state.sessionKey });
   let markExited = () => {};
   // exited: settles when the process is gone (a requested restart waits for it so the port is free again).
   // forceKill: terminates the process by pid, only while no exit was seen (a pid is never reused before that).
@@ -622,6 +634,10 @@ function hardenSession(ses) {
     if (!ok) log(`network request blocked: ${describeUrl(details.url)}`);
     callback({ cancel: !ok });
   });
+  // The session key rides on every request to our own server, added here so the page never holds it
+  ses.webRequest.onBeforeSendHeaders({ urls: ['http://*/*'] }, (details, callback) => {
+    callback({ requestHeaders: withSessionKey(details.url, state.origin, details.requestHeaders, state.sessionKey) });
+  });
 }
 
 // ---------------------------------------------------------------- window
@@ -639,7 +655,9 @@ function onAttention(event, count, text) {
   attention.count = check.count;
   attention.tooltip = plan.tooltip;
   if (win && !win.isDestroyed()) {
-    if (plan.overlay) {
+    // The taskbar's overlay is Windows'; Linux (Unity-style launchers) and macOS show the count on the app's icon
+    if (process.platform !== 'win32') app.setBadgeCount?.(plan.overlay ? check.count : 0);
+    else if (plan.overlay) {
       attention.badge = attention.badge || nativeImage.createFromBitmap(attentionBadgeBitmap(16), { width: 16, height: 16 });
       win.setOverlayIcon(attention.badge, check.text);
     } else win.setOverlayIcon(null, '');
@@ -758,6 +776,8 @@ function loginItemOptions() {
 }
 
 function readOpenAtLogin() {
+  // Linux: Electron has no login items there; a .desktop file in ~/.config/autostart (autostart.mjs, plan G2)
+  if (process.platform === 'linux') return readAutostart(process.env);
   try {
     return app.getLoginItemSettings(loginItemOptions()).openAtLogin === true;
   } catch {
@@ -767,6 +787,12 @@ function readOpenAtLogin() {
 
 // Called only when the user clicks the checkbox in the tray
 function setOpenAtLogin(enabled) {
+  if (process.platform === 'linux') {
+    const o = loginItemOptions();
+    log(writeAutostart(enabled, { env: process.env, exe: o.path, args: o.args }) ? `start at login: ${enabled ? 'on' : 'off'}` : 'start at login could not be changed (autostart file)');
+    refreshTrayMenu();
+    return;
+  }
   try {
     app.setLoginItemSettings({ openAtLogin: enabled, ...loginItemOptions() });
     log(`start at login: ${enabled ? 'on' : 'off'}`);
@@ -1021,6 +1047,23 @@ function projectFolderRules() {
   };
 }
 
+// The page's own errors (review A4): written to main.log, checked and capped by pageErrorLine
+let pageErrorsLogged = 0;
+function onPageError(event, text) {
+  const line = pageErrorLine({ text, logged: pageErrorsLogged, ...senderFacts(event) });
+  if (!line) return false;
+  pageErrorsLogged++;
+  log(line);
+  return true;
+}
+// Settings → Log files: the folder of these logs in File Explorer (a folder, never a file that could run)
+async function onOpenLogs(event) {
+  if (!bridgeSender(senderFacts(event)).ok) return { ok: false, reason: 'refused' };
+  const problem = await shell.openPath(LOG_DIR).catch((e) => e?.message || 'error');
+  if (problem) log(`log folder could not be opened: ${problem}`);
+  return problem ? { ok: false, reason: 'failed' } : { ok: true };
+}
+
 // The sender of a bridge call as bridgeSender reads it (the same facts onPanelActionsRequest passes)
 function senderFacts(event) {
   return { mainWindow: Boolean(win && !win.isDestroyed() && event?.sender === win.webContents), frame: frameFacts(event?.senderFrame), origin: state.origin };
@@ -1054,6 +1097,17 @@ async function onPickProjectFolderRequest(event) {
   } finally {
     state.pickingFolder = false;
   }
+}
+
+// window.sibersentezShell.setTheme(theme): the look chosen in Settings ('dark' | 'light' | 'system'). Same sender rule;
+// nothing is saved here (the page keeps its choice and tells it again at every start): the title bar follows at once.
+function onSetThemeRequest(event, theme) {
+  const check = bridgeSender(senderFacts(event));
+  if (!check.ok) return { ok: false, reason: 'refused' };
+  if (!THEME_CHOICES.includes(theme)) return { ok: false, reason: 'invalid' };
+  nativeTheme.themeSource = theme;
+  if (win && !win.isDestroyed()) win.setBackgroundColor(nativeTheme.shouldUseDarkColors ? WINDOW_BACKGROUND.dark : WINDOW_BACKGROUND.light);
+  return { ok: true };
 }
 
 // window.sibersentezShell.setLanguage(lang): the language chosen in Settings ('auto' | 'en' | 'tr'). Same sender rule;
@@ -1120,12 +1174,10 @@ async function onCreateIdeaProjectRequest(event, name, idea, choose) {
     let documents = null;
     try {
       documents = app.getPath('documents');
-    } catch {
-      documents = path.join(HOME_DIR, 'Documents');
-    }
+    } catch {}
     const result = await createIdeaProject({
       S,
-      base: path.join(documents, IDEA_PROJECTS_DIR),
+      base: ideaProjectsBase(documents, HOME_DIR),
       name: req.name,
       idea: req.idea,
       choose: req.choose,
@@ -1422,12 +1474,18 @@ async function runQaProbes() {
 // The embedded terminals' pseudo console in this build (docs/embedded-terminal.md): node-pty loads from outside the
 // archive and runs one fixed command in the temp folder; nothing reaches the window
 async function qaTerminalProbe() {
-  const unpacked = app.isPackaged ? fs.existsSync(path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'node-pty', 'prebuilds', 'win32-x64', 'conpty.node')) : null;
+  // The platform's own pty binary: Windows' and macOS' prebuilt ones; on Linux node-pty is built from source
+  // (build/Release/pty.node), there is no prebuilt binary for it
+  const ptyBin = process.platform === 'win32' ? ['prebuilds', 'win32-x64', 'conpty.node'] : process.platform === 'darwin' ? ['prebuilds', `darwin-${process.arch}`, 'pty.node'] : ['build', 'Release', 'pty.node'];
+  const unpacked = app.isPackaged ? fs.existsSync(path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'node-pty', ...ptyBin)) : null;
   const result = await new Promise((resolve) => {
     let out = '';
     let p;
     try {
-      p = loadPty().spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe'), ['/d', '/c', 'echo sibersentez-pty-ok'], { name: 'xterm-256color', useConpty: true, cwd: os.tmpdir(), cols: 80, rows: 24, env: { SystemRoot: process.env.SystemRoot || 'C:\\Windows' } }); // an empty environment: CreateProcess error 87 on current Windows
+      p =
+        process.platform === 'win32'
+          ? loadPty().spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'cmd.exe'), ['/d', '/c', 'echo sibersentez-pty-ok'], { name: 'xterm-256color', useConpty: true, cwd: os.tmpdir(), cols: 80, rows: 24, env: { SystemRoot: process.env.SystemRoot || 'C:\\Windows' } }) // an empty environment: CreateProcess error 87 on current Windows
+          : loadPty().spawn('/bin/sh', ['-c', 'echo sibersentez-pty-ok'], { name: 'xterm-256color', cwd: os.tmpdir(), cols: 80, rows: 24, env: { PATH: '/usr/bin:/bin' } });
     } catch (e) {
       resolve({ loaded: false, error: e?.code || e?.message || 'error' });
       return;
@@ -1477,6 +1535,15 @@ const terminals = createTerminals({
   onChange: (ended) => tellServerTerminals(ended),
   log,
   env: process.env,
+  // The official installers' folders, so a tool installed after the app started is found by name (withToolDirs):
+  // looked at again for every terminal, as the tool search does (a Node.js nvm installed meanwhile has a folder of its own)
+  toolDirs: () => installerDirs(process.env, PLATFORM, (dir) => {
+    try {
+      return fs.readdirSync(dir);
+    } catch {
+      return [];
+    }
+  }).map((x) => x.dir),
 });
 function tellServerTerminals(ended = null) {
   serverCalls.call(state.server, 'terminal-state', { sessions: terminals.sessions(), ended }).catch(() => {});
@@ -1510,7 +1577,7 @@ async function quitWithTerminalsConfirmed(reason) {
 }
 
 function main() {
-  app.setAppUserModelId(APP_ID);
+  if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
   if (QA_SHELL.hidden) {
     // Electron reports an uncaught error of the main process in a native dialog; a hidden run logs it and quits instead
     process.on('uncaughtException', (e) => {
@@ -1559,9 +1626,14 @@ function main() {
       ipcMain.handle(PROJECT_PICK_IPC_CHANNEL, onPickProjectFolderRequest);
       ipcMain.handle(LIBRARY_PICK_IPC_CHANNEL, onPickLibraryFolderRequest);
       ipcMain.handle(LANGUAGE_IPC_CHANNEL, onSetLanguageRequest);
+      ipcMain.handle(THEME_IPC_CHANNEL, onSetThemeRequest);
+      // Like the system: the window's background follows when the system turns light or dark
+      nativeTheme.on('updated', () => win && !win.isDestroyed() && win.setBackgroundColor(nativeTheme.shouldUseDarkColors ? WINDOW_BACKGROUND.dark : WINDOW_BACKGROUND.light));
       ipcMain.handle(PROJECT_IDEA_IPC_CHANNEL, onSaveProjectIdeaRequest);
       ipcMain.handle(IDEA_PROJECT_IPC_CHANNEL, onCreateIdeaProjectRequest);
       ipcMain.handle(ATTENTION_IPC_CHANNEL, onAttention);
+      ipcMain.handle(PAGE_ERROR_IPC_CHANNEL, onPageError);
+      ipcMain.handle(LOGS_OPEN_IPC_CHANNEL, onOpenLogs);
       ipcMain.handle(TERMINAL_IPC.open, onTermOpen);
       ipcMain.handle(TERMINAL_IPC.list, (event) => (termSenderOk(event) ? terminals.list() : []));
       ipcMain.handle(TERMINAL_IPC.close, (event, id) => termSenderOk(event) && terminals.close(id));

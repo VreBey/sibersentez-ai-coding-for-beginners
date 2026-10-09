@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { Catalog } from '../server/catalog.mjs';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 const read = (f) => fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 
@@ -16,7 +17,7 @@ test('the first catalog load skips the skill scan; the scan after the logs does 
   assert.ok(after.includes('reloadCatalog();'), 'the full roster comes after the first log scan');
 });
 
-test('the list offers "Add to the library" from the item places alone; library, kit, the hub and the home folder never', () => {
+test('the list offers "Add to the library" from the item places alone; library, kit, the hub and the home folder never', { skip: WIN_ONLY }, () => {
   const c = new Catalog({ hubDir: 'C:\\Users\\u\\SiberSentez', claudeDir: 'C:\\Users\\u\\.claude', homeDir: 'C:\\Users\\u', adapters: [], env: {} });
   c.itemFiles = new Map([
     ['skill:mine', [{ source: 'project', file: 'C:\\work\\app\\.claude\\skills\\mine\\SKILL.md' }]],
@@ -36,5 +37,5 @@ test('the list offers "Add to the library" from the item places alone; library, 
   assert.equal(c.itemOriginLikely('plugin', 'mine'), false);
   assert.equal(c.itemOriginLikely('skill', 'none'), false);
   assert.ok(read('server/views.mjs').includes('catalog.itemOriginLikely(it.kind, it.name)'), 'the roster view uses it');
-  assert.ok(read('server/actions.mjs').includes('catalog.itemOrigin(it.kind, it.name)'), 'the action keeps the disk check');
+  assert.ok(read('server/actionInput.mjs').includes('catalog.itemOrigin(it.kind, it.name)'), 'the action keeps the disk check');
 });

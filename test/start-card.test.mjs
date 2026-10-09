@@ -12,12 +12,12 @@ const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
 test('no project of their own: only the start card leads; with a project, the strip and the job row come back', () => {
   assert.deepEqual(firstScreenParts({ live: true, loaded: true, ownProject: false }), { strip: false, jobRow: false, headerQuiet: true, playQuiet: true });
-  assert.deepEqual(firstScreenParts({ live: true, loaded: true, ownProject: true }), { strip: true, jobRow: true, headerQuiet: false, playQuiet: false });
+  assert.deepEqual(firstScreenParts({ live: true, loaded: true, ownProject: true }), { strip: true, jobRow: true, headerQuiet: true, playQuiet: true }, 'with a project: Start (or the strip) leads; New project and Play are quiet (review B1)');
   // Folders found by other tools, none active lately: no card (they are the person's), nothing in the Building. The
   // strip's "create a project" is the one primary start; no job row (no project to give it to); the header is quiet
-  assert.deepEqual(firstScreenParts({ live: true, loaded: true, ownProject: true, buildingProject: false }), { strip: true, jobRow: false, headerQuiet: true, playQuiet: false });
+  assert.deepEqual(firstScreenParts({ live: true, loaded: true, ownProject: true, buildingProject: false }), { strip: true, jobRow: false, headerQuiet: true, playQuiet: true });
   // Not loaded yet: nothing is hidden on a guess
-  assert.deepEqual(firstScreenParts({ live: true, loaded: false, ownProject: false }), { strip: true, jobRow: true, headerQuiet: false, playQuiet: false });
+  assert.deepEqual(firstScreenParts({ live: true, loaded: false, ownProject: false }), { strip: true, jobRow: true, headerQuiet: true, playQuiet: true });
   // The example plays: its strip says it is an example, even with no project (its way back is there)
   assert.deepEqual(firstScreenParts({ live: false, loaded: true, ownProject: false }), { strip: true, jobRow: true, headerQuiet: true, playQuiet: false });
   // A broad folder is no project of their own (checklist.js, the same rule as the card)
@@ -65,4 +65,16 @@ test("main.js: a helper is defined before the code that runs at load uses it (a 
   assert.ok(main.indexOf('const drawer = createDrawer(') < def, 'and after the drawer it closes');
   // The guide's tour and tools close the drawer first, as the search's commands do (review round 2)
   for (const s of ['tour: leaveDrawer(() => tour.show())', 'tools: leaveDrawer(() => openToolsPanel())']) assert.ok(main.includes(s), s);
+});
+
+test('one primary action (review B1): the strip leads when the person is needed, else Start; never both', async () => {
+  const { primaryIsNext, NEXT_PRIMARY } = await import('../public/js/firstScreen.js');
+  for (const k of ['newProject', 'error', 'plan', 'result', 'waiting', 'stopped']) assert.equal(primaryIsNext(k), true, k);
+  for (const k of ['give', 'working', 'running', 'demo', 'past']) assert.equal(primaryIsNext(k), false, k);
+  assert.equal(primaryIsNext('waiting', false), false, 'no button: Start stays');
+  assert.equal(NEXT_PRIMARY.size, 6);
+  const ws = read('public/js/views/workshop.js');
+  assert.ok(ws.includes("$('next-go').classList.toggle('primary', nextFirst);") && ws.includes("$('give-go').classList.toggle('quiet', nextFirst);"));
+  const css = read('public/css/workshop.css');
+  assert.ok(css.includes('.ws .ws-give button.quiet {') && css.includes('.ws-next button.primary {'));
 });

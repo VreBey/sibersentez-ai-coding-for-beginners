@@ -1,3 +1,4 @@
+// @ts-check
 // "What changed" (docs/changes.md): the files an AI tool created or changed in a project, newest first. A git
 // repository answers from `git status` (new, changed, deleted, renamed; read-only, no lock, no file system monitor);
 // a folder without git from the files' change times of the last 24 hours. Read-only: nothing is written or run in the
@@ -9,12 +10,12 @@ import { isLocalPath } from './fsutil.mjs';
 import { normPath } from './util.mjs';
 import { hasStreamColon } from './library.mjs';
 import { signalRoot } from './suggest.mjs';
-import { GIT_SAFE_ARGS, gitDirArgs, repoCheck } from './git.mjs';
+import { GIT_SAFE_ARGS, gitDirArgs, repoCheck, gitProgram } from './git.mjs';
 
 export const MAX_FILES = 30;
 export const RECENT_MS = 24 * 3600 * 1000;
 // Folders never walked: packages, builds, caches, virtual environments, engines' generated folders
-export const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'target', 'bin', 'obj', 'library', 'temp', 'logs', 'venv', '__pycache__', 'coverage', 'vendor', 'packages', 'intermediate', 'binaries', 'deriveddatacache', 'saved']);
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'target', 'bin', 'obj', 'library', 'temp', 'logs', 'venv', '__pycache__', 'coverage', 'vendor', 'packages', 'intermediate', 'binaries', 'deriveddatacache', 'saved']);
 const WALK_BUDGET = 5000; // entries looked at, at most
 const WALK_DEPTH = 6;
 const GIT_ENV = { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
@@ -36,17 +37,20 @@ export function parsePorcelain(text, max = MAX_FILES) {
       more = true;
       break;
     }
-    files.push({ path: p.replace(/\//g, '\\'), kind });
+    // Shown with the platform's own separator (git writes /)
+    files.push({ path: p.split('/').join(path.sep), kind });
   }
   return { files, more };
 }
 
 // git status of a repository, at most `max` entries read (git is stopped after them); null when git cannot answer
-export function gitStatus(dir, { max = MAX_FILES, run = spawn, timeoutMs = 10000 } = {}) {
+// exe: git by absolute path (git.mjs gitProgram); none: null at once
+export function gitStatus(dir, { max = MAX_FILES, run = spawn, timeoutMs = 10000, exe = gitProgram() } = {}) {
   return new Promise((resolve) => {
     let child;
+    if (!exe) return resolve(null);
     try {
-      child = run('git', [...GIT_SAFE_ARGS, ...gitDirArgs(dir), 'status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all'], { windowsHide: true, env: GIT_ENV, stdio: ['ignore', 'pipe', 'ignore'] });
+      child = run(exe, [...GIT_SAFE_ARGS, ...gitDirArgs(dir), 'status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=all'], { windowsHide: true, env: GIT_ENV, stdio: ['ignore', 'pipe', 'ignore'] });
     } catch {
       return resolve(null);
     }
@@ -98,7 +102,7 @@ export function recentFiles(dir, { now = Date.now(), since = RECENT_MS, max = MA
     for (let e = readEntry(d); e; e = readEntry(d)) {
       if (--budget <= 0) break;
       const name = e.name;
-      const r = rel ? `${rel}\\${name}` : name;
+      const r = rel ? `${rel}${path.sep}${name}` : name;
       if (e.isDirectory()) {
         if (depth + 1 < WALK_DEPTH && !name.startsWith('.') && !SKIP_DIRS.has(name.toLowerCase())) queue.push([path.join(abs, name), r, depth + 1]);
         continue;

@@ -1,3 +1,4 @@
+// @ts-check
 // Open Claude Code sessions: ~/.claude/sessions/<pid>.json (busy/idle state).
 // Only *.json is read; the .key files next to them are left alone.
 // Windows reuses PIDs: so that a record left by a crashed session does not show a "ghost" session when its PID passes to
@@ -8,6 +9,9 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { SESSIONS_DIR } from './config.mjs';
 import { readJson, isAlive } from './util.mjs';
+import { PLATFORM } from './platform.mjs';
+// By absolute path (review A7): Windows would look for a bare 'powershell' in the working folder first
+const POWERSHELL_EXE = path.win32.join(process.env.SystemRoot || process.env.windir || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 
 const EPOCH_DIFF_MS = 11644473600000; // between 1601-01-01 and 1970-01-01
 const BACKOFF_MS = [10000, 60000, 300000]; // gap after 0, 1, 2+ failed reads in a row
@@ -15,7 +19,7 @@ const BACKOFF_MS = [10000, 60000, 300000]; // gap after 0, 1, 2+ failed reads in
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/g;
 
 // FILETIME (1601'den beri 100 ns) -> Unix ms
-export function filetimeMs(ft) {
+function filetimeMs(ft) {
   try {
     return Number(BigInt(String(ft)) / 10000n) - EPOCH_DIFF_MS;
   } catch {
@@ -76,7 +80,7 @@ function runRefresh() {
   const began = Date.now();
   inflightAt = began;
   lastBegan = began;
-  execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', SCRIPT], { windowsHide: true, timeout: 30000, maxBuffer: 4 << 20 }, (err, stdout) => {
+  execFile(POWERSHELL_EXE, ['-NoProfile', '-NonInteractive', '-Command', SCRIPT], { windowsHide: true, timeout: 30000, maxBuffer: 4 << 20 }, (err, stdout) => {
     refreshing = false;
     if (!err) {
       const m = new Map();
@@ -116,13 +120,15 @@ function requestRefresh(after) {
 // PowerShell takes ~0.7 s of CPU per call: it runs not continuously, only when a session that cannot be
 // verified shows up, and every 5 minutes for safety (for a dead session whose PID was taken over at once)
 export function startLiveVerifier() {
+  // Windows only (Win32_Process, FILETIME): elsewhere "is it alive" alone (plan G1; Linux reuses PIDs much later)
+  if (!PLATFORM.windows) return;
   runRefresh();
   setInterval(() => requestRefresh(Infinity), 5 * 60000).unref();
 }
 
 function sameProcess(d) {
   if (!isAlive(d.pid)) return false;
-  if (!d.procStart) return true;
+  if (!d.procStart || !PLATFORM.windows) return true;
   const v = liveVerdict(d.procStart, d.pid, startTimes, startTimesAt);
   if (v === 'check') requestRefresh(filetimeMs(d.procStart));
   return v !== 'dead';

@@ -1,3 +1,4 @@
+// @ts-check
 // Source adapters: one per AI coding tool. The catalog knows no tool; it asks every adapter whose tool is present
 // for projects and items, and remembers every project folder it was shown (memory.mjs), so a project stays listed
 // after a tool deletes its own logs. Contract of the tool adapters: docs/adapters-wave1.md.
@@ -33,7 +34,9 @@
 // folders that do not exist) before remembering them, so adapters may return raw candidates.
 //
 // Privacy: adapters read metadata only (contract §3). Chat and session content, later lines of a session log and
-// SQLite databases are never opened, and nothing is written into a tool's folders.
+// SQLite databases are never opened by them, and nothing is written into a tool's folders. (The session reader is
+// another part: server/ingest.mjs with server/toolLogs.mjs reads the tools' session logs, and OpenCode's database
+// read-only, for the live view and the usage ledger; README "Privacy and security".)
 import { claudeCode } from './claude-code.mjs';
 import { codex } from './codex.mjs';
 import { geminiCli } from './gemini-cli.mjs';

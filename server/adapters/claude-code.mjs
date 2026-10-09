@@ -1,3 +1,4 @@
+// @ts-check
 // Claude Code source adapter (see adapters/index.mjs for the adapter interface).
 //   projects: every folder under ~/.claude/projects is one working directory. Its path comes from the "cwd" at
 //             the head of the newest session file; a folder without session files (only memory/ left, since
@@ -10,6 +11,7 @@ import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { readJson, normPath, slugify } from '../util.mjs';
 import { DirLister, PLAIN_LISTER, exists, listDirs, safeDirs, skillDirs, walkMd } from '../fsutil.mjs';
+import { PLATFORM } from '../platform.mjs';
 
 // Descriptions of the built-in agent types (English; the page shows them in its language: format.js BUILTIN_AGENT_KEYS)
 export const BUILTIN_AGENTS = {
@@ -76,22 +78,31 @@ export function readHeadCwd(file) {
 // root and at every level descend only into sub folders whose own slug is a prefix of what is left; names with
 // spaces, dots or non-ASCII letters therefore match. Only a single existing match is accepted: an ambiguous name
 // ("a b" and "a-b" side by side) or no match gives null. readDirs(dir) lists sub folder names (can be cached).
-export function resolveSlug(slug, readDirs = (d) => listDirs(d, { hidden: true })) {
+// Linux and macOS (plan G5): the name starts at the root, "/home/a/My App" -> "-home-a-My-App"; the walk starts at /.
+export function resolveSlug(slug, readDirs = (d) => listDirs(d, { hidden: true }), plat = PLATFORM) {
+  if (!plat.windows) {
+    const u = /^-(.+)$/.exec(String(slug || ''));
+    return u ? walkSlug('/', u[1].toLowerCase(), readDirs, plat.path) : null;
+  }
   const m = /^([A-Za-z])--(.+)$/.exec(String(slug || ''));
   if (!m) return null;
-  const target = m[2].toLowerCase();
+  return walkSlug(`${m[1].toUpperCase()}:\\`, m[2].toLowerCase(), readDirs, path);
+}
+
+
+function walkSlug(root, target, readDirs, p) {
   const found = [];
   const walk = (dir, rest, depth) => {
     if (found.length > 1 || depth > SLUG_MAX_DEPTH) return;
     for (const name of readDirs(dir)) {
       const s = slugify(name).toLowerCase();
       if (!s) continue;
-      if (rest === s) found.push(path.join(dir, name));
-      else if (rest.startsWith(s + '-')) walk(path.join(dir, name), rest.slice(s.length + 1), depth + 1);
+      if (rest === s) found.push(p.join(dir, name));
+      else if (rest.startsWith(s + '-')) walk(p.join(dir, name), rest.slice(s.length + 1), depth + 1);
       if (found.length > 1) return;
     }
   };
-  walk(`${m[1].toUpperCase()}:\\`, target, 0);
+  walk(root, target, 0);
   return found.length === 1 ? found[0] : null;
 }
 

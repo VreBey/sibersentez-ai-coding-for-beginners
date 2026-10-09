@@ -1,3 +1,4 @@
+// @ts-check
 // Hub folder layout (contract §2, §6A, §9): creating the skeleton and reading the registry, library and settings.
 // Pure module: only node built-ins and util.mjs, never config.mjs. The Electron main process calls initHub on
 // first launch; the server itself never creates the hub.
@@ -196,7 +197,7 @@ export function normalizeLibrary(raw) {
 }
 
 // Hub settings file and the action modes it may hold (docs/actions-toggle.md §3.1)
-export const SETTINGS_FILE = 'settings.json';
+const SETTINGS_FILE = 'settings.json';
 export const ACTION_MODES = Object.freeze(['off', 'dry', 'live']);
 
 // "actions" from <hub>/settings.json, read by the server once at start. Only the desktop shell writes this key

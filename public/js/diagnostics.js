@@ -18,8 +18,9 @@ function toolLine(x) {
   return `- ${x.name} ${x.version || '(version unknown)'} (${bits.join('; ')})`;
 }
 
-// { about (GET /api/about), tools (the tools state), mode, lang, desktop (the desktop app or a browser), now } -> text
-export function diagnosticsText({ about = null, tools = null, mode = 'off', lang = 'en', desktop = false, now = Date.now() } = {}) {
+// { about (GET /api/about), tools (the tools state), mode, lang, desktop (the desktop app or a browser), pageErrors (how
+// many errors the page met this run, pageErrors.js; their text stays in the log), now } -> text
+export function diagnosticsText({ about = null, tools = null, mode = 'off', lang = 'en', desktop = false, pageErrors = null, now = Date.now() } = {}) {
   const a = about && typeof about === 'object' ? about : {};
   const head = [`SiberSentez ${word(a.version) || '(version unknown)'}`, word(a.os), word(a.arch), word(a.electron) ? `Electron ${word(a.electron)}` : null, word(a.node) ? `server Node ${word(a.node)}` : null].filter(Boolean);
   const lines = [head.join(' · '), `Language: ${lang === 'tr' ? 'tr' : 'en'} · Actions: ${['off', 'dry', 'live'].includes(mode) ? mode : 'off'} · ${desktop ? 'desktop app' : 'browser'}`];
@@ -37,6 +38,7 @@ export function diagnosticsText({ about = null, tools = null, mode = 'off', lang
     const found = diagnose(tools);
     lines.push(`Setup check: ${found.length ? found.map((p) => (p.tool ? `${p.id} (${TOOL_INFO[p.tool]?.name || p.tool})` : p.id)).join(', ') : 'nothing found'}`);
   } else lines.push('AI tools: not checked (the check did not answer)');
+  if (Number.isInteger(pageErrors) && pageErrors >= 0) lines.push(`Page errors this run: ${pageErrors}${pageErrors && desktop ? ' (details in main.log)' : ''}`);
   lines.push(`At: ${new Date(now).toISOString()}`);
   return lines.join('\n');
 }

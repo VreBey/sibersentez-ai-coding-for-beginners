@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings for fixed texts the server writes into its data in English (public/js/format.js eventText,
 // itemDescription). Same keys in en and tr; placeholders use {name}. Merged by public/js/i18n.js.
 export default {

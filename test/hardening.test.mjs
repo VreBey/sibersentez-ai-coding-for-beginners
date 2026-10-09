@@ -151,3 +151,22 @@ test('usage ledger: a file over 8 MB is set aside unread and rebuilt; a broken f
   for (const n of older) assert.match(n, /^ledger\.json\.broken-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z(?:-\d+)?$/, n);
   assert.deepEqual(older.map((n) => fs.readFileSync(path.join(dir, n), 'utf8')).sort(), ['broken 3', 'broken 4'], 'the most recent copies, none overwritten');
 });
+
+test('usage ledger: copies set aside within one millisecond (a coarse file clock) still keep the newest two, in order', () => {
+  const NOW = Date.UTC(2026, 8, 29, 12);
+  const hub = path.join(ROOT, 'hub-ledger-same-ms');
+  const dir = path.join(hub, 'usage');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = usage.ledgerFile(hub);
+  const open = () => new usage.UsageLedger({ hubDir: hub, now: () => NOW, log: () => {}, debounceMs: 0 });
+  const same = new Date(NOW);
+  for (let i = 1; i <= 14; i++) {
+    fs.writeFileSync(file, `broken ${i}`);
+    fs.utimesSync(file, same, same);
+    open();
+  }
+  const older = fs.readdirSync(dir).filter((n) => n.startsWith('ledger.json.broken-'));
+  assert.equal(older.length, 2, older.join(', '));
+  assert.deepEqual(older.map((n) => fs.readFileSync(path.join(dir, n), 'utf8')).sort(), ['broken 12', 'broken 13'], 'the newest copies, past -9 and after a pruned name');
+  assert.equal(fs.readFileSync(`${file}.broken`, 'utf8'), 'broken 14');
+});

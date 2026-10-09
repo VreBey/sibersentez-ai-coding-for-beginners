@@ -1,3 +1,4 @@
+// @ts-check
 // Install, remove and try library items in a project (docs/skills-flow.md §3).
 //
 // Where an item comes from: the hub library first; an item the library does not hold comes from the SiberSentez kit
@@ -20,6 +21,7 @@ import { codeError, lstat, isLink, isRealDir, findLibraryItem, treeHash, measure
 import { readKit, findKitItem, defaultKitDir, KIT_SOURCE } from './kit.mjs';
 import { AGENT_FORMATS, AGENT_FORMAT_VERSION, agentFileName, convertAgent } from './agentFormats.mjs';
 import crypto from 'node:crypto';
+import { normalizeDir, isSystemFolder } from './platform.mjs';
 
 // claude and agents hold skills (and claude the agents as they are); gemini, qwen, opencode and codex hold agents only,
 // converted to that tool's own file (server/agentFormats.mjs, 2026-10-07)
@@ -32,7 +34,7 @@ const srcHashOf = (libHash) => `${libHash}|f${AGENT_FORMAT_VERSION}`;
 // Tools that read the shared Agent Skills folder (.agents/skills) and not .claude/skills
 const AGENTS_TOOLS = Object.freeze(['codex', 'gemini-cli', 'antigravity']);
 export const TRIAL_MARKER = '.sibersentez-trial.json';
-export const TRIAL_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+const TRIAL_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
 const TRIAL_RE = /^\d{8}-\d{6}-\d{3}-[a-z0-9][a-z0-9-]{0,39}(?:-\d{1,3})?$/;
 const fail = (status, error) => ({ ok: false, status, error });
 
@@ -51,7 +53,7 @@ export function defaultTargets(via) {
 // Install record
 // ---------------------------------------------------------------------------------------------------------------
 
-export function installsFile(hubDir) {
+function installsFile(hubDir) {
   return path.join(hubDir, 'registry', 'installs.json');
 }
 
@@ -82,7 +84,7 @@ export function readInstalls(hubDir) {
   return { ok: true, installs: data.installs.filter(validRecord), rows: data.installs.slice() };
 }
 
-export function writeInstalls(hubDir, rows) {
+function writeInstalls(hubDir, rows) {
   writeJsonAtomic(installsFile(hubDir), { version: 1, installs: rows });
 }
 
@@ -90,7 +92,7 @@ const recKey = (r) => `${r.project}|${r.target}|${r.kind}|${r.name}`.toLowerCase
 
 // The record of an item in a project and target, only when it points at this very destination (a project that moved
 // keeps its old record, which never makes SiberSentez touch the new folder)
-export function findRecord(installs, projectId, target, kind, name, dest) {
+function findRecord(installs, projectId, target, kind, name, dest) {
   const k = recKey({ project: projectId, target, kind, name });
   return installs.find((r) => recKey(r) === k && normPath(r.path) === normPath(dest)) || null;
 }
@@ -114,7 +116,7 @@ export function isBroadFolder(dir, homeDir) {
   const homes = homeDir ? [homeDir, realPath(homeDir)].filter(Boolean) : [];
   return forms.some((f) => {
     const n = normPath(f);
-    if (isDriveRoot(f) || /^[a-z]:$/.test(n) || /\/windows\/system32$/.test(n)) return true;
+    if (isDriveRoot(f) || /^[a-z]:$/.test(n) || isSystemFolder(n)) return true;
     return homes.some((h) => ['', 'Desktop', 'Documents', 'Downloads'].some((x) => n === normPath(x ? path.join(h, x) : h)));
   });
 }
@@ -128,8 +130,7 @@ export function resolveProject({ catalog, projectId, hubDir = null, homeDir = nu
   if (p.broad) return fail(409, 'broad-folder');
   if (!p.path || p.tmpOnly) return fail(404, 'folder-missing');
   if (!isLocalPath(p.path) || hasStreamColon(p.path) || /[\u0000-\u001f\u007f-\u009f]/.test(p.path)) return fail(409, 'not-local');
-  let dir = path.win32.normalize(p.path);
-  if (dir.length > 3) dir = dir.replace(/[\\/]+$/, '');
+  const dir = normalizeDir(p.path);
   if (isBroadFolder(dir, homeDir) || (typeof catalog.isBroad === 'function' && catalog.isBroad(normPath(dir)))) return fail(409, 'broad-folder');
   let st = null;
   try {
@@ -502,7 +503,7 @@ export function cleanupTrials(hubDir, { now = Date.now(), maxAgeMs = TRIAL_MAX_A
 // copy stages now) and its skills/ or agents/ folder (where an older version staged). Only rows shaped like an
 // install (…/.claude|.agents/skills|agents/<item>), a local path without a ':' after the drive letter, no link
 // anywhere on the way (the real path of the tool folder is the recorded one), never the personal Claude folder.
-export function recordStageDirs(installs, { claudeDir = null } = {}) {
+function recordStageDirs(installs, { claudeDir = null } = {}) {
   const out = new Map();
   const realClaude = claudeDir ? realPath(claudeDir) : null;
   for (const r of installs) {

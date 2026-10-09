@@ -4,6 +4,8 @@
 // program is fixed here. Pure over its parts (spawn, send, log) so the tests run it with a fake pty.
 import fs from 'node:fs';
 import path from 'node:path';
+import { PROJECT_ID_RE } from '../server/util.mjs';
+import { PLATFORM, terminalShell } from '../server/platform.mjs';
 
 export const TERMINAL_IPC = Object.freeze({
   open: 'sibersentez:term-open',
@@ -22,11 +24,12 @@ export const TOOL_CHECK_MS = 1500;
 export const MAX_TERMINALS = 8;
 export const MAX_WRITE = 64 * 1024; // one write from the page (a paste included)
 export const MAX_BUFFER = 256 * 1024; // kept per terminal, so a reloaded page shows what was there
-export const BATCH_MS = 32; // pty output is sent to the window at most this often (one message per window)
-export const HIGH_WATER = 128 * 1024; // bytes waiting for the next send; above it the pty is paused until the window passes
-export const COLS = Object.freeze([2, 500]);
-export const ROWS = Object.freeze([2, 200]);
-const PROJECT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const BATCH_MS = 32; // pty output is sent to the window at most this often (one message per window)
+const HIGH_WATER = 128 * 1024; // bytes waiting for the next send; above it the pty is paused until the window passes
+const COLS = Object.freeze([2, 500]);
+const ROWS = Object.freeze([2, 200]);
+// One project id rule with the server (plan D9)
+const PROJECT_ID = PROJECT_ID_RE;
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TERM_ID = /^t[1-9][0-9]{0,6}$/;
 // A tool id of the tools list (server/tools.mjs) and an app job id (server/job-id.mjs); anything else is dropped
@@ -34,9 +37,11 @@ const TOOL_ID = /^[a-z][a-z0-9-]{1,30}$/;
 const JOB_ID = /^J[0-9a-f]{32}$/;
 const LAUNCH_ID = /^L[0-9a-f]{24}$/;
 
-// The shell every terminal starts: Windows PowerShell by its full path (the install commands the AI tools document are
-// PowerShell); no profile-independent switches beyond -NoLogo, so the person's own profile still applies
-export function terminalProgram(systemRoot = process.env.SystemRoot || 'C:\\Windows') {
+// The shell every terminal starts: on Windows, Windows PowerShell by its full path (the install commands the AI tools
+// document are PowerShell); no profile-independent switches beyond -NoLogo, so the person's own profile still applies.
+// On Linux and macOS the person's login shell (server/platform.mjs terminalShell, plan G1).
+export function terminalProgram(systemRoot = process.env.SystemRoot || 'C:\\Windows', plat = PLATFORM, env = process.env, exists = (p) => fs.existsSync(p)) {
+  if (!plat.windows) return terminalShell(env, plat, exists);
   return { file: path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), args: ['-NoLogo'] };
 }
 
@@ -93,6 +98,26 @@ export function terminalEnv(env = {}) {
   }
   out.COLORTERM = 'truecolor';
   return out;
+}
+
+// The installers' folders (platform.mjs installerDirs) after the PATH a terminal gets, each once: a tool installed
+// after SiberSentez started is in none of its PATH, and Claude Code's native installer on Linux leaves ~/.local/bin out
+// until the next login, so "claude" was not found in the app's own terminal (tried on WSL, 2026-10-09). A folder made
+// later still counts: the shell looks the command up when it runs. Windows names the variable Path and ignores case
+// and the slash's direction. Empty entries are dropped on purpose: on Linux and macOS one means the current folder, so a
+// project could put a "git" or "claude" of its own in front of the real one.
+export function withToolDirs(env, dirs = [], plat = PLATFORM) {
+  if (!dirs.length) return env;
+  const key = Object.keys(env).find((k) => (plat.windows ? /^path$/i.test(k) : k === 'PATH')) || 'PATH';
+  const parts = String(env[key] || '').split(plat.path.delimiter).filter(Boolean);
+  const norm = (d) => (plat.windows ? d.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase() : d.replace(/\/+$/, ''));
+  const have = new Set(parts.map(norm));
+  for (const d of dirs) {
+    if (typeof d !== 'string' || !d || have.has(norm(d))) continue;
+    have.add(norm(d));
+    parts.push(d);
+  }
+  return { ...env, [key]: parts.join(plat.path.delimiter) };
 }
 
 // What the page may ask to open: exactly one of a project id or a session id, or the one-time id of a start-ai the
@@ -228,7 +253,7 @@ const intIn = (v, [lo, hi]) => Number.isInteger(v) && v >= lo && v <= hi;
 // onChange(ended): after a terminal opened or ended (ended: { id, projectId, tool, jobId, exitCode } of the one that
 // ended, else null); the shell tells the server what runs (sessions()) so a restore sees AI tools of every kind
 // exists/every/stopEvery: the ended-mark check (fs.existsSync, setInterval, clearInterval; fakes in tests)
-export function createTerminals({ spawn, send = () => {}, onChange = () => {}, log = () => {}, env = {}, program = terminalProgram(), now = Date.now, clock = Date.now, max = MAX_TERMINALS, setTimer = setTimeout, clearTimer = clearTimeout, batchMs = BATCH_MS, highWater = HIGH_WATER, exists = (p) => fs.existsSync(p), every = setInterval, stopEvery = clearInterval, checkMs = TOOL_CHECK_MS } = {}) {
+export function createTerminals({ spawn, send = () => {}, onChange = () => {}, log = () => {}, env = {}, toolDirs = [], program = terminalProgram(), now = Date.now, clock = Date.now, max = MAX_TERMINALS, setTimer = setTimeout, clearTimer = clearTimeout, batchMs = BATCH_MS, highWater = HIGH_WATER, exists = (p) => fs.existsSync(p), every = setInterval, stopEvery = clearInterval, checkMs = TOOL_CHECK_MS } = {}) {
   const terms = new Map(); // id -> { pty, title, projectId, startedAt, buffer, ai, tool, jobId, endedMark, toolEnded }
   const changed = (ended = null) => {
     try {
@@ -279,16 +304,17 @@ export function createTerminals({ spawn, send = () => {}, onChange = () => {}, l
     const id = `t${++seq}`;
     let pty;
     try {
-      pty = spawn(prog.file, prog.args, { cwd: dir, cols: intIn(cols, COLS) ? cols : 100, rows: intIn(rows, ROWS) ? rows : 30, env: terminalEnv(env) });
+      pty = spawn(prog.file, prog.args, { cwd: dir, cols: intIn(cols, COLS) ? cols : 100, rows: intIn(rows, ROWS) ? rows : 30, env: withToolDirs(terminalEnv(env), typeof toolDirs === 'function' ? toolDirs() : toolDirs) });
     } catch (e) {
       log(`terminal could not start (${e?.code || 'error'})`);
       return { ok: false, reason: 'spawn-failed' };
     }
     // ai: an AI tool runs in it (the page tells a plain shell apart, docs/embedded-terminal.md)
     const ai = prog !== program;
-    // The launcher's ended mark (an AI start: the last argument is its .cmd, absolute or relative to the folder)
+    // The launcher's ended mark (an AI start: the last argument is its .cmd, absolute or relative to the folder; on Linux
+    // and macOS its .sh, always absolute)
     const last = ai ? prog.args.at(-1) : null;
-    const endedMark = typeof last === 'string' && /\.cmd$/i.test(last) ? path.win32.resolve(dir, last) + ENDED_SUFFIX : null;
+    const endedMark = typeof last === 'string' && /\.cmd$/i.test(last) ? path.win32.resolve(dir, last) + ENDED_SUFFIX : typeof last === 'string' && /^\/.+\.sh$/.test(last) ? last + ENDED_SUFFIX : null;
     const t = { pty, title: String(title || '').slice(0, 60), projectId, startedAt: now(), buffer: createChunkBuffer(MAX_BUFFER), ai, tool: ai && TOOL_ID.test(tool || '') ? tool : null, jobId: ai && JOB_ID.test(jobId || '') ? jobId : null, endedMark, toolEnded: false };
     // a pty without pause/resume (or one that throws) just goes unthrottled
     const safe = (name) => () => {

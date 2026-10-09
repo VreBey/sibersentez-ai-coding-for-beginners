@@ -1,3 +1,4 @@
+// @ts-check
 // Timeline: one strip per project. Session spans, the real activity density (tool calls),
 // agents, commands given and commits on the same time axis.
 import { store } from '../store.js';

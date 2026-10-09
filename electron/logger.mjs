@@ -1,3 +1,4 @@
+// @ts-check
 // Size-capped, rotating plain-text log. Never imports Electron (tests run it with plain Node).
 // When <name>.log would exceed the cap it becomes <name>.1.log (the older one is deleted), so a log never
 // takes more than about 2 × maxBytes. The user's home folder is replaced with '~'; no secrets or environment
@@ -7,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { redactHome } from './helpers.mjs';
 
-export const DEFAULT_MAX_BYTES = 1024 * 1024;
+const DEFAULT_MAX_BYTES = 1024 * 1024;
 const MAX_LINE = 4000;
 
 export function createLogger({ dir, name, maxBytes = DEFAULT_MAX_BYTES, homeDir = os.homedir(), now = () => new Date() }) {

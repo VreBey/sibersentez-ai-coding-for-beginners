@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "types": ["node"],
+    "strict": false,
+    "skipLibCheck": true
+  },
+  "include": ["types/*.d.ts", "server/**/*.mjs", "electron/**/*.mjs", "public/js/**/*.js"],
+  "exclude": ["public/js/vendor/**", "node_modules", "dist"]
+}

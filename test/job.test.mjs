@@ -293,7 +293,8 @@ test('a job of several lines (review U06): the server keeps its lines and cuts a
   const { jobMessageText } = await import('../server/launch.mjs');
   const msg = jobMessageText('Menü sayfası\n- fiyatlar', 'J' + '0123456789abcdef'.repeat(2));
   assert.ok(msg.includes('> Menü sayfası\n> - fiyatlar'), 'each line quoted in the job file');
-  const actions = fs.readFileSync(path.join(ROOT, 'server', 'actions.mjs'), 'utf8');
+  // The request checks (actionInput.mjs since plan D8)
+  const actions = fs.readFileSync(path.join(ROOT, 'server', 'actionInput.mjs'), 'utf8');
   assert.ok(actions.includes('job = normalizeJob(body.job);'));
   const drawer = fs.readFileSync(path.join(ROOT, 'public', 'js', 'views', 'drawer.js'), 'utf8');
   assert.ok(drawer.includes("if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;"));

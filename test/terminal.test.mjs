@@ -7,10 +7,12 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
-import { createTerminals, createChunkBuffer, createOutputBatcher, termOpenRequest, terminalEnv, terminalProgram, confirmQuitWithTerminals, avoidForkOnKill, taskkillTree, TERMINAL_IPC, MAX_TERMINALS, MAX_BUFFER, MAX_WRITE, QUIT_CONFIRM_OK, ENDED_SUFFIX, TOOL_CHECK_MS } from '../electron/terminals.mjs';
+import { createTerminals, createChunkBuffer, createOutputBatcher, termOpenRequest, terminalEnv, terminalProgram, withToolDirs, confirmQuitWithTerminals, avoidForkOnKill, taskkillTree, TERMINAL_IPC, MAX_TERMINALS, MAX_BUFFER, MAX_WRITE, QUIT_CONFIRM_OK, ENDED_SUFFIX, TOOL_CHECK_MS } from '../electron/terminals.mjs';
 import { createActions } from '../server/actions.mjs';
 import { rendererReloadPlan } from '../electron/helpers.mjs';
 import { createProjectChannel } from '../server/memory.mjs';
+import { WIN_ONLY } from './lib/winonly.mjs';
+import { platformOf } from '../server/platform.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-term-'));
@@ -35,7 +37,7 @@ function fakePty() {
 }
 
 describe('manager', () => {
-  test('open: the fixed program in the given folder, the size, an id; output to the window and into the buffer', () => {
+  test('open: the fixed program in the given folder, the size, an id; output to the window and into the buffer', { skip: WIN_ONLY }, () => {
     const f = fakePty();
     const sent = [];
     const m = createTerminals({ spawn: f.spawn, send: (...a) => sent.push(a), env: { PATH: 'p', ELECTRON_RUN_AS_NODE: '1', SIBERSENTEZ_PORT: '1', NODE_OPTIONS: '--x', Other: 'o' }, now: () => 5 });
@@ -129,6 +131,30 @@ describe('manager', () => {
     const inherited = terminalEnv({ CLAUDECODE: '1', CLAUDE_CODE_CHILD_SESSION: '1', CLAUDE_CODE_ENTRYPOINT: 'cli', CLAUDE_CODE_SESSION_ID: 'x', CLAUDE_CODE_MESSAGING_TOKEN: 't', CLAUDE_PID: '9', AI_AGENT: 'claude-code', GIT_EDITOR: 'true', CLAUDE_CODE_GIT_BASH_PATH: 'C:\\Git\\bin\\bash.exe', ANTHROPIC_API_KEY: 'k', Path: 'C:\\x' });
     assert.deepEqual(inherited, { CLAUDE_CODE_GIT_BASH_PATH: 'C:\\Git\\bin\\bash.exe', ANTHROPIC_API_KEY: 'k', Path: 'C:\\x', COLORTERM: 'truecolor' });
     assert.equal(terminalEnv({ GIT_EDITOR: 'true' }).GIT_EDITOR, 'true');
+    // The installers' folders after the PATH, each once (tried on WSL, 2026-10-09: "claude" not found after its install)
+    const linux = platformOf('linux');
+    assert.deepEqual(withToolDirs({ PATH: '/usr/bin:/bin', a: 'b' }, ['/h/.local/bin', '/usr/bin/', '/h/.local/bin'], linux), { PATH: '/usr/bin:/bin:/h/.local/bin', a: 'b' });
+    assert.deepEqual(withToolDirs({}, ['/h/.local/bin'], linux), { PATH: '/h/.local/bin' });
+    assert.deepEqual(withToolDirs({ path: 'x' }, ['/d'], linux), { path: 'x', PATH: '/d' }, 'Linux: only PATH is the PATH');
+    const env = { PATH: '/usr/bin' };
+    assert.equal(withToolDirs(env, [], linux), env, 'no folders: the same environment');
+    const win = platformOf('win32');
+    assert.deepEqual(withToolDirs({ Path: 'C:\\Windows;C:\\Users\\x\\.local\\bin\\' }, ['C:\\Users\\X\\.local\\bin', 'C:\\Users\\x\\AppData\\Roaming\\npm'], win), { Path: 'C:\\Windows;C:\\Users\\x\\.local\\bin\\;C:\\Users\\x\\AppData\\Roaming\\npm' }, 'Windows: Path, letter case and a trailing backslash ignored');
+    assert.equal(withToolDirs({ Path: 'C:/Users/x/.local/bin' }, ['C:\\Users\\x\\.local\\bin'], win).Path, 'C:/Users/x/.local/bin', 'Windows: either slash');
+    assert.equal(withToolDirs({ PATH: '/usr/bin::.:' }, ['/d'], linux).PATH, '/usr/bin:.:/d', 'an empty entry (the current folder) is dropped');
+    // Asked again for every terminal when it is a function (a folder made meanwhile, as nvm's)
+    let asked = 0;
+    const fp = fakePty();
+    const fm = createTerminals({ spawn: fp.spawn, env: { PATH: '/usr/bin' }, toolDirs: () => [`/n${++asked}`], program: { file: '/bin/bash', args: ['-i'] } });
+    fm.open({ dir: '/p', title: 'a' });
+    fm.open({ dir: '/p', title: 'b' });
+    assert.equal(asked, 2);
+    // Every terminal gets them: a plain shell and an AI start alike
+    const tp = fakePty();
+    const tm = createTerminals({ spawn: tp.spawn, env: { PATH: '/usr/bin' }, toolDirs: ['/h/.local/bin'], program: { file: '/bin/bash', args: ['-i'] } });
+    tm.open({ dir: '/p', title: 'x' });
+    tm.open({ dir: '/p', title: 'y', launch: { file: '/bin/sh', args: ['/tmp/l.sh'] } });
+    for (const c of tp.calls) assert.ok(c.opts.env[Object.keys(c.opts.env).find((k) => /^path$/i.test(k))].split(path.delimiter).includes('/h/.local/bin'));
     assert.equal(terminalEnv({ CLAUDECODE: '1', GIT_EDITOR: 'code --wait' }).GIT_EDITOR, 'code --wait');
     // A start-ai in the dock: its one-time id alone
     const L = 'L' + 'a'.repeat(24);
@@ -171,7 +197,12 @@ describe('preload: window.sibersentezTerminal', () => {
     const sends = [];
     const listens = [];
     const exposed = {};
-    const ipcRenderer = { invoke: (...a) => (invokes.push(a), Promise.resolve({ ok: true })), send: (...a) => sends.push(a), on: (...a) => listens.push(a) };
+    const ipcRenderer = {
+      invoke: (...a) => (invokes.push(a), Promise.resolve({ ok: true })),
+      send: (...a) => sends.push(a),
+      on: (...a) => listens.push(a),
+      removeListener: (channel, fn) => listens.splice(listens.findIndex(([c, f]) => c === channel && f === fn), 1),
+    };
     vm.runInNewContext(read('electron', 'preload.cjs'), { require: (m) => (m === 'electron' ? { contextBridge: { exposeInMainWorld: (k, v) => (exposed[k] = v) }, ipcRenderer } : null) });
     // The preload runs in its own realm: compare as JSON
     const j = (x) => JSON.parse(JSON.stringify(x));
@@ -209,6 +240,20 @@ describe('preload: window.sibersentezTerminal', () => {
     p.listens[0][1]({ sender: 'the event object' }, 't1', 'out');
     assert.deepEqual(p.j(got), [['t1', 'out']], 'the page never gets the event object');
   });
+
+  test('one listener per channel: setting one up again replaces it (review A7)', () => {
+    const p = loadPreload();
+    const a = [];
+    const b = [];
+    p.api.onData((id, text) => a.push(text));
+    p.api.onData((id, text) => b.push(text));
+    p.api.onExit(() => {});
+    p.api.onExit(() => {});
+    p.api.onToolEnd(() => {});
+    assert.deepEqual(p.listens.map(([c]) => c), [TERMINAL_IPC.data, TERMINAL_IPC.exit, TERMINAL_IPC.toolEnd]);
+    p.listens[0][1]({}, 't1', 'once');
+    assert.deepEqual([a, b], [[], ['once']], 'only the newest gets each line, once');
+  });
 });
 
 describe('server: terminal-target', () => {
@@ -232,7 +277,7 @@ describe('server: terminal-target', () => {
     assert.equal(live.terminalTarget({}).ok, false);
   });
 
-  test('the setup terminal: only { setup: true }, only in On, a plain shell of the home folder with no program', () => {
+  test('the setup terminal: only { setup: true }, only in On, a plain shell of the home folder with no program', { skip: WIN_ONLY }, () => {
     const withHome = (mode, home) => createActions({ catalog, ingest: { sessions: new Map() }, fit: { invalidate() {} }, mode, port: 1, workDir: TMP, log: () => {}, ai: { env: { USERPROFILE: home } } });
     assert.deepEqual(withHome('live', TMP).terminalTarget({ setup: true }), { ok: true, dir: TMP, title: 'Setup', projectId: null });
     assert.equal(withHome('live', TMP).terminalTarget({ setup: true }).program, undefined, 'no program: a plain shell');
@@ -243,7 +288,7 @@ describe('server: terminal-target', () => {
     assert.equal(withHome('live', '\\\\server\\share').terminalTarget({ setup: true }).ok, false, 'not a local drive');
   });
 
-  test('the setup terminal through every layer: the page → the preload → the shell\'s check → the channel → the server (each layer passed alone, together they dropped { setup }: found by using the app 2026-10-08)', async () => {
+  test('the setup terminal through every layer: the page → the preload → the shell\'s check → the channel → the server (each layer passed alone, together they dropped { setup }: found by using the app 2026-10-08)', { skip: WIN_ONLY }, async () => {
     const invokes = [];
     const exposed = {};
     vm.runInNewContext(read('electron', 'preload.cjs'), { require: (m) => (m === 'electron' ? { contextBridge: { exposeInMainWorld: (k, v) => (exposed[k] = v) }, ipcRenderer: { invoke: (...a) => (invokes.push(a), Promise.resolve({ ok: true })), send() {}, on() {} } } : null) });

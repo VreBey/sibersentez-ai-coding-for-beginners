@@ -1,0 +1,59 @@
+name: Packaged QA
+
+# The hidden checks of the packaged app (tools/electron-qa.ps1, plan D3): the app is built as a folder (no installer,
+# nothing published) and run hidden with a temporary hub; the result and the logs are kept as an artifact. Started by
+# hand from the Actions tab while it proves itself on GitHub's runner; then it can run on every release.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      # No certificate here: electron-builder must not look for one
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx electron-builder --win dir
+      - run: pwsh -NoProfile -File tools/electron-qa.ps1
+      - if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: packaged-qa
+          path: |
+            qa/electron-qa-sonuc.json
+            qa/electron-qa-main.log
+            qa/electron-qa-server.log
+          if-no-files-found: ignore
+
+  # Linux (plan G2): the AppImage, then the same hidden checks on a virtual display (tools/linux-qa.sh)
+  qa-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y xvfb libfuse2t64
+      - run: npm ci --no-audit --no-fund
+      - run: npx electron-builder --linux AppImage
+      - run: xvfb-run -a bash tools/linux-qa.sh
+      - if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: packaged-qa-linux
+          path: |
+            qa/linux-qa-main.log
+            qa/linux-qa-shot.png
+          if-no-files-found: ignore

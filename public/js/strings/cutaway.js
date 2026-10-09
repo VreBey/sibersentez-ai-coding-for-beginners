@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the scene on Today: the building (docs/hq.md) and the orchestra switch. Same keys in en and tr;
 // placeholders use {name}. Merged into STRINGS by ../i18n.js.
 export default {

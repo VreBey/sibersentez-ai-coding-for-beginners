@@ -6,12 +6,13 @@ import path from 'node:path';
 import { Catalog } from '../server/catalog.mjs';
 import { isOtherFolder } from '../public/js/attention.js';
 import { projectGroups } from '../public/js/views/projects.js';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 const HOME = String.raw`C:\Users\u`;
 const cat = new Catalog({ hubDir: null, claudeDir: path.join(HOME, '.claude'), homeDir: HOME, env: { TEMP: String.raw`C:\Users\u\AppData\Local\Temp` } });
 const adhoc = (p, extra = {}) => ({ kind: 'adhoc', path: p, ...extra });
 
-test('placeOf: broad, temporary, chat folder, or a project; a registered project is always a project', () => {
+test('placeOf: broad, temporary, chat folder, or a project; a registered project is always a project', { skip: WIN_ONLY }, () => {
   assert.equal(cat.placeOf(adhoc(HOME, { broad: true })), 'broad');
   assert.equal(cat.placeOf(adhoc(String.raw`C:\WINDOWS\system32`)), 'broad');
   assert.equal(cat.placeOf(adhoc(String.raw`C:\Users\u\AppData\Local\Temp\ork-plugin-dir-test`)), 'temp');

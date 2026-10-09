@@ -5,9 +5,13 @@
 //   SIBERSENTEZ_ACTIONS | actions | then <hub>\settings.json "actions", then off (docs/actions-toggle.md §3.2;
 //                    |         | environment: dry|1, files: off|dry|live; see actions.mjs)
 //   SIBERSENTEZ_INSTANCE | -      | none: when set, every response carries X-SiberSentez-Instance (the desktop shell checks it)
+//   SIBERSENTEZ_SESSION_KEY | -   | none: when set (by the desktop shell, 64 hex characters), every /api request must
+//                    |         | carry it in X-SiberSentez-Key (app.mjs sessionKeyAllowed); an invalid value closes /api.
+//                    |         | Removed from the environment once read: programs the server starts never inherit it
 //   SIBERSENTEZ_KIT     | -       | the SiberSentez kit folder (KIT_DIR below; tests name another one)
 // Resolving settings never creates the hub folder (hub.mjs builds the skeleton, called by the desktop shell) and
 // never writes settings.json: in the installed app only the shell's tray menu changes the actions mode.
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -59,6 +63,7 @@ function isDir(p) {
 }
 
 const INSTANCE_RE = /^[A-Za-z0-9._-]{1,128}$/;
+const SESSION_KEY_RE = /^[0-9a-f]{64}$/;
 const blank = (v) => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
 
 // Only numbers and numeric strings count (true or [] must not turn into 1 or 0 through Number())
@@ -143,9 +148,20 @@ export function resolveConfig({ env = {}, appDir = APP_DIR, homeDir = os.homedir
     else log('SIBERSENTEZ_INSTANCE is invalid (allowed: letters, digits, . _ -, at most 128); no instance header');
   }
 
+  // Session key (environment only, never logged): an invalid value closes /api instead of leaving it open
+  let sessionKey = null;
+  if (!blank(env.SIBERSENTEZ_SESSION_KEY)) {
+    const v = String(env.SIBERSENTEZ_SESSION_KEY).trim();
+    if (SESSION_KEY_RE.test(v)) sessionKey = v;
+    else {
+      sessionKey = randomBytes(32).toString('hex');
+      log('SIBERSENTEZ_SESSION_KEY is invalid (64 lowercase hex characters); /api stays closed');
+    }
+  }
+
   const actions = actionModeFrom({ env, file, hub, log });
 
-  return { appDir, homeDir, claudeDir: path.join(homeDir, '.claude'), port, days, hub, hubSource: hub ? hubSource : null, actions, instance };
+  return { appDir, homeDir, claudeDir: path.join(homeDir, '.claude'), port, days, hub, hubSource: hub ? hubSource : null, actions, instance, sessionKey };
 }
 
 // Actions: the first source that holds a value decides, and an unknown value there means off (it never falls through
@@ -170,7 +186,7 @@ export function resolveActionModeNow({ env = {}, appDir = APP_DIR, hub = null, l
 }
 
 adoptLegacyEnv(process.env);
-export const CONFIG = resolveConfig({ env: process.env, appDir: APP_DIR, homeDir: os.homedir(), log: (line) => console.warn(line) });
+const CONFIG = resolveConfig({ env: process.env, appDir: APP_DIR, homeDir: os.homedir(), log: (line) => console.warn(line) });
 
 export const PUBLIC_DIR = path.join(APP_DIR, 'public');
 export const HUB_DIR = CONFIG.hub;
@@ -180,6 +196,9 @@ export const HUB_DIR = CONFIG.hub;
 export const KIT_DIR = resolveKitDir({ env: process.env, appDir: APP_DIR });
 export const ACTIONS = CONFIG.actions;
 export const INSTANCE = CONFIG.instance;
+export const SESSION_KEY = CONFIG.sessionKey;
+// Read once; git, PowerShell and the AI tools the server starts must not inherit it
+delete process.env.SIBERSENTEZ_SESSION_KEY;
 export const HOME_DIR = CONFIG.homeDir;
 export const CLAUDE_DIR = CONFIG.claudeDir;
 export const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');

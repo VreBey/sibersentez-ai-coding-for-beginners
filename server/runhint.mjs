@@ -1,3 +1,4 @@
+// @ts-check
 // "How to run it" (docs/run-hint.md): after the AI built something, a beginner does not know how to start it. This
 // reads the names in the project folder and a few small manifest files (the same ones server/suggest.mjs reads) and
 // says, in steps, what to install first and which command starts it. Read-only: nothing is run, written or installed,

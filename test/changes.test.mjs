@@ -24,7 +24,7 @@ const hasGit = (() => {
 test('porcelain: new, changed, deleted, renamed (its old path skipped), at most the limit', () => {
   const text = ['?? web/index.html', ' M app.js', 'D  old.txt', 'R  new name.js', 'old name.js', 'A  added.css', ''].join('\0');
   assert.deepEqual(parsePorcelain(text).files, [
-    { path: 'web\\index.html', kind: 'new' },
+    { path: path.join('web', 'index.html'), kind: 'new' },
     { path: 'app.js', kind: 'changed' },
     { path: 'old.txt', kind: 'deleted' },
     { path: 'new name.js', kind: 'renamed' },
@@ -44,14 +44,15 @@ test('without git: the files of the last 24 hours, newest first; packages, build
     const t = (Date.now() - ageMs) / 1000;
     fs.utimesSync(f, t, t);
   };
+  // The platform's own separator (a backslash is a letter of a name on Linux)
   put('index.html', 60_000);
-  put('src\\app.js', 5_000);
+  put(path.join('src', 'app.js'), 5_000);
   put('old.txt', 3 * 24 * 3600_000);
-  put('node_modules\\x\\a.js', 1_000);
-  put('.cache\\b.js', 1_000);
-  put('Library\\c.asset', 1_000);
+  put(path.join('node_modules', 'x', 'a.js'), 1_000);
+  put(path.join('.cache', 'b.js'), 1_000);
+  put(path.join('Library', 'c.asset'), 1_000);
   const r = recentFiles(dir);
-  assert.deepEqual(r.files.map((f) => f.path), ['src\\app.js', 'index.html']);
+  assert.deepEqual(r.files.map((f) => f.path), [path.join('src', 'app.js'), 'index.html']);
   assert.equal(r.more, false);
 });
 
@@ -258,7 +259,8 @@ test('an open drawer stays current: refresh asks again at once; a started AI too
   assert.match(menu, /new CustomEvent\(AI_STARTED_EVENT/);
   const drawer = fs.readFileSync(new URL('../public/js/views/drawer.js', import.meta.url), 'utf8');
   assert.match(drawer, /addEventListener\?\.\(AI_STARTED_EVENT, [^]*restore\.refresh\(id\);\s*changes\.refresh\(id\);/);
-  assert.match(drawer, /if \(current\?\.type === 'project' && !document\.hidden\) render\(\);\s*\}, PROJECT_TICK_MS\);/);
+  // Not while the window is hidden (whileVisible.js, plan D5): once when it shows again
+  assert.match(drawer, /everyVisible\(\(\) => \{\s*if \(current\?\.type === 'project'\) render\(\);\s*\}, PROJECT_TICK_MS\);/);
 });
 
 test('a project whose folder is gone says so first in its drawer, in both languages', async () => {

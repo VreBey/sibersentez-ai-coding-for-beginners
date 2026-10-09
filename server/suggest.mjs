@@ -1,3 +1,4 @@
+// @ts-check
 // Suggestions (docs/skills-flow.md §3.1): library items ranked for one project, each with a short reason.
 // Signals come from file names and a few small manifest files in the project folder (package.json, pyproject.toml,
 // requirements.txt, go.mod, Cargo.toml, pubspec.yaml, project.godot, *.csproj, *.sln, *.uproject, Unity folders and
@@ -10,6 +11,7 @@ import { isLocalPath } from './fsutil.mjs';
 import { normPath } from './util.mjs';
 import { listLibrary, isLegacyHub, normText, hasKeyword, lstat, isRealDir, validName, hasStreamColon, isDriveRoot } from './library.mjs';
 import { readInstalls } from './install.mjs';
+import { PLATFORM, normalizeDir } from './platform.mjs';
 
 const MANIFEST_MAX = 256 * 1024;
 export const MAX_SUGGESTIONS = 50;
@@ -35,7 +37,7 @@ export const NPM_SIGNALS = Object.freeze([
 ]);
 
 // Python requirement names -> signal (pyproject.toml, requirements.txt)
-export const PY_SIGNALS = Object.freeze([
+const PY_SIGNALS = Object.freeze([
   { id: 'django', deps: ['django'], categories: ['web'], keywords: ['django'] },
   { id: 'flask', deps: ['flask'], categories: ['web'], keywords: ['flask'] },
   { id: 'fastapi', deps: ['fastapi'], categories: ['web'], keywords: ['fastapi', 'api'] },
@@ -47,14 +49,14 @@ export const PY_SIGNALS = Object.freeze([
 
 // Unity package ids (Packages/manifest.json of a Unity project) -> signal. Only packages a project adds on purpose:
 // the ones every template ships (test framework, uGUI, input system) say nothing about the project.
-export const UNITY_SIGNALS = Object.freeze([
+const UNITY_SIGNALS = Object.freeze([
   { id: 'unity-multiplayer', match: /^com\.unity\.(?:netcode|multiplayer|transport)|^com\.unity\.services\.(?:multiplayer|lobby|relay|matchmaker)|fishnet|mirror-networking|photon/, categories: ['game'], keywords: ['multiplayer', 'netcode'] },
   { id: 'unity-rendering', match: /^com\.unity\.(?:render-pipelines\.(?:universal|high-definition)|shadergraph|visualeffectgraph)$/, categories: ['game'], keywords: ['shader', 'shaders', 'vfx', 'rendering'] },
   { id: 'unity-localization', match: /^com\.unity\.localization$/, categories: [], keywords: ['localization'] },
 ]);
 
 // Signals from the dependency names of a Unity Packages/manifest.json text, in the table order
-export function unityPackageSignals(text) {
+function unityPackageSignals(text) {
   let j = null;
   try {
     j = JSON.parse(text);
@@ -106,6 +108,7 @@ function pythonDeps(text) {
 // folder (not another link) and is not broad (a drive root, or what `broad` says). A link to a network share is
 // never opened (it could block on an offline server). Everything below that folder is read without following links,
 // as for any project. null: nothing is read.
+/** @param {string} dir @param {{ broad?: (dir: string) => boolean }} [options] */
 export function signalRoot(dir, { broad = () => false } = {}) {
   const st = dir ? lstat(dir) : null;
   if (!st) return null;
@@ -118,16 +121,16 @@ export function signalRoot(dir, { broad = () => false } = {}) {
     return null;
   }
   if (typeof target !== 'string' || !target) return null;
-  if (!path.win32.isAbsolute(target)) target = path.win32.resolve(path.win32.dirname(dir), target);
+  if (!PLATFORM.path.isAbsolute(target)) target = PLATFORM.path.resolve(PLATFORM.path.dirname(dir), target);
   if (!isLocalPath(target) || hasStreamColon(target)) return null;
-  let t = path.win32.normalize(target);
-  if (t.length > 3) t = t.replace(/[\\/]+$/, '');
+  const t = normalizeDir(target);
   if (isDriveRoot(t) || !isRealDir(t) || broad(t)) return null;
   return t;
 }
 
 // Signals of a project folder, in a fixed order. Reads only names and the small manifest files listed above.
 // broad(folder): true for a folder that is never read (see signalRoot).
+/** @param {string} dir @param {{ broad?: (dir: string) => boolean }} [options] */
 export function projectSignals(dir, { broad = () => false } = {}) {
   const out = [];
   dir = signalRoot(dir, { broad });

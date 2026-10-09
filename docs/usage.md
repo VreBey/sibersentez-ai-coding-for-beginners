@@ -201,3 +201,19 @@ of its output). The model is the tool's own (`gpt-6-astra`, `gemini-3-pro`...): 
 prices only, so these are counted and listed among the models without a price, never given a made-up dollar amount.
 The ledger's older-log scan (`scanOlderLogs`) stays Claude Code's: another tool's history older than the log reader's
 window is not counted.
+
+## What a job uses (2026-10-09, plan B5)
+
+`GET /api/usage/jobs[?project=<id>]` (read-only, `server/jobCost.mjs`): for the recent jobs started in SiberSentez, each
+job's span runs from its start record (`restore.mjs recordJobPoint`) to the project's next job start, at most three
+hours and never past now; its usage is the project's usage in the ledger's hours of that span (`UsageLedger.span`, the
+end hour left out). Whole UTC hours: another session in the same project and hour counts too, so the page says
+"about". The answer: `{ jobs: [{ projectId, jobId, at, until, messages, processed, output, usd }], estimate: { jobs,
+low, high, median } | null }`; `usd` is null when a model of the job has no price (Codex, Gemini...: tokens only), and
+the estimate is the range of the last ten priced jobs that did anything, none below two.
+
+- **Before a job** (the job box, under Start): "Recent jobs on this computer (N): about $low to $high each, API
+  equivalent. On a subscription this is not billed; it counts toward your plan's usage." Without a range: where the
+  number will show. Nothing with "Hide $".
+- **After it** (the job's result): "This job: about $X API equivalent, N tokens processed", or its tokens only.
+- Not done: suggesting a lighter model or effort for a first job (it would need a launch option per tool).

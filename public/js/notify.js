@@ -1,9 +1,10 @@
+// @ts-check
 // Notifications: when a session finishes its turn and starts waiting for you, or an agent or workflow finishes.
 // In-page card (on by default), desktop notification (if permitted, only while the tab is in the background),
 // optional soft sound. Turns that finish while the tab is not visible are counted in the title: "(2) waiting".
 // Settings are kept in this browser only (localStorage).
 import { store } from './store.js';
-import { t } from './i18n.js';
+import { t, tOs } from './i18n.js';
 import { esc, projectColor, agentColor, waitWhat } from './format.js';
 import { icon } from './icons.js';
 import { mountToast, dismissToast } from './toasts.js';
@@ -45,7 +46,7 @@ export function createNotifier({ stackEl, buttonEl, menuEl, onOpen }) {
       <h4>${icon('pulse')} ${esc(t('nfyTitle'))}</h4>
       <label><input type="checkbox" data-k="toast" ${settings.toast ? 'checked' : ''}><span>${esc(t('nfyToast'))}</span></label>
       <label><input type="checkbox" data-k="desktop" ${settings.desktop && perm === 'granted' ? 'checked' : ''} ${canDesktop && perm !== 'denied' ? '' : 'disabled'}><span>${esc(t('nfyDesktop'))} <small>${esc(t('nfyDesktopNote'))}</small></span></label>
-      ${perm === 'denied' ? `<p class="muted small">${esc(t('nfyDenied'))}</p>` : ''}
+      ${perm === 'denied' ? `<p class="muted small">${esc(tOs('nfyDenied'))}</p>` : ''}
       <label><input type="checkbox" data-k="sound" ${settings.sound ? 'checked' : ''}><span>${esc(t('nfySound'))}</span></label>
       <label><input type="checkbox" data-k="agents" ${settings.agents ? 'checked' : ''}><span>${esc(t('nfyAgents'))}</span></label>
       <p class="muted small">${esc(t('nfyAlways'))}</p>

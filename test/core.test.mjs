@@ -17,6 +17,7 @@ import { eventRow } from '../public/js/views/feed.js';
 import { trSlug, actionPlain } from '../public/js/format.js';
 import { store } from '../public/js/store.js';
 import { setLanguage } from '../public/js/i18n.js';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 // ---------------- util ----------------
 test('readLinesFrom: a partial line is not processed, the next read continues where it stopped', async () => {
@@ -106,7 +107,7 @@ test('resolve: no empty project is opened for an unknown project known only by f
   assert.equal(c.adhoc.size, 0);
 });
 
-test('resolve: a project first seen through a scratchpad is upgraded to the same id when the real folder appears', () => {
+test('resolve: a project first seen through a scratchpad is upgraded to the same id when the real folder appears', { skip: WIN_ONLY }, () => {
   const c = catalogWith();
   const a = c.resolve(TMP + 'C--Users-U-Desktop-SampleApp\\2222\\scratchpad', null);
   const b = c.resolve('C:\\Users\\U\\Desktop\\SampleApp', null);
@@ -195,6 +196,59 @@ test('ingest: an agent that runs again and finishes again yields a single "done"
   feed(ing, ag, st, asst('m2', 5, [{ type: 'text', text: 'done again' }], 'end_turn', new Date().toISOString()));
   ing.refreshAgentStatus(ag);
   assert.equal(ing.events.filter((e) => e.kind === 'agent_done').length, 1);
+});
+
+test('ingest: an agent that hands its work back (Claude Code 2.1.29x, no end_turn) is done at once', () => {
+  const ing = new Ingest(fakeCatalog());
+  ing.cutoff = 0;
+  ing.initial = false;
+  const ag = ing.getAgent({ agentId: 'a-hb', sessionId: 's1', slug: 'x', workflowRunId: null }, path.join(os.tmpdir(), 'none', 'agent-a-hb.jsonl'));
+  const st = {};
+  const now = new Date().toISOString();
+  feed(ing, ag, st, asst('m1', 5, [{ type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'ls' } }], null, now));
+  feed(ing, ag, st, user([{ type: 'tool_result', tool_use_id: 'tu1', content: 'ok' }], { timestamp: now }));
+  ing.refreshAgentStatus(ag);
+  assert.equal(ag.status, 'running', 'an ordinary tool result: still working');
+  feed(ing, ag, st, asst('m2', 5, [{ type: 'tool_use', id: 'tu2', name: 'SubagentHandback', input: {} }], null, now));
+  feed(ing, ag, st, user([{ type: 'tool_result', tool_use_id: 'tu2', content: 'handed back' }], { timestamp: now, toolEndsTurn: true }));
+  ing.refreshAgentStatus(ag);
+  assert.equal(ag.status, 'done');
+  assert.equal(ing.events.filter((e) => e.kind === 'agent_done').length, 1);
+});
+
+test('ingest: the handback mark is looked for in its own line only, as the top-level key, and only in an agent', () => {
+  const ing = new Ingest(fakeCatalog());
+  ing.cutoff = 0;
+  ing.initial = false;
+  const now = new Date().toISOString();
+  const ag = ing.getAgent({ agentId: 'a-hb2', sessionId: 's1', slug: 'x', workflowRunId: null }, path.join(os.tmpdir(), 'none', 'agent-a-hb2.jsonl'));
+  // One buffer of several lines, as a read chunk holds them: the plain result before the handback does not end it
+  const lines = [
+    asst('m1', 5, [{ type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'cat notes.json' } }], null, now),
+    // The mark inside a tool's output text (escaped in JSON) is no handback
+    user([{ type: 'tool_result', tool_use_id: 'tu1', content: 'the file says "toolEndsTurn":true' }], { timestamp: now }),
+    user([{ type: 'tool_result', tool_use_id: 'tu2', content: 'later' }], { timestamp: now, toolEndsTurn: true }),
+  ].map((o) => JSON.stringify(o));
+  const buf = Buffer.from(lines.join('\n'));
+  const st = {};
+  let a = 0;
+  const lineAt = (i) => {
+    const b = a + Buffer.byteLength(lines[i]);
+    ing.line(ag, st, buf, a, b);
+    a = b + 1;
+  };
+  lineAt(0);
+  lineAt(1);
+  ing.refreshAgentStatus(ag);
+  assert.equal(ag.status, 'running', 'the next line of the chunk carries the mark: not this one');
+  lineAt(2);
+  ing.refreshAgentStatus(ag);
+  assert.equal(ag.status, 'done');
+  // The main session: the same mark changes nothing there
+  const main = ing.getSession('s-main', 'x');
+  const before = main.lastStop;
+  feed(ing, main, {}, user([{ type: 'tool_result', tool_use_id: 'tu3', content: 'x' }], { timestamp: now, toolEndsTurn: true }));
+  assert.equal(main.lastStop, before);
 });
 
 test('ingest: the last action summary carries the description or program name, not the raw command', () => {

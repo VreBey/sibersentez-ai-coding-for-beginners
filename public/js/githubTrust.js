@@ -1,3 +1,4 @@
+// @ts-check
 // The trust line of a GitHub download (docs/github-import.md, "Trust line"): where the files came from, how old the
 // commit is, that nothing was run, and what the safety scan can and cannot see. Pure (tested in node, no DOM).
 import { esc, ago } from './format.js';

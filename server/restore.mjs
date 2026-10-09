@@ -15,8 +15,9 @@ import { validJobId, readCurrentJob } from './job-id.mjs';
 import { FIRST_DIR } from './launch.mjs';
 import { isLocalPath } from './fsutil.mjs';
 import { hasStreamColon } from './library.mjs';
+import { writeFileAtomic } from './atomic.mjs';
 
-export const RESTORE_DIR = 'restore';
+const RESTORE_DIR = 'restore';
 export const RESTORE_LIMITS = Object.freeze({ files: 3000, bytes: 50 * 1024 * 1024, fileBytes: 16 * 1024 * 1024, depth: 16 });
 // Points kept per project (newest first); the point a restore goes back to and the one it takes are never pruned by it
 export const RESTORE_KEEP = 5;
@@ -25,22 +26,22 @@ export const RESTORE_KEEP = 5;
 // back, as a skipped folder: the point of a lean scope is planned and backed up with the same scope.
 export const LEAN = Object.freeze({ fileBytes: 2 * 1024 * 1024, skipExt: Object.freeze(new Set(['.log'])), files: 6000, bytes: 150 * 1024 * 1024 });
 // The limits a scope scans with: a lean point may hold more small files than a full one
-export const limitsFor = (scope, limits) => (scope === 'lean' ? { ...limits, files: Math.max(limits.files, LEAN.files), bytes: Math.max(limits.bytes, LEAN.bytes) } : limits);
-export const RESTORE_SCOPES = Object.freeze(['full', 'lean']);
+const limitsFor = (scope, limits) => (scope === 'lean' ? { ...limits, files: Math.max(limits.files, LEAN.files), bytes: Math.max(limits.bytes, LEAN.bytes) } : limits);
+const RESTORE_SCOPES = Object.freeze(['full', 'lean']);
 const OVER = new Set(['too-many-files', 'too-large', 'file-too-large']);
 // Folders never copied, at any depth: package caches, version control and virtual environments
-export const RESTORE_SKIP = Object.freeze(new Set(['.git', '.hg', '.svn', 'node_modules', '.venv', 'venv', '__pycache__', '.pytest_cache', '.next', '.nuxt', '.turbo', '.cache', '.parcel-cache', '.godot']));
+const RESTORE_SKIP = Object.freeze(new Set(['.git', '.hg', '.svn', 'node_modules', '.venv', 'venv', '__pycache__', '.pytest_cache', '.next', '.nuxt', '.turbo', '.cache', '.parcel-cache', '.godot']));
 // A game engine's project inside the folder (a Unity project in a subfolder, as many are): its regenerated folders are
 // left out wherever it sits, as RESTORE_SKIP_TOP leaves them out at the top. A folder is a Unity project when it holds
 // both Assets and ProjectSettings.
-export const UNITY_SKIP = Object.freeze(new Set(['library', 'temp', 'logs', 'obj', 'usersettings', 'build', 'builds']));
+const UNITY_SKIP = Object.freeze(new Set(['library', 'temp', 'logs', 'obj', 'usersettings', 'build', 'builds']));
 // Folders never copied at the project's top only: build output, the AI tools' own set-up and Unity's generated
 // folders (a folder of the same name deeper down, say assets/out, is the person's content and is kept). The other AI
 // tools' folders too (2026-10-07): SiberSentez installs their agents there, and going back must not roll a record's
 // copy back to an older text it would then take for the person's own
 export const RESTORE_SKIP_TOP = Object.freeze(new Set(['.claude', '.agents', '.gemini', '.qwen', '.opencode', '.codex', 'dist', 'build', 'builds', 'out', 'coverage', 'obj', 'bin', 'target', '.gradle', 'library', 'temp', 'logs', 'usersettings']));
 export const POINT_ID_RE = /^R\d{14}[0-9a-f]{4}$/;
-export const POINT_REASONS = Object.freeze(['ai-start', 'before-restore', 'manual']);
+const POINT_REASONS = Object.freeze(['ai-start', 'before-restore', 'manual']);
 // The longest job text a point keeps as its label
 export const LABEL_MAX = 80;
 const MANIFEST = 'manifest.json';
@@ -86,7 +87,7 @@ export function safeRel(rel) {
 }
 
 // A path in one of the folders a point leaves out (a manifest written by hand could name one)
-export function skippedRel(rel) {
+function skippedRel(rel) {
   const parts = String(rel).toLowerCase().split('/').slice(0, -1);
   return parts.some((p) => RESTORE_SKIP.has(p)) || (parts.length > 0 && RESTORE_SKIP_TOP.has(parts[0]));
 }
@@ -228,13 +229,11 @@ export function recordJobPoint({ hubDir, projectId, jobId, point, now = Date.now
   const tmp = path.join(base, `.${JOB_POINTS_FILE}.${crypto.randomBytes(4).toString('hex')}.tmp`);
   try {
     fs.mkdirSync(base, { recursive: true });
-    fs.writeFileSync(tmp, JSON.stringify({ version: 1, jobs }), { encoding: 'utf8', flag: 'wx' });
-    fs.renameSync(tmp, path.join(base, JOB_POINTS_FILE));
+    writeFileAtomic(path.join(base, JOB_POINTS_FILE), JSON.stringify({ version: 1, jobs }), { tmp });
     return true;
   } catch (e) {
-    // A file held just now (an antivirus, a read at the same moment): said in the log, the start goes on
+    // A file still held after the retries (an antivirus, a read at the same moment): said in the log, the start goes on
     console.error('start record not written:', e?.code || 'error');
-    fs.rmSync(tmp, { force: true });
     return false;
   }
 }
@@ -263,6 +262,14 @@ const stampOf = (at) => {
 
 // Keep the newest RESTORE_KEEP points; protect: ids never removed here
 function prune(base, protect = []) {
+  // A restore that stopped halfway keeps both its points: the way forward and the way back (RESTORE_MARK)
+  let mark = null;
+  try {
+    mark = JSON.parse(fs.readFileSync(path.join(base, RESTORE_MARK), 'utf8'));
+  } catch {
+    mark = null;
+  }
+  for (const id of [mark?.to, mark?.before]) if (POINT_ID_RE.test(String(id))) protect = [...protect, id];
   let names = [];
   try {
     names = fs.readdirSync(base).sort().reverse();
@@ -277,6 +284,8 @@ function prune(base, protect = []) {
       if (/^R\d{14}[0-9a-f]{4}\.tmp-[0-9a-f]{8}$/.test(n)) fs.rmSync(p, { recursive: true, force: true });
       // The same for a start record that was being written (recordJobPoint)
       if (/^\.start-points\.json\.[0-9a-f]{8}\.tmp$/.test(n)) fs.rmSync(p, { force: true });
+      // And for a restore mark that was being written
+      if (/^\.restore-running\.json\.[0-9a-f]{8}\.tmp$/.test(n)) fs.rmSync(p, { force: true });
       continue;
     }
     if (kept < RESTORE_KEEP || protect.includes(n)) {
@@ -304,12 +313,94 @@ function preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope }) {
     const m = readManifest(path.join(base, latest.id));
     if (m && (m.scope || 'full') === scan.scope && sameFiles(m.files, scan.files)) candidate = { id: latest.id, files: m.files, answer: { ok: true, id: latest.id, reused: true, files: scan.files.length, bytes: scan.bytes, scope: scan.scope, leftOut: scan.leftOut } };
   }
+  const shared = latest ? sharedFrom(path.join(base, latest.id)) : null;
   const at = now();
   let stamp = stampOf(at);
   if (latest && stamp <= latest.id.slice(1, 15)) stamp = stampOf(Date.UTC(+latest.id.slice(1, 5), +latest.id.slice(5, 7) - 1, +latest.id.slice(7, 9), +latest.id.slice(9, 11), +latest.id.slice(11, 13), +latest.id.slice(13, 15)) + 1000);
   const id = `R${stamp}${crypto.randomBytes(2).toString('hex')}`;
   const tmp = path.join(base, `${id}.tmp-${crypto.randomBytes(4).toString('hex')}`);
-  return { scan, base, id, tmp, at, candidate };
+  return { scan, base, id, tmp, at, candidate, shared };
+}
+
+// Files a new point shares with the newest one (plan D6): a file with the same path and digest is linked to that
+// point's copy (a hard link) instead of written again, so five points of a project that changed a little take about
+// one copy on disk. The older copy is linked only when its bytes are the new file's (review D: a copy damaged at the
+// same size would otherwise spread to every newer point); a link that cannot be made (another drive, a file system
+// without hard links, an older copy that differs) is a plain copy, as before, written to a new name only ('wx': a
+// shared file is never opened for writing). A point's files are only ever read (going back writes the
+// project from their bytes, never moves or links them out of the hub), so one file in two points is safe; removing a
+// point removes its names, and a file goes when its last point does. Points before 2026-10-06 (SHA-1) share nothing.
+function sharedFrom(pointDir) {
+  const m = readManifest(pointDir);
+  if (!m) return null;
+  const byRel = new Map();
+  for (const f of m.files) if (typeof f.sha256 === 'string') byRel.set(f.rel, { sha256: f.sha256, size: f.size });
+  return byRel.size ? { dir: path.join(pointDir, 'files'), byRel } : null;
+}
+const sharedSource = (shared, rec) => {
+  const old = shared?.byRel.get(rec.rel);
+  return old && old.sha256 === rec.sha256 && old.size === rec.size ? path.join(shared.dir, ...rec.rel.split('/')) : null;
+};
+function linkShared(from, dest, buf) {
+  try {
+    const st = fs.lstatSync(from);
+    if (!st.isFile() || st.size !== buf.length || !fs.readFileSync(from).equals(buf)) return false;
+    fs.linkSync(from, dest);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function linkSharedAsync(from, dest, buf) {
+  try {
+    const st = await fs.promises.lstat(from);
+    if (!st.isFile() || st.size !== buf.length || !(await fs.promises.readFile(from)).equals(buf)) return false;
+    await fs.promises.link(from, dest);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// What the project's points take on disk (plan D6): every file once however many points name it (a shared file is
+// one file: same volume and file id), next to what the copies would take apart. Points never change once taken, so
+// the answer is kept per set of points. A file system without file ids counts every name (no sharing claimed).
+// Asynchronous (review D: a big project's five lean points are some 30,000 looks, about a second): the server keeps
+// answering meanwhile, and two asks for the same set share one count.
+const diskCache = new Map(); // points folder -> { key, disk: Promise }
+export function pointsDisk({ hubDir, projectId, points }) {
+  const base = pointsDir(hubDir, projectId);
+  const key = points.map((x) => x.id).join(',');
+  const kept = diskCache.get(base);
+  if (kept && kept.key === key) return kept.disk;
+  const disk = countDisk(base, points).catch(() => null);
+  diskCache.set(base, { key, disk });
+  return disk;
+}
+async function countDisk(base, points) {
+  const seen = new Set();
+  let bytes = 0;
+  let apart = 0;
+  for (const x of points) {
+    const pd = path.join(base, x.id);
+    const m = readManifest(pd);
+    if (!m) continue;
+    for (const f of m.files) {
+      apart += f.size;
+      let st = null;
+      try {
+        st = await fs.promises.lstat(path.join(pd, 'files', ...f.rel.split('/')), { bigint: true });
+      } catch {
+        continue;
+      }
+      if (!st.isFile()) continue;
+      const id = st.ino > 0n ? `${st.dev}:${st.ino}` : `${x.id}/${f.rel}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      bytes += Number(st.size);
+    }
+  }
+  return { bytes, apart };
 }
 
 // Every file of a point holds the same bytes in the project now (its digest); false at the first that does not, or
@@ -361,8 +452,10 @@ export function createPoint({ hubDir, projectId, dir, reason = 'manual', now = D
       const buf = fs.readFileSync(path.join(dir, ...f.rel.split('/')));
       const dest = path.join(p.tmp, 'files', ...f.rel.split('/'));
       fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(dest, buf);
-      files.push(copied(f, buf));
+      const rec = copied(f, buf);
+      const from = sharedSource(p.shared, rec);
+      if (!(from && linkShared(from, dest, buf))) fs.writeFileSync(dest, buf, { flag: 'wx' });
+      files.push(rec);
     }
     fs.writeFileSync(path.join(p.tmp, MANIFEST), JSON.stringify(manifestOf(p, projectId, reason, files, label)));
     fs.renameSync(p.tmp, path.join(p.base, p.id));
@@ -375,8 +468,8 @@ export function createPoint({ hubDir, projectId, dir, reason = 'manual', now = D
 }
 
 // The same point, copied without holding the server: a big project's first point takes seconds (a Unity game: about
-// 3,000 files and 100 MB, 9 s), and the live view and every other request keep moving meanwhile. Used by start-ai;
-// going back stays synchronous (it must not interleave with another write).
+// 3,000 files and 100 MB, 9 s), and the live view and every other request keep moving meanwhile. Used by start-ai
+// and by going back (its point of the present); actions.mjs keeps the two from running in one project at once.
 export async function createPointAsync({ hubDir, projectId, dir, reason = 'manual', now = Date.now, limits = RESTORE_LIMITS, protect = [], reuse = true, scope = null, label = '' }) {
   const p = preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope });
   if (p.answer) return p.answer;
@@ -388,8 +481,10 @@ export async function createPointAsync({ hubDir, projectId, dir, reason = 'manua
       const buf = await fs.promises.readFile(path.join(dir, ...f.rel.split('/')));
       const dest = path.join(p.tmp, 'files', ...f.rel.split('/'));
       await fs.promises.mkdir(path.dirname(dest), { recursive: true });
-      await fs.promises.writeFile(dest, buf);
-      files.push(copied(f, buf));
+      const rec = copied(f, buf);
+      const from = sharedSource(p.shared, rec);
+      if (!(from && (await linkSharedAsync(from, dest, buf)))) await fs.promises.writeFile(dest, buf, { flag: 'wx' });
+      files.push(rec);
     }
     await fs.promises.writeFile(path.join(p.tmp, MANIFEST), JSON.stringify(manifestOf(p, projectId, reason, files, label)));
     await fs.promises.rename(p.tmp, path.join(p.base, p.id));
@@ -415,7 +510,7 @@ const readRel = (dir, rel) => fs.readFileSync(path.join(dir, ...rel.split('/')))
 
 // The digest of a plan: the preview hands it to the page, the apply refuses a plan that differs (plan-changed), so
 // going back never does more than the person was shown
-export function planDigest(plan) {
+function planDigest(plan) {
   return digestOf(JSON.stringify([plan.point?.id, plan.changed, plan.missing, plan.added])).slice(0, 16);
 }
 
@@ -467,9 +562,51 @@ function safeParents(dir, rel) {
   return true;
 }
 
-// The file as it is now is held by the point of the present (same bytes), or it is not there: only then may it be
-// removed or overwritten
-function backedUp(dir, rel, kept) {
+// The mark of a restore under way (review A2): written once the point of the present is kept and before the first
+// file is touched, removed when the last file is done. Left behind only when going back stopped halfway (the app
+// closed, the computer went off): the restore list then says so, with the two ways out (finish going back, or return
+// to the point kept just before it started). prune never removes the two points it names.
+export const RESTORE_MARK = '.restore-running.json';
+const markPath = (hubDir, projectId) => path.join(pointsDir(hubDir, projectId), RESTORE_MARK);
+export function readRestoreMark({ hubDir, projectId }) {
+  if (!hubDir) return null;
+  let m;
+  try {
+    const p = markPath(hubDir, projectId);
+    const st = lstat(p);
+    if (!st || !st.isFile() || st.size > 4096) return null;
+    m = JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch {
+    return null;
+  }
+  if (!m || m.version !== 1 || !POINT_ID_RE.test(String(m.to)) || !POINT_ID_RE.test(String(m.before)) || !Number.isFinite(m.at)) return null;
+  return { to: m.to, before: m.before, at: m.at };
+}
+async function writeRestoreMark(hubDir, projectId, mark) {
+  const p = markPath(hubDir, projectId);
+  const tmp = `${p}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  try {
+    await fs.promises.writeFile(tmp, JSON.stringify({ version: 1, ...mark }), { flag: 'wx' });
+    await fs.promises.rename(tmp, p);
+    return true;
+  } catch {
+    await fs.promises.rm(tmp, { force: true });
+    return false;
+  }
+}
+
+// The mark goes; held by Windows for a moment, it is tried again by the next going back (the work itself is done)
+async function clearRestoreMark(hubDir, projectId) {
+  try {
+    await fs.promises.rm(markPath(hubDir, projectId), { force: true, maxRetries: 3, retryDelay: 50 });
+  } catch (e) {
+    console.error('restore mark not removed:', e?.code || 'error');
+  }
+}
+
+const readRelAsync = (dir, rel) => fs.promises.readFile(path.join(dir, ...rel.split('/')));
+// backedUp, without holding the server
+async function backedUpAsync(dir, rel, kept) {
   const file = path.join(dir, ...rel.split('/'));
   const st = lstat(file);
   if (!st) return true;
@@ -477,7 +614,7 @@ function backedUp(dir, rel, kept) {
   const want = kept.get(key(rel));
   if (!want) return false;
   try {
-    return want.rel === rel && sameBytes(fs.readFileSync(file), want);
+    return want.rel === rel && sameBytes(await fs.promises.readFile(file), want);
   } catch {
     return false;
   }
@@ -485,32 +622,41 @@ function backedUp(dir, rel, kept) {
 
 // Go back to a point. In order: every copy the restore writes is read and checked against its digest first (a damaged
 // point changes nothing: point-damaged); a point of the present is taken, always new (if it cannot be, nothing
-// changes: backup-failed); files that came later are removed, then changed and missing files are written (removing
-// first lets a file take the place of a folder and the other way round). A file is removed or overwritten only when
-// the point of the present holds its current bytes (else not-backed-up), never through a link, and each write goes
-// to a temporary file renamed into place. planId (optional): the preview's digest; a plan that changed since is
-// refused (plan-changed). Returns { ok: true, before, restored, removed, failed: [{ rel, error }] } or
-// { ok: false, problem }.
-export function applyRestore({ hubDir, projectId, dir, id, planId = null, now = Date.now, limits = RESTORE_LIMITS }) {
+// changes: backup-failed); the restore's mark is written (if it cannot be, nothing changes: backup-failed); files that
+// came later are removed, then changed and missing files are written (removing first lets a file take the place of a
+// folder and the other way round); the mark is removed. A file is removed or overwritten only when the point of the
+// present holds its current bytes (else not-backed-up), never through a link, and each write goes to a temporary file
+// renamed into place. Asynchronous and one file at a time (review A2): the server keeps answering meanwhile, and only
+// one file is held in memory (each copy is read again and checked again when it is written). The caller keeps an AI
+// start out of the project until it is done (actions.mjs restoring). planId (optional): the preview's digest; a plan
+// that changed since is refused (plan-changed). Returns { ok: true, before, restored, removed, failed: [{ rel, error }] }
+// or { ok: false, problem }.
+export async function applyRestore({ hubDir, projectId, dir, id, planId = null, now = Date.now, limits = RESTORE_LIMITS }) {
   const plan = planRestore({ hubDir, projectId, dir, id, limits });
   if (!plan.ok) return plan;
   if (planId && planId !== plan.planId) return fail('plan-changed');
-  if (!plan.changed.length && !plan.missing.length && !plan.added.length) return { ok: true, before: null, restored: 0, removed: 0, failed: [] };
+  if (!plan.changed.length && !plan.missing.length && !plan.added.length) {
+    // Nothing to change: the project already is this point. A restore cut off halfway that named it (its way forward or
+    // its way back) is over then (review A2: the mark stayed for good when a cut came before the first file or after the
+    // last one)
+    const mark = readRestoreMark({ hubDir, projectId });
+    if (mark && (mark.to === id || mark.before === id)) await clearRestoreMark(hubDir, projectId);
+    return { ok: true, before: null, restored: 0, removed: 0, failed: [] };
+  }
   const pt = readPoint(hubDir, projectId, id);
   const byRel = new Map(pt.manifest.files.map((f) => [f.rel, f]));
-  const writes = [];
-  for (const rel of [...plan.changed, ...plan.missing]) {
-    let buf;
+  const fromPoint = path.join(pt.dir, 'files');
+  const writes = [...plan.changed, ...plan.missing];
+  for (const rel of writes) {
     try {
-      buf = readRel(path.join(pt.dir, 'files'), rel);
+      if (!sameBytes(await readRelAsync(fromPoint, rel), byRel.get(rel))) return fail('point-damaged');
     } catch {
       return fail('point-damaged');
     }
-    if (!sameBytes(buf, byRel.get(rel))) return fail('point-damaged');
-    writes.push({ rel, buf });
   }
-  const before = createPoint({ hubDir, projectId, dir, reason: 'before-restore', now, limits, protect: [id], reuse: false, scope: pt.manifest.scope === 'lean' ? 'lean' : 'full' });
+  const before = await createPointAsync({ hubDir, projectId, dir, reason: 'before-restore', now, limits, protect: [id], reuse: false, scope: pt.manifest.scope === 'lean' ? 'lean' : 'full' });
   if (!before.ok) return fail('backup-failed');
+  if (!(await writeRestoreMark(hubDir, projectId, { to: id, before: before.id, at: now() }))) return fail('backup-failed');
   const kept = new Map((readPoint(hubDir, projectId, before.id)?.manifest.files || []).map((f) => [key(f.rel), f]));
   const failed = [];
   let removed = 0;
@@ -522,8 +668,8 @@ export function applyRestore({ hubDir, projectId, dir, id, planId = null, now = 
       const st = lstat(file);
       if (!st) continue;
       if (!st.isFile()) throw coded('not-a-file');
-      if (!backedUp(dir, rel, kept)) throw coded('not-backed-up');
-      fs.rmSync(file);
+      if (!(await backedUpAsync(dir, rel, kept))) throw coded('not-backed-up');
+      await fs.promises.rm(file);
       removed++;
       const parts = rel.split('/');
       for (let i = parts.length - 1; i > 0; i--) emptied.add(parts.slice(0, i).join('/'));
@@ -531,35 +677,39 @@ export function applyRestore({ hubDir, projectId, dir, id, planId = null, now = 
       failed.push({ rel, error: codeOf(e, 'remove-failed') });
     }
   }
-  // Deepest first; a folder that still holds anything stays (rmdirSync refuses it)
+  // Deepest first; a folder that still holds anything stays (rmdir refuses it)
   for (const rel of [...emptied].sort((a, b) => b.split('/').length - a.split('/').length)) {
     const d = path.join(dir, ...rel.split('/'));
     const st = lstat(d);
     if (!st || !st.isDirectory() || st.isSymbolicLink()) continue;
     try {
-      fs.rmdirSync(d);
+      await fs.promises.rmdir(d);
     } catch {
       /* not empty */
     }
   }
   let restored = 0;
-  for (const { rel, buf } of writes) {
+  for (const rel of writes) {
     const dest = path.join(dir, ...rel.split('/'));
     const tmp = `${dest}.sibersentez-${crypto.randomBytes(4).toString('hex')}.tmp`;
     try {
+      // Checked again: the point was read before the present was kept, and only its digest is trusted
+      const buf = await readRelAsync(fromPoint, rel);
+      if (!sameBytes(buf, byRel.get(rel))) throw coded('point-damaged');
       if (!safeParents(dir, rel)) throw coded('link-in-path');
       const st = lstat(dest);
       if (st && !st.isFile()) throw coded('not-a-file');
-      if (!backedUp(dir, rel, kept)) throw coded('not-backed-up');
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(tmp, buf, { flag: 'wx' });
-      fs.renameSync(tmp, dest);
+      if (!(await backedUpAsync(dir, rel, kept))) throw coded('not-backed-up');
+      await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+      await fs.promises.writeFile(tmp, buf, { flag: 'wx' });
+      await fs.promises.rename(tmp, dest);
       restored++;
     } catch (e) {
-      fs.rmSync(tmp, { force: true });
+      await fs.promises.rm(tmp, { force: true });
       failed.push({ rel, error: codeOf(e, 'write-failed') });
     }
   }
+  await clearRestoreMark(hubDir, projectId);
   return { ok: true, before: before.id, restored, removed, failed };
 }
 
@@ -575,7 +725,19 @@ export function projectRestore({ catalog, projectId }) {
   // whether that copy is still there now (available: among the points above); a record is history, not a promise
   const there = new Set(points.map((x) => x.id));
   const jobs = listJobPoints({ hubDir, projectId }).map((r) => (r.id ? { ...r, available: there.has(r.id) } : r));
-  return { status: 200, body: { project: projectId, points, keep: RESTORE_KEEP, jobs } };
+  // interrupted: going back stopped halfway (RESTORE_MARK); each of its two points says whether it is still there
+  const mark = readRestoreMark({ hubDir, projectId });
+  const interrupted = mark ? { at: mark.at, to: mark.to, before: mark.before, toAvailable: there.has(mark.to), beforeAvailable: there.has(mark.before) } : null;
+  return { status: 200, body: { project: projectId, points, keep: RESTORE_KEEP, jobs, interrupted } };
+}
+
+// The same answer with disk: what the points take on disk, shared files once, and what they would take apart (plan
+// D6); counted without holding the server (GET /api/projects/<id>/restore)
+export async function projectRestoreWithDisk({ catalog, projectId }) {
+  const r = projectRestore({ catalog, projectId });
+  const hubDir = catalog?.hubDir || null;
+  if (r.status !== 200 || !hubDir || !r.body.points.length) return r;
+  return { ...r, body: { ...r.body, disk: await pointsDisk({ hubDir, projectId, points: r.body.points }) } };
 }
 
 // GET /api/projects/<id>/job-changes?job=<Job-ID> (read-only, no action mode needed; docs/restore.md §9): what changed
@@ -595,7 +757,7 @@ export const JOB_CHANGES_MAX = 200;
 // One comparison per project and job is kept JOB_CHANGES_TTL_MS: every open drawer asks again every 20 s, and a big
 // project's comparison reads files (the review measured about 0.4 s on 821 files). A request while one runs waits
 // for that one.
-export const JOB_CHANGES_TTL_MS = 10000;
+const JOB_CHANGES_TTL_MS = 10000;
 export function createJobChangesCache({ ttl = JOB_CHANGES_TTL_MS, now = Date.now, run = projectJobChanges } = {}) {
   const cache = new Map();
   return (args) => {

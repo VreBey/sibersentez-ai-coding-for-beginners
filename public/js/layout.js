@@ -1,3 +1,4 @@
+// @ts-check
 // Layout decisions of the first screen (docs/direction.md §3.3), pure so node tests can hold them.
 
 // The building on Today: the size the person chose wins ('small' | 'large'); otherwise a band while no session is

@@ -182,7 +182,7 @@ test('wiring of the start record: the job box asks for it, a failed copy is reco
   const actions = read('server/actions.mjs');
   assert.ok(actions.includes("point = { problem: 'copy-failed' };"), 'a copy that failed is a record too');
   assert.ok(actions.includes('if (jobId && r?.ok) recordJobPoint({ hubDir, projectId: r.project.id, jobId, point, now });'), 'under the project of the points');
-  assert.ok(actions.includes("await takeStartPoint(ctx.pointProjectId, ctx.job || '', jobId)"));
+  assert.ok(actions.includes("await takeStartPoint(pid, ctx.job || '', jobId)"));
 });
 
 test('F2 reproduced: a job start copy pushed out by newer points is no longer promised; the current job keeps its own', async () => {

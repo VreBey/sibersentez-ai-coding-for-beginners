@@ -1,3 +1,4 @@
+// @ts-check
 // The permission mode an AI session runs in, in plain words (docs/attention.md): Claude Code writes it on every line
 // the person writes (permissionMode: plan, default, acceptEdits, auto, dontAsk, bypassPermissions); Codex's approval
 // and sandbox policies are said in the same words (server/toolLogs.mjs codexPermission). SiberSentez

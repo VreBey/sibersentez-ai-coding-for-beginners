@@ -1,3 +1,4 @@
+// @ts-check
 // Today's "First 10 minutes" checklist (docs/shell.md): the four things a new user does once, each ticked by itself from
 // what SiberSentez already knows (the AI tools found, the actions mode, the projects, the sessions), each with the one
 // button that does it. It goes away when all four are done or when the person hides it.
@@ -8,7 +9,7 @@ import { icon } from '../icons.js';
 import { t } from '../i18n.js';
 import { isOtherFolder } from '../attention.js';
 
-export const CHECKLIST_KEY = 'sibersentez.checklist';
+const CHECKLIST_KEY = 'sibersentez.checklist';
 export const STEPS = Object.freeze(['tool', 'actions', 'project', 'session']);
 
 // s: { tools: the tools state ({ status, tools }), mode, projects: [project], sessions: [session], askOnStart }

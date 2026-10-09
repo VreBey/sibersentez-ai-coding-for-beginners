@@ -6,7 +6,10 @@
 //   window.sibersentezShell.pickProjectFolder()               the folder picker for a new project
 //   window.sibersentezShell.pickLibraryFolder()               the folder picker of "Add to the library" (answers the path)
 //   window.sibersentezShell.setLanguage(lang)                 the language chosen in Settings ('auto' | 'en' | 'tr')
+//   window.sibersentezShell.setTheme(theme)                   the look chosen in Settings ('dark' | 'light' | 'system')
 //   window.sibersentezShell.saveProjectIdea(projectId, text)  the project's idea, kept with the program's project memory
+//   window.sibersentezShell.reportError(text)                 an error of the page, written to the shell's log (review A4)
+//   window.sibersentezShell.openLogs()                        the folder of the shell's logs, in File Explorer
 //
 // setActionsMode asks the shell to switch the actions mode and resolves the shell's short answer ({ changed, mode,
 // reason, code? }, electron/helpers.mjs panelReply). The panel asks the user before it sends 'live'.
@@ -33,11 +36,18 @@ const LIBRARY_PICK_CHANNEL = 'sibersentez:pick-library-folder';
 // Same name and choices as LANGUAGE_IPC_CHANNEL and LANGUAGE_CHOICES in helpers.mjs
 const LANGUAGE_CHANNEL = 'sibersentez:set-language';
 const LANGUAGES = ['auto', 'en', 'tr'];
+// Same name and choices as THEME_IPC_CHANNEL and THEME_CHOICES in helpers.mjs
+const THEME_CHANNEL = 'sibersentez:set-theme';
+const THEMES = ['dark', 'light', 'system'];
 // Same name and limit as ATTENTION_IPC_CHANNEL and ATTENTION_TEXT_MAX in helpers.mjs
 const ATTENTION_CHANNEL = 'sibersentez:attention';
 const ATTENTION_MAX = 80;
+// Same names and limit as PAGE_ERROR_IPC_CHANNEL, LOGS_OPEN_IPC_CHANNEL and PAGE_ERROR_MAX in helpers.mjs
+const PAGE_ERROR_CHANNEL = 'sibersentez:page-error';
+const LOGS_CHANNEL = 'sibersentez:open-logs';
+const PAGE_ERROR_MAX = 1000;
 const MODES = ['off', 'dry', 'live'];
-// Same rules as PROJECT_ID_RE and IDEA_TEXT_MAX in helpers.mjs
+// Same rules as PROJECT_ID_RE (server/util.mjs; the sandboxed preload cannot import it) and IDEA_TEXT_MAX in helpers.mjs
 const PROJECT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const IDEA_MAX = 1200;
 
@@ -80,18 +90,27 @@ contextBridge.exposeInMainWorld('sibersentezTerminal', {
   list() {
     return ipcRenderer.invoke(TERM.list);
   },
-  // One listener each; the page gets (id, text) and (id, exitCode), never the event object
+  // One listener each (listenOnly); the page gets (id, text) and (id, exitCode), never the event object
   onData(fn) {
-    if (typeof fn === 'function') ipcRenderer.on(TERM.data, (_e, id, text) => fn(id, text));
+    if (typeof fn === 'function') listenOnly(TERM.data, (_e, id, text) => fn(id, text));
   },
   onExit(fn) {
-    if (typeof fn === 'function') ipcRenderer.on(TERM.exit, (_e, id, code) => fn(id, code));
+    if (typeof fn === 'function') listenOnly(TERM.exit, (_e, id, code) => fn(id, code));
   },
   // The AI tool of a tab ended, its shell stays open (the launcher's mark): the page gets (id)
   onToolEnd(fn) {
-    if (typeof fn === 'function') ipcRenderer.on(TERM.toolEnd, (_e, id) => fn(id));
+    if (typeof fn === 'function') listenOnly(TERM.toolEnd, (_e, id) => fn(id));
   },
 });
+
+// The terminal bridge's listeners (above; hoisted): one per channel (review A7): a second call replaces the first instead of adding another, so a page that
+// sets its terminal up again never gets each line twice
+const listening = {};
+function listenOnly(channel, handler) {
+  if (listening[channel]) ipcRenderer.removeListener(channel, listening[channel]);
+  listening[channel] = handler;
+  ipcRenderer.on(channel, handler);
+}
 
 contextBridge.exposeInMainWorld('sibersentezShell', {
   setActionsMode(mode) {
@@ -118,6 +137,11 @@ contextBridge.exposeInMainWorld('sibersentezShell', {
     if (typeof lang !== 'string' || !LANGUAGES.includes(lang)) return Promise.resolve({ ok: false, reason: 'invalid' });
     return ipcRenderer.invoke(LANGUAGE_CHANNEL, lang);
   },
+  // The look chosen in Settings: the window's title bar and background follow it; resolves { ok }
+  setTheme(theme) {
+    if (typeof theme !== 'string' || !THEMES.includes(theme)) return Promise.resolve({ ok: false, reason: 'invalid' });
+    return ipcRenderer.invoke(THEME_CHANNEL, theme);
+  },
   saveProjectIdea(projectId, text) {
     if (typeof projectId !== 'string' || !PROJECT_ID.test(projectId) || typeof text !== 'string' || text.length > IDEA_MAX) {
       return Promise.resolve({ ok: false, reason: 'invalid' });
@@ -130,5 +154,13 @@ contextBridge.exposeInMainWorld('sibersentezShell', {
       return Promise.resolve({ ok: false, reason: 'invalid' });
     }
     return ipcRenderer.invoke(ATTENTION_CHANNEL, count, text);
+  },
+  // An error of the page (pageErrors.js): one line of text to the shell's log; resolves whether it was written
+  reportError(text) {
+    if (typeof text !== 'string' || text.length === 0 || text.length > PAGE_ERROR_MAX) return Promise.resolve(false);
+    return ipcRenderer.invoke(PAGE_ERROR_CHANNEL, text);
+  },
+  openLogs() {
+    return ipcRenderer.invoke(LOGS_CHANNEL);
   },
 });

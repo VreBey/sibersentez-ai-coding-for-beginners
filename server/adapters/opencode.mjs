@@ -1,3 +1,4 @@
+// @ts-check
 // OpenCode source adapter (see adapters/index.mjs; contract docs/adapters-wave1.md; roadmap F4, 2026-10-08).
 //   projects: none here. OpenCode keeps its projects and sessions in a SQLite database, which adapters never open
 //             (contract §3); its sessions, and the folders they ran in, come from the session reader (ingest.mjs).

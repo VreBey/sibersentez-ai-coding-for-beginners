@@ -1,7 +1,8 @@
 {
   "name": "sibersentez",
   "productName": "SiberSentez",
-  "version": "0.17.0",
+  "desktopName": "sibersentez.desktop",
+  "version": "0.18.0",
   "description": "Build something with AI coding tools, even if you have never written code: start from an idea, with the AI tool you already have, and go back whenever you like. Runs only on this computer.",
   "author": "Samet Nazlım",
   "license": "GPL-3.0-or-later",
@@ -14,17 +15,25 @@
     "url": "https://github.com/VreBey/sibersentez-ai-coding-for-beginners/issues"
   },
   "private": true,
+  "engines": {
+    "node": ">=24"
+  },
   "main": "electron/main.mjs",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win nsis",
-    "test": "node --test \"test/*.test.mjs\""
+    "test": "node --test \"test/*.test.mjs\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "node tools/lint.mjs",
+    "coverage": "node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-branches=86 --test-coverage-functions=84 \"test/*.test.mjs\""
   },
   "devDependencies": {
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
-    "electron": "44.5.1",
-    "electron-builder": "26.15.3"
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "happy-dom": "20.14.5",
+    "typescript": "7.0.2"
   },
   "build": {
     "copyright": "Copyright (c) 2026 Samet Nazlım (https://sibersentez.com)",
@@ -40,9 +49,9 @@
       "public/**",
       "electron/**",
       "package.json",
-      "!node_modules/node-pty/prebuilds/{darwin-*,linux-*,win32-arm64}/**",
       "!node_modules/node-pty/{deps,src,scripts,third_party,typings}/**",
-      "!node_modules/node-pty/**/*.{pdb,cc,h,gyp,gypi,md}"
+      "!node_modules/node-pty/**/*.{pdb,cc,h,gyp,gypi,md}",
+      "!node_modules/node-pty/build/{Release/obj.target,Release/.deps,Release/obj,node_gyp_bins}/**"
     ],
     "extraResources": [
       {
@@ -67,7 +76,66 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "files": [
+        "server/**",
+        "public/**",
+        "electron/**",
+        "package.json",
+        "!node_modules/node-pty/{deps,src,scripts,third_party,typings}/**",
+        "!node_modules/node-pty/**/*.{pdb,cc,h,gyp,gypi,md}",
+        "!node_modules/node-pty/build/{Release/obj.target,Release/.deps,Release/obj,node_gyp_bins}/**",
+        "!node_modules/node-pty/prebuilds/{darwin-*,linux-*,win32-arm64}/**"
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development",
+      "syncDesktopName": true,
+      "icon": "build/icon.png",
+      "artifactName": "SiberSentez-${version}-${arch}.${ext}",
+      "files": [
+        "server/**",
+        "public/**",
+        "electron/**",
+        "package.json",
+        "!node_modules/node-pty/{deps,src,scripts,third_party,typings}/**",
+        "!node_modules/node-pty/**/*.{pdb,cc,h,gyp,gypi,md}",
+        "!node_modules/node-pty/build/{Release/obj.target,Release/.deps,Release/obj,node_gyp_bins}/**",
+        "!node_modules/node-pty/prebuilds/**"
+      ]
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "identity": null,
+      "artifactName": "SiberSentez-${version}-${arch}.${ext}",
+      "files": [
+        "server/**",
+        "public/**",
+        "electron/**",
+        "package.json",
+        "!node_modules/node-pty/{deps,src,scripts,third_party,typings}/**",
+        "!node_modules/node-pty/**/*.{pdb,cc,h,gyp,gypi,md}",
+        "!node_modules/node-pty/build/{Release/obj.target,Release/.deps,Release/obj,node_gyp_bins}/**",
+        "!node_modules/node-pty/prebuilds/{win32-*,linux-*}/**"
+      ]
     },
     "electronFuses": {
       "runAsNode": false,

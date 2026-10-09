@@ -179,11 +179,12 @@ test("a session continues with its own tool only, never as Claude Code's (the jo
   assert.equal(resumeCandidate({ sessions: [codex], projectId: 'p', job: { step: 'build', jobId: JOB, tool: 'claude' }, now }), null);
   assert.equal(jobSession({ sessions: [codex], projectId: 'p', job: { jobId: JOB, tool: 'claude' } }), null);
   assert.equal(tabResumeSession([codex], { projectId: 'p', jobId: JOB }, now), null);
-  const actions = fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8');
+  // The server's code: createActions and its request checks (actionInput.mjs since plan D8)
+  const actions = ['actions.mjs', 'actionInput.mjs'].map((f) => fs.readFileSync(new URL(`../server/${f}`, import.meta.url), 'utf8')).join('\n');
   // Windows Terminal's continue and the copy are Claude Code's own; start-ai continues each session with its own tool
   assert.ok(actions.includes("if ((action === 'resume' || action === 'fork') && (session.tool || 'claude') !== 'claude') return reject(400, 'resume-claude-only');"));
   assert.ok(actions.includes("if (resume && (ingest?.sessions?.get(t.ctx.sessionId)?.tool || 'claude') !== body.tool) return reject(400, 'resume-other-tool');"));
-  assert.ok(actions.includes('args: ctx.resume ? resumeArgs(tool, ctx.sessionId)'));
+  assert.ok(actions.includes('(ctx.resume ? resumeArgs(tool, ctx.sessionId)'));
   // The same tool's session does continue: a Codex job goes on with its Codex session, a Codex tab with Codex's
   const job = { step: 'build', jobId: JOB, tool: 'codex' };
   assert.equal(resumeCandidate({ sessions: [codex], projectId: 'p', job, now })?.id, UUID);

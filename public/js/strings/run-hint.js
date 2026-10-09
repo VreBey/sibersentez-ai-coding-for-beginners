@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of "How to run it" (public/js/runHint.js). Same keys in en and tr; placeholders use {file}. Merged into
 // the string table by public/js/i18n.js.
 export default {
@@ -7,6 +8,7 @@ export default {
     runEmpty: 'Nothing to run yet: the folder is still empty. Start the AI above and build something first.',
     runUnknown: 'SiberSentez could not tell how this project starts. Ask the AI:',
     runAsk: 'How do I run this project on Windows? Tell me step by step.',
+    runAsk_unix: 'How do I run this project on this computer? Tell me step by step.',
     runAskAi: 'Ask the AI how to run it',
     runAskAiNote: 'The question is written into this project’s AI in the terminal below; it is not sent: read it and press Enter there.',
     runAskFirst: 'The AI is asking you something. Answer it in the terminal first; the run question has not been written.',
@@ -46,6 +48,7 @@ export default {
     runEmpty: 'Henüz çalıştırılacak bir şey yok: klasör boş. Yukarıdan yapay zekâyı başlat ve önce bir şey yapsın.',
     runUnknown: 'SiberSentez bu projenin nasıl başlatıldığını çıkaramadı. Yapay zekâya sor:',
     runAsk: 'Bu projeyi Windows’ta nasıl çalıştırırım? Adım adım anlat.',
+    runAsk_unix: 'Bu projeyi bu bilgisayarda nasıl çalıştırırım? Adım adım anlat.',
     runAskAi: 'Yapay zekâya nasıl çalıştırılacağını sor',
     runAskAiNote: 'Soru alttaki terminalde bu projenin yapay zekâsına yazılır, gönderilmez: oku ve orada Enter’a bas.',
     runAskFirst: 'Yapay zekâ şu an sana bir şey soruyor. Önce terminalde onu yanıtla; çalıştırma sorusu yazılmadı.',

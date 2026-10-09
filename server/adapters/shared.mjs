@@ -1,3 +1,4 @@
+// @ts-check
 // Helpers shared by the source adapters of tools other than Claude Code (contract docs/adapters-wave1.md).
 // Every root is derived from the adapter context only (ctx.homeDir, ctx.env, ctx.appDataDir), never from the real
 // home or the process environment, so the tests run against a fake home. Every helper swallows file system errors
@@ -173,7 +174,7 @@ export function vscodeWorkspaces(appDataDir, appName, { requireChat = false, cac
 }
 
 // A JSON file: { value } (value null when the text is not JSON), or { error: true } when it cannot be read
-export function readJsonFile(file) {
+function readJsonFile(file) {
   let text;
   try {
     text = fs.readFileSync(file, 'utf8');

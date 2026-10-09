@@ -1,3 +1,4 @@
+// @ts-check
 // Notification stack: ONE upper limit and ONE removal function for action notifications (main.js) and bell notifications (notify.js).
 // Rules (WCAG 2.2.1, 2.4.3):
 // - while the pointer is over it or focus is inside, the timer pauses, and it closes a short time after leaving;
@@ -9,7 +10,7 @@ import { icon } from './icons.js';
 import { t } from './i18n.js';
 import { focusableVisible } from './contextmenu.js';
 
-export const TOAST_MAX = 4;
+const TOAST_MAX = 4;
 const RESUME_MS = 4000;
 // A pointer resting on a card pauses it at most this long (a card that appeared under a pointer left there, over the
 // terminal, never closed); focus inside still holds it, and an error stays until closed
@@ -49,7 +50,7 @@ export function mountToast(stack, el, { ms = 9000, sticky = false } = {}) {
 
 // Upper limit: removal starts from the oldest; cards being removed (data-gone), errors (sticky) and those
 // that contain focus are not counted/are skipped. Errors may exceed the limit (they stay until closed).
-export function trimToasts(stack, max = TOAST_MAX) {
+function trimToasts(stack, max = TOAST_MAX) {
   const alive = [...stack.children].filter((c) => !c.dataset.gone);
   let extra = alive.length - max;
   for (let i = alive.length - 1; i >= 0 && extra > 0; i--) {

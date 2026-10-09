@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the workshop (docs/hq.md): the building, its cards, the team, the rewind and the example. Same keys in
 // en and tr; placeholders use {name}. Merged into STRINGS by ../i18n.js. The ws prefix keeps them apart from the rest.
 export default {
@@ -9,6 +10,9 @@ export default {
     wsPause: 'Pause',
     wsStep: 'Step',
     wsFit: 'Overview',
+    wsListView: 'List',
+    wsBuildingView: 'Building',
+    wsListEmpty: 'Nobody is at work in this project right now.',
     wsSpeed: 'Speed',
     wsDemo: '3-minute demo · loop {n}',
     wsHint: 'Click rooms or furniture · Doors open · Pick a floor at the lift · Double-click a floor · Tab / Enter · Esc: back',
@@ -242,6 +246,9 @@ export default {
     wsPause: 'Duraklat',
     wsStep: 'Adım',
     wsFit: 'Genel görünüm',
+    wsListView: 'Liste',
+    wsBuildingView: 'Bina',
+    wsListEmpty: 'Bu projede şu an çalışan kimse yok.',
     wsSpeed: 'Hız',
     wsDemo: '3 dakikalık demo · döngü {n}',
     wsHint: 'Oda veya eşyaya tıkla · Kapılar açılır · Asansörden kat seç · Kata çift tıkla · Tab / Enter · Esc: geri',

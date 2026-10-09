@@ -23,7 +23,7 @@
   padding: 8px 11px;
   border-radius: 10px;
   border: 1px solid var(--line-2);
-  background: #151a27;
+  background: var(--raised);
   box-shadow: var(--shadow);
   color: var(--text);
   font-size: 12.5px;

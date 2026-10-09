@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the tool view (docs/tool-view.md): which AI tools see a project or an item. Same keys in en and tr;
 // placeholders use {name}. Merged into the string table by public/js/i18n.js.
 export default {

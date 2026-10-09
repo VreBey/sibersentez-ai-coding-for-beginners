@@ -7,16 +7,19 @@ import { eventRow, bindOpen } from './feed.js';
 import { actionsState, argvSummary, runAction, initActions } from '../actions.js';
 import { replyError } from '../actionsSwitch.js';
 import { errorText, menuModel, previewValid, runMenuItem, focusKeyOf, focusableVisible, findFocusTarget, focusScopeOf, itemInstallView, installTargets, planRows, skillErrorText, skillTargets, libraryInstallable, SKILL_TARGETS, MAX_SKILL_ITEMS, AI_STARTED_EVENT } from '../contextmenu.js';
-import { t } from '../i18n.js';
+import { t, tOs } from '../i18n.js';
 import { sessionState } from '../attention.js';
 import { createProjectUsage, setPeriod, dateText } from '../usage.js';
-import { aiStartSectionHtml, bindAiStart, ideaPref, needTools, toolsState, installedTools } from './tools.js';
-import { createRunHint, bindRunHint } from '../runHint.js';
+import { everyVisible } from '../whileVisible.js';
+import { aiStartSectionHtml, bindAiStart, ideaPref, needTools, toolsState, installedTools, preferredTool } from './tools.js';
+import { createRunHint, bindRunHint, askAiDraft } from '../runHint.js';
 import { sessionToolName } from '../jobId.js';
 import { createJob, TEAM_KEYS, TEAM_ITEMS, teamInstalled, teamUpdates, giveJob, fetchFitFor, resumeCandidate, aiIdleIn, jobSession, stepsHtml, jobCountText, realTwin, toolsOnlyHtml, nextFor, NEXT_KEYS } from './job.js';
 import { createChanges } from '../changes.js';
+import { createPublishCheck, publishJobText } from '../publishCheck.js';
 import { createRestore, startPointOf, askJobPoint } from '../restore.js';
-import { createJobResult } from '../jobResult.js';
+import { createJobCosts, estimateText, jobCostText } from '../jobCost.js';
+import { createJobResult, jobTips } from '../jobResult.js';
 import { apiErrorHtml, projectApiError, liveApiError } from '../apiError.js';
 import { permModeChip, permModeLine } from '../permMode.js';
 
@@ -40,10 +43,18 @@ const toolsOnlyAsked = new Set();
 const startAsk = new Set();
 // "What changed" (changes.js): the same way
 const changes = createChanges({ onData: (projectId) => rerenderUsage(projectId) });
+// "Put it online" first looks for what should not go online (plan E1, publishCheck.js); asked only when pressed
+const publish = createPublishCheck({ onData: (projectId) => rerenderUsage(projectId) });
 // "Restore points" (restore.js, docs/restore.md): the same way
 const restore = createRestore({ onData: (projectId) => rerenderUsage(projectId) });
 // "This job's result" (jobResult.js): what changed since the job's own start copy, the checks apart, going back
 const jobResult = createJobResult({ onData: (projectId) => rerenderUsage(projectId) });
+// What a job uses, before and after (jobCost.js, plan B5): the same way
+const jobCosts = createJobCosts({ onData: (projectId) => rerenderUsage(projectId) });
+// The result's ways (review B3): open goes through "How to run it" (its own button, or the section itself when the way
+// is not a button); a change and an acceptance are drafts into the project's running AI tab (never with Enter). With no
+// AI there, a change becomes the job box's follow-up, and acceptance says the AI is not running.
+let resultAct = () => {};
 // A project's fit arrived (set by createDrawer from its onFit option): the project list badge follows it
 let fitArrived = () => {};
 // Whether "Turn actions on and install" can be offered (set by createDrawer: it has turnActionsOn)
@@ -191,6 +202,33 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
     input?.setSelectionRange?.(input.value.length, input.value.length);
   };
   bindRunHint(body, { projectOf: () => (current?.type === 'project' ? current.id : null), asJob: fillJob });
+  resultAct = (projectId, act) => {
+    if (act === 'open') {
+      const open = body.querySelector('[data-run-open]');
+      if (open) return open.click();
+      const run = body.querySelector('[data-sec="run"]');
+      run?.scrollIntoView?.({ block: 'start' });
+      return (run?.querySelector('button, a') || run)?.focus?.({ preventScroll: true });
+    }
+    if (act === 'change' || act === 'accept') {
+      const r = askAiDraft(projectId, t(act === 'change' ? 'jrChangeDraft' : 'jrAcceptDraft'));
+      if (r?.ok || r?.reason === 'asks') return;
+      if (act === 'change') return fillJob(projectId, t('jobNextText_change'));
+      return toast?.({ tone: 'info', title: t('jrTitle'), body: t('jrAcceptNoAi') });
+    }
+    // "What did it do?" (plan C3): the AI explains its own work in plain words; without it there, as a new job
+    if (act === 'explain') {
+      const r = askAiDraft(projectId, t('jrExplainDraft'));
+      if (r?.ok || r?.reason === 'asks') return;
+      return fillJob(projectId, t('jrExplainDraft'));
+    }
+    // The plan (review B7): the same drafts, for the plan the AI waits on
+    if (act === 'plan-ok' || act === 'plan-change') {
+      const r = askAiDraft(projectId, t(act === 'plan-ok' ? 'jobPlanOkDraft' : 'jobPlanChangeDraft'));
+      if (r?.ok || r?.reason === 'asks') return;
+      return toast?.({ tone: 'info', title: t('jobAsk'), body: t('jobPlanNoAi') });
+    }
+  };
   body.addEventListener('click', (e) => {
     // Usage section: a period button (the choice is shared with the strip; main.js redraws both)
     const up = e.target.closest('[data-usage-period]');
@@ -203,9 +241,28 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
     if (ad) return adoptAct(ad);
     const ja = e.target.closest('[data-job-act]');
     if (ja) return jobAct(ja);
+    // The result's ways (review B3, jobResult.js resultActsHtml)
+    const jr = e.target.closest('[data-jr-act]');
+    if (jr && current?.type === 'project') return resultAct(current.id, jr.dataset.jrAct);
     // A finished job's follow-up: its sentence goes into the job box; Start stays the person's
     const jn = e.target.closest('[data-job-next]');
+    // "Put it online": the publish check first (plan E1); its own button writes the steps into the job box
+    if (jn && current?.type === 'project' && jn.dataset.jobNext === 'deploy') {
+      publish.start(current.id);
+      return render();
+    }
     if (jn && current?.type === 'project' && NEXT_KEYS.includes(jn.dataset.jobNext)) return fillJob(current.id, t(`jobNextText_${jn.dataset.jobNext}`));
+    const pa = e.target.closest('[data-pub-act]');
+    if (pa && current?.type === 'project') {
+      const id = current.id;
+      if (pa.dataset.pubAct === 'again') publish.start(id);
+      else {
+        const data = publish.get(id)?.data;
+        publish.close(id);
+        if (pa.dataset.pubAct === 'write') return fillJob(id, publishJobText(data));
+      }
+      return render();
+    }
     const ra = e.target.closest('[data-rst-act]');
     if (ra) return restoreAct(ra);
     const ma = e.target.closest('[data-menu-act]');
@@ -964,8 +1021,8 @@ export function createDrawer(drawerEl, scrimEl, { toast, openActionsChooser, onF
     restore.refresh(id);
     changes.refresh(id);
   });
-  setInterval(() => {
-    if (current?.type === 'project' && !document.hidden) render();
+  everyVisible(() => {
+    if (current?.type === 'project') render();
   }, PROJECT_TICK_MS);
 
   // A skill-flow section got its data (the fit): redraw only when that section is on screen
@@ -1524,7 +1581,7 @@ function whatText(c) {
   return parts.length === 2 ? t('fitWhatAnd', { a: parts[0], b: parts[1] }) : parts[0];
 }
 
-export function fitBusyText(busy) {
+function fitBusyText(busy) {
   return busy === 'try' ? t('skBusy_try') : busy === 'apply' ? t('fitBusy_apply') : busy === 'turn-on' ? t('fitBusy_turnOn') : t('fitBusy_plan');
 }
 
@@ -1563,7 +1620,7 @@ function fitBtn(act, label, off, cls = '') {
 }
 
 // The tags found in the project's folder: stack tags first as the server sorts them; the evidence in the tooltip
-export function fitTagsHtml(project) {
+function fitTagsHtml(project) {
   const tags = (Array.isArray(project?.tags) ? project.tags : []).filter((g) => g && typeof g === 'object');
   const chips = tags.map((g) => `<li class="fit-tag ${g.type === 'stack' ? 'stack' : 'topic'}"${g.from ? ` title="${esc(t('fitTagFrom', { from: String(g.from) }))}"` : ''}>${esc(fitTagLabel(g.id))}</li>`).join('');
   const list = chips ? `<ul class="fit-tag-list" aria-label="${esc(t('startFolderTags'))}">${chips}</ul>` : `<span class="small muted">${esc(t('startFolderEmpty'))}</span>`;
@@ -1647,7 +1704,7 @@ export function ideaStateHtml(st) {
 }
 
 // One candidate: checkbox, name, kind, source and band, the reasons, and why it cannot be installed when it cannot
-export function fitRowHtml(c, st, busy, nameOf) {
+function fitRowHtml(c, st, busy, nameOf) {
   const can = selectable(c);
   const band = FIT_BANDS.includes(c.confidence) ? c.confidence : 'low';
   const meta = [kindText(c.kind), fitSourceText(c.sources, nameOf), t(`startBand_${band}`)].filter(Boolean).join(' · ');
@@ -1739,7 +1796,7 @@ export function fitSectionHtml(p, st, mode, nameOf = (id) => id, startTool = nul
     const ask = [t('skAskInstall', { count: num(v.sel.length), project: p.name }), v.imports ? t('fitAskImports', { count: num(v.imports) }) : '', andStart ? t('fitAskStart', { tool: andStart.name }) : ''].filter(Boolean).join(' ');
     const yes = andStart ? `${fitBtn('confirm-start', t('fitConfirmStart', { tool: andStart.name }), false, 'primary')}${fitBtn('confirm', t('fitConfirmOnly'), false)}` : fitBtn('confirm', t('skConfirmInstall'), false, 'primary');
     // Off: one question says what On does (the switch's own words) and what is installed; "Yes" does both
-    const turnOnAsk = [t('actionsSwitchConfirmBody'), t('skAskInstall', { count: num(v.sel.length), project: p.name }), v.imports ? t('fitAskImports', { count: num(v.imports) }) : ''].filter(Boolean).join(' ');
+    const turnOnAsk = [tOs('actionsSwitchConfirmBody'), t('skAskInstall', { count: num(v.sel.length), project: p.name }), v.imports ? t('fitAskImports', { count: num(v.imports) }) : ''].filter(Boolean).join(' ');
     const confirm = st.confirm === 'turn-on' && v.oneStep ? `<div class="flow-confirm" role="group" aria-labelledby="fitQ"><p id="fitQ"><b>${esc(t('actionsSwitchConfirmTitle'))}</b> ${esc(turnOnAsk)}</p><div class="flow-btns">${fitBtn('confirm-on', t('fitTurnOnYes'), false, 'primary')}${fitBtn('cancel', t('skCancel'), false)}</div></div>` : st.confirm === 'apply' ? `<div class="flow-confirm" role="group" aria-labelledby="fitQ"><p id="fitQ">${esc(ask)}</p><div class="flow-btns">${yes}${fitBtn('cancel', t('skCancel'), false)}</div></div>` : '';
     // Off: no target picker and no chooser here; the drawer's one banner says it and carries the button
     const where = mode === 'off' ? '' : agentsOnly ? `<p class="small muted sk-targets">${esc(t('skAgentsClaudeOnly'))}</p>` : targetFold(st, v.busy);
@@ -1794,7 +1851,7 @@ function fitSection(p) {
 // (docs/skills-flow.md §5.1). Only for items the server marked adoptable (it knows their folder); the answer of the
 // last try stays under the button while the actions mode stays the same.
 const adoptState = new Map(); // kind:name -> { busy, ok, msg }
-export function adoptSection(r, mode = actionsState().mode, st = adoptState.get(`${r.kind}:${r.name}`.toLowerCase())) {
+function adoptSection(r, mode = actionsState().mode, st = adoptState.get(`${r.kind}:${r.name}`.toLowerCase())) {
   if (!r?.adoptable || (r.kind !== 'skill' && r.kind !== 'agent')) return '';
   const off = mode === 'off';
   const busy = !!st?.busy;
@@ -1895,7 +1952,14 @@ function jobResultSection(p) {
   const tab = waiting && (store.dockRunning?.() || []).some((x) => x && x.projectId === p.id);
   // Its AI no longer runs (no tab, its session closed): said before the click, as the job box said it before
   const go = waiting ? { session: session?.id || null, tab, stopped: !tab && !!session && sessionState(session) === 'closed' } : null;
-  return jobResult.html(p, d, jobId ? startPointOf(p.id, jobId) : null, waiting ? { steps: stepsHtml(d), go } : {});
+  const cost = jobId ? jobCostText(jobCosts.job(p.id, jobId)) : '';
+  // The person's own words for the tip (plan C4): the label of the job's start copy, as the restore list has it
+  const startPoint = jobId ? startPointOf(p.id, jobId) : null;
+  const label = startPoint?.id && !startPoint.reused ? (restore.get(p.id)?.data?.points || []).find((x) => x?.id === startPoint.id)?.label : '';
+  const tips = jobTips(label);
+  const rst = restore.ui(p.id).step;
+  const backOpts = { mode: actionsState().mode, busy: rst === 'loading' || rst === 'busy' };
+  return jobResult.html(p, d, startPoint, waiting ? { steps: stepsHtml(d, { offline: store.lost }), go, cost, tips, back: backOpts } : { cost, tips, back: backOpts });
 }
 
 // The session that can go on with the project's job: the Building's own answer (job.js resumeCandidate)
@@ -1919,7 +1983,7 @@ function projectHtml(id) {
   const built = ['check', 'finish', 'done'].includes(job.get(p.id).data?.step);
   // The result waits (finish): it comes first, the job box is a secondary "New job" at the end (review U07)
   const resultFirst = job.get(p.id).data?.step === 'finish';
-  const jobBox = job.html(p, { mode: actionsState().mode, turnOn: canTurnOn, asking: startAsk.has(p.id), next: nextFor({ web: isWebRun(runHint.get(p.id).data) }), stopped: drawerResume(p.id), asNew: resultFirst, idle: aiIdleIn({ sessions: store.sessions.values(), projectId: p.id, dock: store.dockRunning?.() || [] }) });
+  const jobBox = job.html(p, { mode: actionsState().mode, turnOn: canTurnOn, asking: startAsk.has(p.id), next: nextFor({ web: isWebRun(runHint.get(p.id).data) }), stopped: drawerResume(p.id), asNew: resultFirst, idle: aiIdleIn({ sessions: store.sessions.values(), projectId: p.id, dock: store.dockRunning?.() || [] }), cost: estimateText(jobCosts.estimate(p.id), { tool: preferredTool(installedTools())?.id }), offline: store.lost });
   return `${head(p.name, `${esc(projectKindText(p))}${p.path ? ` · <code>${esc(p.path)}</code><button type="button" class="icon-btn dr-copy" data-copy data-fk="copy:path" aria-label="${esc(t('shCopyPath'))}" title="${esc(t('shCopyPath'))}">${icon('copy')}</button>` : ''}`, projectColor(id), st ? stateBadge(st) : '')}
     ${folderMissingHtml(p)}
     ${toolsOnlyHtml(p, realTwin(store.projects.values(), p))}
@@ -1929,7 +1993,8 @@ function projectHtml(id) {
     ${resultFirst ? '' : jobBox}
     ${permModeLine(store.sessions.values(), p.id)}
     ${jobResultSection(p)}
-    ${built ? runHint.html(p) : ''}
+    ${publish.html(p)}
+    ${built ? runHint.html(p, { quiet: resultFirst }) : ''}
     ${restore.html(p, { mode: actionsState().mode })}
     ${resultFirst ? jobBox : ''}
     <details class="dr-more" data-more="${esc(p.id)}"${moreOpen.has(p.id) ? ' open' : ''}><summary><b>${esc(t('drMore'))}</b><span class="small muted">${esc(t('drMoreHint'))}</span></summary>
@@ -1980,7 +2045,7 @@ function toolBars(counts) {
 // A session that waits for the person: what it waits for, and where to answer (the concept's "Needs you" box). No button
 // pretends to take the person there: SiberSentez cannot bring another terminal window forward, and resuming would open the
 // same session a second time.
-export function waitingNoteHtml(s, now = Date.now()) {
+function waitingNoteHtml(s, now = Date.now()) {
   if (!s || sessionState(s, now) !== 'waiting') return '';
   const what = waitWhat(s) ? t('attnAsks', { what: waitWhat(s) }) : t('drWaitingTurn');
   return `<div class="dr-waiting" role="note"><b>${esc(t('attnState_waiting'))}</b><p>${esc(what)}</p><p class="small">${esc(t('drWaitingWhere'))}</p></div>`;
@@ -1989,7 +2054,7 @@ export function waitingNoteHtml(s, now = Date.now()) {
 // The AI tool a session belongs to (server/toolLogs.mjs reads Codex's and Gemini CLI's logs too): its name, and a
 // tag for any tool but Claude Code (whose sessions were the only ones before)
 // (jobId.js sessionToolName)
-export const sessionToolTag = (s) => ((s?.tool || 'claude') === 'claude' ? '' : `<span class="tag">${esc(sessionToolName(s))}</span>`);
+const sessionToolTag = (s) => ((s?.tool || 'claude') === 'claude' ? '' : `<span class="tag">${esc(sessionToolName(s))}</span>`);
 
 function sessionHtml(d) {
   const p = store.projects.get(d.projectId);

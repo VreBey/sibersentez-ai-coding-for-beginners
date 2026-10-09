@@ -1,3 +1,4 @@
+// @ts-check
 // Live usage tracking in the page (docs/usage.md §6): the period and dollar preferences, number and dollar formats,
 // the strip's cards, the project card's line and the drawer's usage section with its data. Numbers come from the
 // snapshot (kpi.usage, project.usage30) and from GET /api/usage. Every dollar amount starts with "~$" and is called an
@@ -7,7 +8,7 @@ import { esc, modelName } from './format.js';
 import { icon } from './icons.js';
 import { hintHtml } from './hints.js';
 
-export const USAGE_PERIODS = Object.freeze(['24h', '7d', 'month', '30d']);
+const USAGE_PERIODS = Object.freeze(['24h', '7d', 'month', '30d']);
 export const PERIOD_KEY = 'sibersentez.usage.period';
 // '1': the dollars are shown; otherwise (the default since docs/direction.md §3.3) they are hidden everywhere, so a
 // newcomer is not met by a price for work their subscription already pays
@@ -17,7 +18,7 @@ export const COST_KEY = 'sibersentez.usage.cost';
 export const ADVANCED_KEY = 'sibersentez.advanced';
 // '1': the strip shows its cards; otherwise (the default) it is one line with the main numbers, so the tabs stay on
 // the first screen
-export const OPEN_KEY = 'sibersentez.usage.open';
+const OPEN_KEY = 'sibersentez.usage.open';
 
 // ---------- preferences (localStorage; a blocked storage keeps them for this page only) ----------
 
@@ -77,6 +78,22 @@ export function setCostShown(on) {
   changed();
   return true;
 }
+// The embedded terminal read out by a screen reader (plan C2: xterm.js screenReaderMode); off unless turned on
+const READER_KEY = 'sibersentez.terminal.screenReader';
+let reader = null;
+export function terminalReaderOn() {
+  if (reader === null) reader = readPref(READER_KEY) === '1';
+  return reader;
+}
+export function setTerminalReader(on) {
+  const v = !!on;
+  if (v === terminalReaderOn()) return false;
+  reader = v;
+  writePref(READER_KEY, v ? '1' : '0');
+  changed();
+  return true;
+}
+
 export function advancedShown() {
   if (advanced === null) advanced = readPref(ADVANCED_KEY) === '1';
   return advanced;
@@ -169,7 +186,7 @@ function shortDay(iso) {
 // ---------- shared pieces ----------
 
 // The period buttons (the strip and the drawer): data-usage-period, the chosen one pressed
-export function periodSegHtml(current) {
+function periodSegHtml(current) {
   return `<div class="seg us-seg" role="group" aria-label="${esc(t('usagePeriods'))}">${USAGE_PERIODS.map(
     (p) => `<button type="button" data-usage-period="${p}" data-fk="usage:${p}" class="${p === current ? 'on' : ''}" aria-pressed="${p === current}">${esc(t(`usagePeriod_${p}`))}</button>`,
   ).join('')}</div>`;
@@ -240,7 +257,7 @@ export function cardLineHtml(u, cost = costShown()) {
 }
 
 // Sort key of "by spend": dollars, or processed tokens while dollars are hidden
-export function spendOf(p, cost = costShown()) {
+function spendOf(p, cost = costShown()) {
   const u = p?.usage30;
   if (!u) return 0;
   return cost ? u.usd || 0 : u.processed || 0;
@@ -314,7 +331,7 @@ async function fetchUsage(projectId, p) {
 // Per project and period, the answer of GET /api/usage, kept for ttl ms; an older one is asked for again when the
 // section is drawn (the drawer redraws with the live updates, so an open drawer stays current). onData(projectId)
 // runs when an answer arrived. fetchJson and now are injected in tests.
-export function createProjectUsage({ fetchJson = fetchUsage, onData = () => {}, now = () => Date.now(), ttl = 20000 } = {}) {
+export function createProjectUsage({ fetchJson = fetchUsage, onData = (_projectId) => {}, now = () => Date.now(), ttl = 20000 } = {}) {
   const cache = new Map();
   function get(projectId, p) {
     const key = `${projectId}|${p}`;

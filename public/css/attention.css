@@ -1,15 +1,11 @@
 /* What needs the person (docs/attention.md): the waiting state, the left-open state and the header's waiting counter.
    The raw live classes (s-busy, s-idle) stay in app.css; s-waiting and s-left are the attention states. */
-:root {
-  --waiting: #ff8f6b;
-  --left: #8a93a6;
-}
 
 
 .sdot.s-waiting { background: var(--waiting); }
 .sdot.s-left { background: var(--left); }
 .pstate.s-waiting { color: var(--waiting); background: rgba(var(--orange-rgb), 0.12); font-weight: 650; }
-.pstate.s-left { color: var(--left); background: rgba(138, 147, 166, 0.1); }
+.pstate.s-left { color: var(--left); background: color-mix(in srgb, var(--quiet) 10%, transparent); }
 .pstate.s-left i { background: var(--left); }
 .now-card.st-waiting { border-color: rgba(var(--orange-rgb), 0.4); box-shadow: 0 0 0 1px rgba(var(--orange-rgb), 0.14), 0 8px 30px rgba(var(--orange-rgb), 0.08); }
 .now-card.st-left { opacity: 0.8; }
@@ -20,7 +16,7 @@
 .wait-wrap { position: relative; flex: none; }
 .wait-chip { color: var(--muted); }
 .wait-chip .ic { width: 14px; height: 14px; color: var(--busy); }
-.wait-chip.on { color: #fff; background: rgba(var(--orange-rgb), 0.2); border-color: rgba(var(--orange-rgb), 0.55); }
+.wait-chip.on { color: var(--text-strong); background: rgba(var(--orange-rgb), 0.2); border-color: rgba(var(--orange-rgb), 0.55); }
 .wait-chip.on:hover { background: rgba(var(--orange-rgb), 0.28); border-color: var(--waiting); }
 .wait-chip b { font-weight: 650; }
 

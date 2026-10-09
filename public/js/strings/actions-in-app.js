@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the in-app actions switch (docs/actions-toggle.md §3b). Same keys in en and tr; placeholders use {name}. Merged into STRINGS by ../i18n.js.
 // The mode names themselves (Off / Preview / On) are the base table's actionsModeOff|Dry|Live, shared with the header
 // indicator and the tray menu, so the three places always use the same words.
@@ -11,6 +12,7 @@ export default {
     actionsSwitchCurrent: 'current',
     actionsSwitchConfirmTitle: 'Turn actions on?',
     actionsSwitchConfirmBody: 'SiberSentez will really act on this computer: it opens a terminal in the project folder (you start the AI tool you want there), resumes Claude Code sessions, opens folders in Explorer and VS Code, and installs skills and agents into project folders. To only see the commands, choose Preview.',
+    actionsSwitchConfirmBody_unix: 'SiberSentez will really act on this computer: it opens a terminal in the project folder (you start the AI tool you want there), resumes Claude Code sessions, opens folders in the file manager and VS Code, and installs skills and agents into project folders. To only see the commands, choose Preview.',
     actionsSwitchConfirmOk: 'Turn on',
     actionsSwitchConfirmCancel: 'Cancel',
     actionsSwitchSaving: 'Saving…',
@@ -32,7 +34,8 @@ export default {
     actionsSwitchDescLive: 'Terminal açma, skill kurma gibi işlemler gerçekten yapılır.',
     actionsSwitchCurrent: 'şu an',
     actionsSwitchConfirmTitle: 'Eylemler açılsın mı?',
-    actionsSwitchConfirmBody: 'SiberSentez bu bilgisayarda gerçekten iş yapar: proje klasöründe terminal açar (istediğin yapay zekâ aracını orada başlatırsın), Claude Code oturumuna devam eder, klasörleri Gezgin’de ve VS Code’da açar, skill ve ajanları proje klasörlerine kurar. Yalnız komutları görmek için Önizleme’yi seçin.',
+    actionsSwitchConfirmBody: 'SiberSentez bu bilgisayarda gerçekten iş yapar: proje klasöründe terminal açar (istediğin yapay zekâ aracını orada başlatırsın), Claude Code oturumuna devam eder, klasörleri Gezgin’de ve VS Code’da açar, skill ve ajanları proje klasörlerine kurar. Yalnız komutları görmek için Önizleme’yi seç.',
+    actionsSwitchConfirmBody_unix: 'SiberSentez bu bilgisayarda gerçekten iş yapar: proje klasöründe terminal açar (istediğin yapay zekâ aracını orada başlatırsın), Claude Code oturumuna devam eder, klasörleri dosya yöneticisinde ve VS Code’da açar, skill ve ajanları proje klasörlerine kurar. Yalnız komutları görmek için Önizleme’yi seç.',
     actionsSwitchConfirmOk: 'Aç',
     actionsSwitchConfirmCancel: 'Vazgeç',
     actionsSwitchSaving: 'Kaydediliyor…',

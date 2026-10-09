@@ -1,3 +1,4 @@
+// @ts-check
 // Stage: a live simulation in the orchestra metaphor (Canvas 2D).
 // The conductor's podium at the bottom; projects are sections on two arcs; baton lines go to live sessions;
 // sub-agents are musicians seated around their project; every tool call is a colored note.
@@ -9,7 +10,7 @@ import { CAT, projectColor, agentColor, hexA, initials, clock, esc, modelName, a
 
 const TAU = Math.PI * 2;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const FONT = '"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif';
+const FONT = '"Segoe UI Variable Text", "Segoe UI", "Ubuntu Sans", Ubuntu, Cantarell, "Noto Sans", system-ui, sans-serif';
 const GLYPH = { write: '♪', shell: '♫', agent: '♬', skill: '✦', workflow: '◆', web: '◦', read: '•', mcp: '•', other: '•' };
 const dayName = (i) => tx('stgDays').split(',')[i];
 
@@ -198,7 +199,7 @@ export class Stage {
     return all
       // A folder that is not a project (docs/folders.md) takes a place only while a session is open in it
       .filter((p) => (isOtherFolder(p) ? p.live : p.live || p.lastActivity > 0 || p.kind !== 'adhoc'))
-      .sort((a, b) => (b.live ? 1 : 0) - (a.live ? 1 : 0) || (b.lastActivity > day) - (a.lastActivity > day) || b.stats24.tools - a.stats24.tools || b.lastActivity - a.lastActivity);
+      .sort((a, b) => (b.live ? 1 : 0) - (a.live ? 1 : 0) || Number(b.lastActivity > day) - Number(a.lastActivity > day) || b.stats24.tools - a.stats24.tools || b.lastActivity - a.lastActivity);
   }
 
   layout(now) {

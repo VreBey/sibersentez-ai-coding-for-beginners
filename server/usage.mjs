@@ -23,16 +23,17 @@ import fs from 'node:fs';
 import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { PRICED_AT, costOf, priceOf } from './prices.mjs';
+import { writeFileAtomic } from './atomic.mjs';
 
 export const HOUR = 3600000;
 const DAY = 86400000;
-export const LEDGER_VERSION = 1;
+const LEDGER_VERSION = 1;
 // Messages newer than this are counted from the logs on every start (covers "30 days" and a whole calendar month)
-export const HORIZON_DAYS = 32;
+const HORIZON_DAYS = 32;
 // Hour buckets older than this are folded into day buckets in the file
-export const HOURS_KEPT_DAYS = 40;
+const HOURS_KEPT_DAYS = 40;
 export const PERIODS = Object.freeze(['24h', '7d', 'month', '30d']);
-export const DAILY_DAYS = 30;
+const DAILY_DAYS = 30;
 // Cell layout: the four token kinds (cache writes split by lifetime), then the message count
 export const FIELDS = Object.freeze(['input', 'cacheWrite5m', 'cacheWrite1h', 'cacheRead', 'output']);
 const MSG = 5;
@@ -46,7 +47,7 @@ export function ledgerFile(hubDir) {
 // far below it (hours are folded into days after HOURS_KEPT_DAYS)
 export const LEDGER_MAX_BYTES = 8 * 1024 * 1024;
 // Set-aside copies kept: ledger.json.broken (the newest) and the older time-stamped ones
-export const BROKEN_KEPT = 3;
+const BROKEN_KEPT = 3;
 
 const count = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
 
@@ -76,7 +77,7 @@ export function localDay(t) {
 }
 // Hour bucket <-> its label in the file (UTC, readable): 2026-09-29T07
 export const hourLabel = (h) => new Date(h * HOUR).toISOString().slice(0, 13);
-export function parseHourLabel(s) {
+function parseHourLabel(s) {
   if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(s)) return null;
   const t = Date.parse(`${s}:00:00Z`);
   return Number.isFinite(t) ? t / HOUR : null;
@@ -98,7 +99,7 @@ export function periodRange(period, now = Date.now()) {
 }
 
 // The last `days` local days, oldest first, as { day, start } (start: local midnight in ms)
-export function lastLocalDays(days, now = Date.now()) {
+function lastLocalDays(days, now = Date.now()) {
   const d = new Date(now);
   const out = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -379,6 +380,28 @@ export class UsageLedger {
     return value;
   }
 
+  // One project's cells hour by hour between two times (a job's span, server/jobCost.mjs): [[hour, Map(model -> cell)]],
+  // the ledger's whole UTC hours that the span touches, read directly (a span is a few hours). The end is not part of it
+  // (the next job starts there)
+  hoursOf(projectId, fromMs, toMs) {
+    const out = [];
+    const last = Math.floor(Math.max(fromMs, toMs - 1) / HOUR);
+    for (let h = Math.floor(fromMs / HOUR); h <= last; h++) {
+      const fm = this.fresh.get(h)?.get(projectId);
+      const am = this.archive.hours.get(h)?.get(projectId);
+      const pick = !am ? fm : !fm ? am : msgsOf(am) > msgsOf(fm) ? am : fm;
+      if (pick && pick.size) out.push([h, pick]);
+    }
+    return out;
+  }
+
+  // The same span added up (whole hours, so it reads "about")
+  span(projectId, fromMs, toMs) {
+    const models = new Map();
+    for (const [, mm] of this.hoursOf(projectId, fromMs, toMs)) addModels(models, mm);
+    return totalsOf(models);
+  }
+
   // A project's last 30 days (compact totals), or null when it has none
   projectUsage(pid) {
     this.summary();
@@ -496,9 +519,15 @@ export class UsageLedger {
     try {
       if (fs.existsSync(broken)) {
         const stamp = new Date(fs.statSync(broken).mtimeMs).toISOString().replace(/[:.]/g, '-');
-        let target = `${broken}-${stamp}`;
-        for (let i = 1; fs.existsSync(target); i++) target = `${broken}-${stamp}-${i}`;
-        fs.renameSync(broken, target);
+        // Copies set aside within one millisecond share the stamp (Linux keeps file times by a coarse clock): the
+        // next number after the highest one there, never a name a pruned copy left free (it would sort as the oldest)
+        const base = `${path.basename(broken)}-${stamp}`;
+        let next = -1;
+        for (const n of fs.readdirSync(path.dirname(broken))) {
+          if (n === base) next = Math.max(next, 0);
+          else if (n.startsWith(`${base}-`) && /^\d+$/.test(n.slice(base.length + 1))) next = Math.max(next, Number(n.slice(base.length + 1)));
+        }
+        fs.renameSync(broken, next < 0 ? `${broken}-${stamp}` : `${broken}-${stamp}-${next + 1}`);
       }
       fs.renameSync(this.file, broken);
     } catch {
@@ -507,7 +536,19 @@ export class UsageLedger {
     try {
       const dir = path.dirname(this.file);
       const head = `${path.basename(broken)}-`;
-      const older = fs.readdirSync(dir).filter((n) => n.startsWith(head)).sort();
+      // Oldest first: by the stamp, then by its number (-10 after -9)
+      const order = (n) => {
+        const m = /^(.*?)(?:-(\d+))?$/.exec(n.slice(head.length));
+        return [m[1], Number(m[2] || 0)];
+      };
+      const older = fs
+        .readdirSync(dir)
+        .filter((n) => n.startsWith(head))
+        .sort((a, b) => {
+          const [sa, na] = order(a);
+          const [sb, nb] = order(b);
+          return sa < sb ? -1 : sa > sb ? 1 : na - nb;
+        });
       for (const n of older.slice(0, Math.max(0, older.length - (BROKEN_KEPT - 1)))) fs.rmSync(path.join(dir, n), { force: true });
     } catch {
       /* tried again next time */
@@ -561,18 +602,11 @@ export class UsageLedger {
       this.timer = null;
     }
     if (!this.file || !this.dirty) return false;
-    const tmp = `${this.file}.tmp-${process.pid}-${this.saves}`;
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
-      fs.writeFileSync(tmp, JSON.stringify(this.toJSON()) + '\n', 'utf8');
-      fs.renameSync(tmp, this.file);
+      writeFileAtomic(this.file, JSON.stringify(this.toJSON()) + '\n');
     } catch (e) {
       this.log(`usage ledger could not be written (${e?.code || 'error'}); will retry`);
-      try {
-        fs.rmSync(tmp, { force: true });
-      } catch {
-        /* nothing to clean */
-      }
       return false;
     }
     this.dirty = false;

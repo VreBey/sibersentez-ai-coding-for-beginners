@@ -6,6 +6,7 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
@@ -34,7 +35,6 @@ import {
   initialSupervisor,
   isShellActionsModeUrl,
   normalizeActionsMode,
-  probeServer,
   readHubActionsSetting,
   readQaActionsMode,
   readQaOptions,
@@ -260,7 +260,7 @@ describe("shell: writing the mode into the hub's settings.json", () => {
     assert.equal(writeHubActionsSetting(w.hub, 'dry', { fsImpl: spy, suffix: () => 'fixed' }).ok, true);
     const tmp = path.join(w.hub, 'settings.json.fixed.tmp');
     assert.deepEqual(calls, [
-      ['write', tmp, { encoding: 'utf8', flag: 'wx' }],
+      ['write', tmp, { encoding: 'utf8', flag: 'wx', flush: true }],
       ['rename', tmp, file],
     ]);
     assert.ok(!calls.some(([op, p]) => op === 'write' && p === file), 'settings.json itself is never written in place');
@@ -435,7 +435,14 @@ describe('shell: the switch flow behind the tray menu', () => {
   test('confirmation dialog: Cancel is the first button, the default and the Esc answer; the texts come from the string table', () => {
     for (const lang of ['en', 'tr']) {
       const S = getStrings(lang);
-      const o = actionsConfirmOptions(S);
+      const o = actionsConfirmOptions(S, 'win32');
+      // Linux and macOS have no Explorer: the same text with the file manager (tried on WSL, 2026-10-09)
+      for (const platform of ['linux', 'darwin']) {
+        const unix = actionsConfirmOptions(S, platform);
+        assert.deepEqual({ ...unix, detail: S.actionsConfirmBody }, o, platform);
+        assert.ok(unix.detail.length > 100, platform);
+        assert.doesNotMatch(unix.detail, /Explorer|Gezgin/, platform);
+      }
       assert.deepEqual(o, {
         type: 'warning',
         title: S.actionsConfirmTitle,
@@ -633,7 +640,7 @@ describe('shell: the restart that applies the mode', () => {
     assert.equal((src.match(/writeHubActionsSetting\(/g) || []).length, 0);
     assert.doesNotMatch(src, /settings\.json['"`]\s*\)\s*,\s*JSON/);
     // The bridge's three handlers (the actions mode, and the new project's folder picker and idea: docs/start-flow.md)
-    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'the bridge handlers (actions, project folder, library folder, language, idea, a project made from an idea, attention) and five for the terminal (open, list, close; write and resize as sends: test/terminal.test.mjs), nothing else');
+    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'the bridge handlers (actions, project folder, library folder, language, theme, idea, a project made from an idea, attention, page error, log folder) and five for the terminal (open, list, close; write and resize as sends: test/terminal.test.mjs), nothing else');
     assert.doesNotMatch(src, /contextBridge|ipcRenderer/);
     // The one send into the page: the embedded terminals' output, only while the window shows the app
     assert.equal((src.match(/webContents\.send\(/g) || []).length, 1);
@@ -755,7 +762,7 @@ describe('shell: actions found on without the tray', () => {
     assert.equal(updateShellState(file, { actionsModeSeen: { hub: w.hub, mode: 'live' } }, { fsImpl: spy, suffix: () => 'fixed' }), true);
     const tmp = path.join(w.base, `${SHELL_STATE_FILE}.fixed.tmp`);
     assert.deepEqual(calls, [
-      ['write', tmp, { encoding: 'utf8', flag: 'wx' }],
+      ['write', tmp, { encoding: 'utf8', flag: 'wx', flush: true }],
       ['rename', tmp, file],
     ]);
     assert.equal(fs.existsSync(tmp), false);
@@ -1129,7 +1136,9 @@ describe('real server: the mode after a shell-requested restart', () => {
     };
     const port = await freePort();
     const instance = `test-${process.pid}`;
-    const env = buildServerEnv(userEnv, { port, hubPath: w.hub, instance });
+    // The shell's per-launch secret (review A1): every /api request below carries it, as the shell's window would
+    const sessionKey = randomBytes(32).toString('hex');
+    const env = buildServerEnv(userEnv, { port, hubPath: w.hub, instance, sessionKey });
     const settingsBefore = read(path.join(w.hub, 'settings.json'));
     // The server runs from a copy of server/ and public/ in a temporary app folder: the server reads sibersentez.json
     // from its own app folder (config.mjs), so a developer's sibersentez.json in the repository (say "actions": "live")
@@ -1155,9 +1164,18 @@ describe('real server: the mode after a shell-requested restart', () => {
       await exited;
     };
     ctx.after(stop);
-    const site = { 'Sec-Fetch-Site': 'same-origin' };
+    const site = { 'Sec-Fetch-Site': 'same-origin', 'X-SiberSentez-Key': sessionKey };
 
     await start();
+    // Another program copying the headers a browser would send, but without the key: every /api route refuses it
+    for (const url of ['/api/actions', '/api/snapshot', '/api/tools', '/./api/snapshot', '/x/../api/actions']) {
+      const r = await request(port, { url, headers: { 'Sec-Fetch-Site': 'same-origin' } });
+      assert.equal(r.status, 401, url);
+      assert.deepEqual(r.json, { error: 'session-key' }, url);
+    }
+    const wrong = await request(port, { url: '/api/snapshot', headers: { 'Sec-Fetch-Site': 'same-origin', 'X-SiberSentez-Key': 'f'.repeat(64) } });
+    assert.equal(wrong.status, 401, 'a wrong key');
+    assert.equal((await request(port, { url: '/', headers: { 'Sec-Fetch-Site': 'same-origin' } })).status, 200, 'the page itself stays open');
     assert.match(output.join(''), /sibersentez\.json is invalid \(not a JSON object\); using defaults/, "the server read the copy's sibersentez.json");
     assert.equal((await request(port, { url: '/api/actions', headers: site })).status, 404, 'settings.json has no actions key: off (the environment asked for dry)');
 

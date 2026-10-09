@@ -1,3 +1,4 @@
+// @ts-check
 // Browser-side data store: loads the snapshot, applies the patches from the server,
 // and announces the changes to listeners.
 
@@ -24,6 +25,9 @@ const MAX_TICKS = 12000;
 
 class Store {
   constructor() {
+    // The terminal dock's sessions that wait for the person (main.js sets it when the dock is there)
+    /** @type {(() => string[]) | null} */
+    this.dockAsking = null;
     this.projects = new Map();
     this.sessions = new Map();
     this.agents = new Map();
@@ -38,6 +42,8 @@ class Store {
     this.hub = undefined;
     this.tools = []; // the adapters: which AI tools left traces here (docs/tool-view.md)
     this.connected = false;
+    // The live stream was there and dropped (review B8): not the moment before the first hello
+    this.lost = false;
     this.loaded = false;
     this.listeners = new Set();
   }

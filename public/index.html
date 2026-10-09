@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="dark light">
+  <script src="/js/theme-boot.js"></script>
   <title>SiberSentez</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/theme.css">
@@ -80,6 +81,7 @@
   <section id="tab-today" class="panel today">
   <div class="screen-head"><h1 class="screen-title" data-i18n="navToday">Building</h1></div>
   <div class="today-checklist" id="todayChecklist" hidden></div>
+  <div class="today-learn" id="todayLearn" hidden></div>
   <div class="screen-body ws-home" id="workshopBody"></div>
 
   <section class="today-recent" id="todayRecent" aria-labelledby="todayRecentH"></section>
@@ -94,7 +96,7 @@
       <section class="kpis adv-only" id="kpis" aria-label="Last 24 hours" data-i18n-attr="aria-label:shKpisLabel"></section>
       <!-- The orchestra scene (an advanced view since the Building became the main screen, docs/simplify.md) -->
   <section class="hero adv-only" id="hero" data-folded="0">
-    <div class="stage-wrap" id="stageWrap">
+    <div class="stage-wrap dusk" id="stageWrap">
       <canvas id="stage" aria-label="Live scene of projects, sessions and agents" data-i18n-attr="aria-label:shStageLabel"></canvas>
       <div class="stage-ui">
         <div class="stage-controls">

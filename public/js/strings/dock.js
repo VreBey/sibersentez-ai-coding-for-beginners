@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the terminal dock (docs/embedded-terminal.md). Same keys in en and tr; placeholders use {name}.
 // Merged into the string table by public/js/i18n.js.
 export default {
@@ -8,6 +9,7 @@ export default {
     dockFold: 'Fold or unfold the terminals',
     dockTerminal: 'Terminal',
     dockPlain: 'Plain terminal (PowerShell): for commands, not the AI',
+    dockPlain_unix: 'Plain terminal: for commands, not the AI',
     dockAsks: '{name}: the AI is asking something and waits for your answer',
     dockClose: 'Close this terminal',
     dockCloseAi: 'Click again to stop the AI',
@@ -23,7 +25,9 @@ export default {
     dockRefused: 'This folder cannot take a terminal (it is missing, too broad, or its name has unsafe characters).',
     dockTooMany: 'Eight terminals are open already. Close one first.',
     dockNoPty: 'The terminal part of SiberSentez could not start on this computer. Open in Windows Terminal instead.',
+    dockNoPty_unix: 'The terminal part of SiberSentez could not start on this computer. Run the command in a terminal of the system instead.',
     dockFailed: 'Something went wrong. Try Windows Terminal instead.',
+    dockFailed_unix: 'Something went wrong. Try a terminal of the system instead.',
     termOpenOutside: 'Open in Windows Terminal',
     termOpenOutsideHint: 'Outside SiberSentez, in a new window',
     aiToastInDock: 'It runs in the terminal at the bottom of this window.',
@@ -35,6 +39,7 @@ export default {
     dockFold: 'Terminalleri katla ya da aç',
     dockTerminal: 'Terminal',
     dockPlain: 'Düz terminal (PowerShell): komutlar için, yapay zekâ değil',
+    dockPlain_unix: 'Düz terminal: komutlar için, yapay zekâ değil',
     dockAsks: '{name}: yapay zekâ bir şey soruyor, cevabını bekliyor',
     dockClose: 'Bu terminali kapat',
     dockCloseAi: 'Yapay zekâyı durdurmak için tekrar bas',
@@ -50,7 +55,9 @@ export default {
     dockRefused: 'Bu klasörde terminal açılamaz (klasör yok, çok geniş ya da adında güvensiz karakter var).',
     dockTooMany: 'Zaten sekiz terminal açık. Önce birini kapat.',
     dockNoPty: 'SiberSentez’in terminal bölümü bu bilgisayarda başlayamadı. Bunun yerine Windows Terminal’de aç.',
+    dockNoPty_unix: 'SiberSentez’in terminal bölümü bu bilgisayarda başlayamadı. Komutu bunun yerine sistemin bir terminalinde çalıştır.',
     dockFailed: 'Bir şeyler ters gitti. Bunun yerine Windows Terminal’i dene.',
+    dockFailed_unix: 'Bir şeyler ters gitti. Bunun yerine sistemin bir terminalini dene.',
     termOpenOutside: 'Windows Terminal’de aç',
     termOpenOutsideHint: 'SiberSentez’in dışında, yeni pencerede',
     aiToastInDock: 'Bu pencerenin altındaki terminalde çalışıyor.',

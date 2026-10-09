@@ -7,11 +7,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { libraryPickReply, libraryFolderDialogOptions, LIBRARY_PICK_IPC_CHANNEL, LIBRARY_SOURCE_MAX } from '../electron/helpers.mjs';
 import { STRINGS } from '../public/js/i18n.js';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
 
-test('folder picker answer: a local absolute folder the server takes, else a reason; never anything else', () => {
+test('folder picker answer: a local absolute folder the server takes, else a reason; never anything else', { skip: WIN_ONLY }, () => {
   assert.deepEqual(libraryPickReply({ canceled: false, filePaths: ['D:\\my-skills'] }), { ok: true, path: 'D:\\my-skills' });
   assert.deepEqual(libraryPickReply({ canceled: true, filePaths: [] }), { ok: false, reason: 'cancelled' });
   assert.deepEqual(libraryPickReply(null), { ok: false, reason: 'cancelled' });

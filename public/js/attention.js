@@ -1,3 +1,4 @@
+// @ts-check
 // What needs the person: the state of each open session and project, and the order that puts "waiting for you" first
 // (docs/attention.md). Pure functions over the store's sessions and projects, so the header, the rail, the project
 // list and the scene use the same four states and the tests can check them without a page.

@@ -715,7 +715,7 @@ export function createRosterView(root, openDrawer) {
 export const SUGGEST_MAX = 4;
 // Asked again after a minute, as the drawer asks (an item installed meanwhile leaves the list); a request that does not
 // answer in time is dropped, so the list is never stuck
-export const SUGGEST_TTL_MS = 60 * 1000;
+const SUGGEST_TTL_MS = 60 * 1000;
 const SUGGEST_TIMEOUT_MS = 15 * 1000;
 const timeoutSignal = (ms) => (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(ms) : undefined);
 

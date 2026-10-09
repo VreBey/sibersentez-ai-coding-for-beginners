@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the start flow: from an idea to fitting skills, and a new project from a folder to a terminal
 // (docs/start-flow.md). Same keys in en and tr; placeholders use {name}. Merged into STRINGS by ../i18n.js.
 export default {

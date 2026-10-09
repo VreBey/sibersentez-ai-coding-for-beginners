@@ -9,6 +9,7 @@ import { fileReady, toolById, createToolDetector, publicTools } from '../server/
 import { wizardState, wizardHtml, installCommand, signInCommand, WIZARD_TOOLS, PREREQS } from '../public/js/views/setupWizard.js';
 import { TOOL_INFO, normalizeTools, wizardFirst, wizardPanelHtml } from '../public/js/views/tools.js';
 import { STRINGS, setLanguage } from '../public/js/i18n.js';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const HOME = 'C:\\Users\\u';
@@ -16,22 +17,25 @@ const env = (extra = {}) => ({ USERPROFILE: HOME, ...extra });
 const files = (map) => ({ readJson: (p) => (p in map ? map[p] : null), isFile: (p) => p in map });
 const at = (...p) => [HOME, ...p].join('\\');
 
-test('Gemini CLI: the sign-in type it chose with what that type needs (its Google sign-in file, GEMINI_API_KEY), or either without a type', () => {
+test('Gemini CLI: the sign-in type it chose with what that type needs (its Google sign-in file, GEMINI_API_KEY), or either without a type', { skip: WIN_ONLY }, () => {
   const settings = (o) => ({ [at('.gemini', 'settings.json')]: o });
   const creds = { [at('.gemini', 'oauth_creds.json')]: {} };
   assert.equal(fileReady('gemini', { env: env({ GEMINI_API_KEY: 'x' }), ...files(settings({ security: { auth: { selectedType: 'gemini-api-key' } } })) }), 'yes');
   assert.equal(fileReady('gemini', { env: env(), ...files(settings({ security: { auth: { selectedType: 'gemini-api-key' } } })) }), 'unknown', 'the key may be in a .env file: not looked for');
-  assert.equal(fileReady('gemini', { env: env(), ...files({ ...settings({ selectedAuthType: 'oauth-personal' }), ...creds }) }), 'yes', 'the older field');
+  // A Google sign-in serves only a Code Assist licence since 2026-06-18: its file alone is not known; with the licence's
+  // Cloud project it is
+  assert.equal(fileReady('gemini', { env: env(), ...files({ ...settings({ selectedAuthType: 'oauth-personal' }), ...creds }) }), 'unknown', 'the older field');
+  assert.equal(fileReady('gemini', { env: env({ GOOGLE_CLOUD_PROJECT: 'p' }), ...files({ ...settings({ selectedAuthType: 'oauth-personal' }), ...creds }) }), 'yes');
   assert.equal(fileReady('gemini', { env: env(), ...files(settings({ security: { auth: { selectedType: 'oauth-personal' } } })) }), 'no', 'Google chosen, never signed in (review 2026-10-08)');
   assert.equal(fileReady('gemini', { env: env({ GOOGLE_CLOUD_PROJECT: 'p' }), ...files(settings({ security: { auth: { selectedType: 'vertex-ai' } } })) }), 'yes');
   assert.equal(fileReady('gemini', { env: env(), ...files(settings({ security: { auth: { selectedType: 'cloud-shell' } } })) }), 'unknown');
-  assert.equal(fileReady('gemini', { env: env(), ...files({ [at('.gemini', 'oauth_creds.json')]: {} }) }), 'yes');
+  assert.equal(fileReady('gemini', { env: env(), ...files({ [at('.gemini', 'oauth_creds.json')]: {} }) }), 'unknown', 'a Google sign-in file alone (since 2026-06-18)');
   assert.equal(fileReady('gemini', { env: env({ GEMINI_API_KEY: 'x' }), ...files({}) }), 'yes');
   assert.equal(fileReady('gemini', { env: env(), ...files({ [at('.gemini', 'settings.json')]: { mcpServers: {} } }) }), 'no');
   assert.equal(fileReady('gemini', { env: {}, ...files({}) }), 'unknown', 'no home folder');
 });
 
-test('Qwen Code: its sign-in type; a provider through the variable its key comes from or a key field; Qwen OAuth through its file', () => {
+test('Qwen Code: its sign-in type; a provider through the variable its key comes from or a key field; Qwen OAuth through its file', { skip: WIN_ONLY }, () => {
   const s = (o) => ({ [at('.qwen', 'settings.json')]: o });
   const nv = { security: { auth: { selectedType: 'openai' } }, modelProviders: { openai: [{ id: 'kimi', envKey: 'NVIDIA_API_KEY' }] } };
   assert.equal(fileReady('qwen', { env: env({ NVIDIA_API_KEY: 'k' }), ...files(s(nv)) }), 'yes');
@@ -43,7 +47,7 @@ test('Qwen Code: its sign-in type; a provider through the variable its key comes
   assert.equal(fileReady('qwen', { env: env(), ...files(s({ security: { auth: { selectedType: 'openai' } }, modelProviders: { openai: [{ envKey: 'bad name' }] } })) }), 'no', 'only a variable name');
 });
 
-test('OpenCode: a provider in its credentials file, or a variable of a provider it reads', () => {
+test('OpenCode: a provider in its credentials file, or a variable of a provider it reads', { skip: WIN_ONLY }, () => {
   const auth = at('.local', 'share', 'opencode', 'auth.json');
   assert.equal(fileReady('opencode', { env: env(), ...files({ [auth]: { anthropic: { type: 'oauth' } } }) }), 'yes');
   assert.equal(fileReady('opencode', { env: env(), ...files({ [auth]: {} }) }), 'no');
@@ -52,7 +56,7 @@ test('OpenCode: a provider in its credentials file, or a variable of a provider 
   assert.equal(fileReady('copilot', { env: env(), ...files({}) }), 'unknown', 'Copilot keeps it in the Windows credential store');
 });
 
-test('Cursor CLI: `status` answers 0 either way, so its words decide; the output is never part of the answer', async () => {
+test('Cursor CLI: `status` answers 0 either way, so its words decide; the output is never part of the answer', { skip: WIN_ONLY }, async () => {
   const c = toolById('cursor');
   assert.deepEqual(c.ready, ['status']);
   assert.equal(c.readyOut('✓ Logged in as someone@example.com'), true);
@@ -122,6 +126,11 @@ test('the markup: the tools to pick with the best fit and a free start marked; e
     const pick = wizardHtml(wizardState(st, null, TOOL_INFO), { info: TOOL_INFO, st });
     assert.equal((pick.match(/data-wz="pick:/g) || []).length, 7);
     assert.ok(pick.includes(STRINGS[lang].wzBestFit) && pick.includes(STRINGS[lang].wzFreeStart));
+    // "Can start free" sits on Copilot's card (its free plan includes the CLI), never on Gemini's (paid API keys only
+    // since 2026-06-18)
+    const card = (id) => pick.slice(pick.indexOf(`data-wz="pick:${id}"`), pick.indexOf('</li>', pick.indexOf(`data-wz="pick:${id}"`)));
+    assert.ok(card('copilot').includes(STRINGS[lang].wzFreeStart) && !card('gemini').includes(STRINGS[lang].wzFreeStart));
+    assert.ok(pick.indexOf('pick:copilot') < pick.indexOf('pick:gemini'), 'the free start before Gemini');
     const inst = wizardHtml(wizardState(st, 'claude', TOOL_INFO), { info: TOOL_INFO, st, canType: true });
     assert.ok(inst.includes('irm https://claude.ai/install.ps1 | iex') && inst.includes('class="ai-cmd"'));
     assert.ok(inst.includes(STRINGS[lang].wzTypeHow));
@@ -148,4 +157,55 @@ test('wiring: the wizard opens by itself while no tool is installed, asks again 
   assert.ok(tools.includes('saveTool(pick);'), '"Use it" makes it the tool jobs start with');
   const main = read('public/js/main.js');
   assert.ok(main.indexOf('setWizardDone(() => newProject.start());') > main.indexOf('const newProject = createNewProjectFlow('), 'after the flow exists');
+});
+
+test('Gemini CLI: the words say a paid API key; never that a Google account is enough (review B/C, Google 2026-06-18)', () => {
+  assert.match(STRINGS.tr.aiAcct_gemini, /ücretli/i);
+  assert.match(STRINGS.en.aiAcct_gemini, /paid/i);
+  assert.match(STRINGS.tr.wzSignIn_gemini, /artık çalışmıyor/);
+  assert.doesNotMatch(STRINGS.tr.aiAcct_gemini, /^Bir Google hesabı/);
+  assert.doesNotMatch(STRINGS.en.aiAcct_gemini, /^A Google account/);
+});
+
+test('one table of what SiberSentez does with each tool, and one honest line in the tools panel (plan D4)', async () => {
+  const { TOOLS, capabilities } = await import('../server/tools.mjs');
+  const { capsLine } = await import('../public/js/views/tools.js');
+  const caps = Object.fromEntries(TOOLS.map((t) => [t.id, capabilities(t)]));
+  assert.deepEqual([caps.claude.live, caps.codex.live], ['yes', 'no'], 'live status: Claude Code only');
+  assert.deepEqual([caps.codex.plan, caps.opencode.plan, caps.claude.plan], ['no', 'no', 'yes']);
+  assert.equal(caps.cursor.usage, 'no', 'Cursor logs carry no tokens');
+  assert.equal(caps.copilot.signIn, 'unknown');
+  assert.equal(caps.gemini.signIn, 'file', 'read from its settings files, often not for sure (review D)');
+  assert.equal(caps.claude.signIn, 'yes');
+  setLanguage('tr');
+  try {
+    assert.match(capsLine(caps.gemini), /giriş denetimi: ayar dosyasından/);
+  } finally {
+    setLanguage('en');
+  }
+  assert.equal(caps.copilot.planMin, '1.0.93');
+  setLanguage('tr');
+  try {
+    const line = capsLine(caps.copilot);
+    assert.ok(line.includes('plan kipi: var (1.0.93 ya da yenisi)') && line.includes('giriş denetimi: bilinmiyor') && line.includes('canlı durum: yok'));
+    assert.equal(capsLine(null), '', 'an older server: nothing');
+    assert.equal(capsLine({ plan: 'maybe' }), '', 'unknown words are never shown');
+  } finally {
+    setLanguage('en');
+  }
+});
+
+test('a tool whose sign-in cannot be seen: the done step says the tool\'s own way to sign in (review D: Gemini, a Google account alone)', async () => {
+  const { wizardHtml } = await import('../public/js/views/setupWizard.js');
+  const { TOOL_INFO } = await import('../public/js/views/tools.js');
+  setLanguage('tr');
+  try {
+    const w = { step: 'done', tool: { id: 'gemini', installed: true, ready: 'unknown' }, needs: [], install: null, signIn: 'gemini', ready: 'unknown' };
+    const html = wizardHtml(w, { info: TOOL_INFO, st: null });
+    assert.match(html, /Google hesabıyla giriş artık çalışmıyor/);
+    assert.doesNotMatch(wizardHtml({ ...w, ready: 'yes' }, { info: TOOL_INFO, st: null }), /wz-tool-sign/, 'a signed-in tool: no sign-in text');
+    assert.doesNotMatch(wizardHtml(w, { info: TOOL_INFO, st: null, signedIn: true }), /wz-tool-sign/, 'the person said done');
+  } finally {
+    setLanguage('en');
+  }
 });

@@ -63,6 +63,16 @@ Node.js and Git, whether `ANTHROPIC_API_KEY` is set, each AI tool with its versi
 user name, project name, session or account: a value from the server that does not look like a version is left out.
 The labels are English, like a log. The toast shows what was copied.
 
+**The page's own errors and the log folder (2026-10-09, plan A4).** An exception nobody caught or a promise nobody
+waited for (`public/js/pageErrors.js`, installed before the rest of `main.js` runs; an error while its imports are
+first read is not caught) goes to the desktop app's `main.log` as one line: its name and message, where, the first
+stack lines (each different one once, at most 20 per run from the page and 50 in the shell, from the main window's top
+frame only; keys and passwords are masked as everywhere, and the log masks the home folder). An
+object thrown without a message is written as "unknown error", never by its contents. Diagnostics adds only the
+count ("Page errors this run: N"). Settings → Help → "Log files · Open the folder" (desktop app only) opens the log
+folder in File Explorer; the shell always opens its own folder, never a path from the page. Nothing is sent anywhere:
+the person attaches the logs to a report if they want. Tests: `test/page-errors.test.mjs`.
+
 ## Look
 
 The shell sets the layout only. Every colour comes from `public/css/theme.css` (docs/theme.md); the look is designed

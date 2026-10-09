@@ -14,6 +14,11 @@ import { createActions, readActionMode, buildArgv, buildShellFallbackArgv, realW
 import { ACTION_FIELDS as CLIENT_ACTION_FIELDS, ACTION_NAMES as CLIENT_ACTION_NAMES, actionBody } from '../public/js/actions.js';
 import { createHandler } from '../server/app.mjs';
 import { PUBLIC_DIR } from '../server/config.mjs';
+import { platformOf } from '../server/platform.mjs';
+
+// Windows Terminal's actions are Windows' (plan G): these tests give the action layer Windows' rules, so they run on
+// Linux too, with the computer's own folders (Linux' own answers: test/platform-launch.test.mjs)
+const WIN = platformOf('win32');
 
 // ---------------- fake world ----------------
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-actions-'));
@@ -184,6 +189,7 @@ async function startServer({ mode = 'dry', withActions = true, ...over } = {}) {
         now: () => clock,
         log: (l) => logs.push(l),
         ai: { tools: fakeTools() },
+        plat: WIN,
         ...over,
       })
     : null;
@@ -224,15 +230,15 @@ test('buildArgv: the argv formats of the contract (pure)', () => {
   const ctx = { dir: String.raw`C:\p\a b`, title: 'Alpha', sessionId: S_IDLE, newSessionId: S_UNKNOWN, projectId: 'alpha', packageDirs: [plugin('web-ui'), plugin('design')], codeExe: CODE_EXE };
   const wt = ['wt.exe', '-w', 'sibersentez', 'new-tab', '-d', ctx.dir, '--title', 'Alpha', '--suppressApplicationTitle', 'claude'];
   const plugins = ['--plugin-dir', plugin('web-ui'), '--plugin-dir', plugin('design')];
-  assert.deepEqual(buildArgv('resume', ctx), [...wt, '--resume', S_IDLE, ...plugins]);
-  assert.deepEqual(buildArgv('fork', ctx), [...wt, '--resume', S_IDLE, ...plugins, '--fork-session']);
-  assert.deepEqual(buildArgv('new', ctx), [...wt, '-n', 'alpha', '--session-id', S_UNKNOWN, ...plugins]);
-  assert.deepEqual(buildArgv('resume', { ...ctx, packageDirs: [] }), [...wt, '--resume', S_IDLE]);
+  assert.deepEqual(buildArgv('resume', ctx, WIN), [...wt, '--resume', S_IDLE, ...plugins]);
+  assert.deepEqual(buildArgv('fork', ctx, WIN), [...wt, '--resume', S_IDLE, ...plugins, '--fork-session']);
+  assert.deepEqual(buildArgv('new', ctx, WIN), [...wt, '-n', 'alpha', '--session-id', S_UNKNOWN, ...plugins]);
+  assert.deepEqual(buildArgv('resume', { ...ctx, packageDirs: [] }, WIN), [...wt, '--resume', S_IDLE]);
   // A plain terminal: a new tab with the default profile in the folder, no command (so no AI tool starts)
-  assert.deepEqual(buildArgv('terminal', ctx), ['wt.exe', '-w', 'sibersentez', 'new-tab', '-d', ctx.dir, '--title', 'Alpha']);
+  assert.deepEqual(buildArgv('terminal', ctx, WIN), ['wt.exe', '-w', 'sibersentez', 'new-tab', '-d', ctx.dir, '--title', 'Alpha']);
   assert.deepEqual(buildShellFallbackArgv({ cmdExe: CMD_EXE, powershellExe: PS_EXE }), [CMD_EXE, '/d', '/c', 'start', '', PS_EXE, '-NoExit']);
-  assert.deepEqual(buildArgv('explorer', ctx), ['explorer.exe', `"${ctx.dir}"`]);
-  assert.deepEqual(buildArgv('vscode', ctx), [CODE_EXE, ctx.dir]);
+  assert.deepEqual(buildArgv('explorer', ctx, WIN), ['explorer.exe', `"${ctx.dir}"`]);
+  assert.deepEqual(buildArgv('vscode', ctx, WIN), [CODE_EXE, ctx.dir]);
   assert.throws(() => buildArgv('rm', ctx));
   assert.throws(() => buildArgv('skills-install', ctx), 'no skill installing in this phase');
 });
@@ -305,7 +311,7 @@ test('GET /api/actions: Sec-Fetch-Site required and same-origin; reply has mode,
     assert.equal((await env.get('/api/action', { 'Sec-Fetch-Site': 'same-origin' })).status, 405);
     assert.equal((await env.get('/api/actions', { Host: `evil.example:${env.port}`, 'Sec-Fetch-Site': 'same-origin' })).status, 421);
     // The token is generated again on every start
-    const other = createActions({ catalog: fakeCatalog(), ingest: fakeIngest(), mode: 'dry', port: 1, hubDir: HUB, log: () => {} });
+    const other = createActions({ catalog: fakeCatalog(), ingest: fakeIngest(), mode: 'dry', port: 1, hubDir: HUB, log: () => {}, plat: WIN });
     assert.notEqual(other.token, env.actions.token);
   } finally {
     await env.close();
@@ -1148,7 +1154,7 @@ test('terminal: the argument checks of every Windows Terminal action (unsafe fol
 
 // "Open in the browser" (docs/run-hint.md): the explorer action opens the project's own index.html, and nothing else
 test('explorer open: only the literal index.html, a plain file at the project root, never with a session', async () => {
-  assert.deepEqual(buildArgv('explorer', { dir: 'C:\\p', file: 'C:\\p\\index.html' }), ['explorer.exe', '"C:\\p\\index.html"']);
+  assert.deepEqual(buildArgv('explorer', { dir: 'C:\\p', file: 'C:\\p\\index.html' }, WIN), ['explorer.exe', '"C:\\p\\index.html"']);
   const env = await startServer({ mode: 'dry' });
   const page = path.join(DIR_A, 'index.html');
   try {

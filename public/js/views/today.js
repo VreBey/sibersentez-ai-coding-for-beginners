@@ -1,8 +1,8 @@
+// @ts-check
 // Today's "Pick up where you left off" block (docs/shell.md): the three projects worked in most recently (what waits or
 // runs first), each one click from its detail, and a link to every project. todayRecentHtml is pure (tested in node).
 import { store } from '../store.js';
 import { esc, ago, projectColor, replaceHtml } from '../format.js';
-import { icon } from '../icons.js';
 import { t } from '../i18n.js';
 import { projectState, groupSessions, isOtherFolder } from '../attention.js';
 

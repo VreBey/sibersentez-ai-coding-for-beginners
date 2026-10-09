@@ -14,6 +14,7 @@ import { initHub } from '../server/hub.mjs';
 import { Catalog } from '../server/catalog.mjs';
 import { CATEGORIES, CATEGORY_KEYWORDS, LIMITS, OVER_LIMIT, LEFTOVER_RE, listLibrary, libraryItems, isLegacyHub, scanSource, checkSource, proposeCategory, planImport, executeImport, normRel, validName, treeHash, measureTree, sizeProblem, placeCopy, realPath, writeCatalog } from '../server/library.mjs';
 import { sweepLeftovers } from '../server/install.mjs';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-library-'));
 after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
@@ -274,7 +275,7 @@ test('scan: status against the library — new, same (identical content), confli
   assert.equal(p['team/x/Agents/delta.md'].status, 'new');
 });
 
-test('scan: source rules — relative, UNC, device, drive root, home folder, inside the hub, missing, a file, too long or control characters are refused', () => {
+test('scan: source rules — relative, UNC, device, drive root, home folder, inside the hub, missing, a file, too long or control characters are refused', { skip: WIN_ONLY }, () => {
   const h = hub();
   write(path.join(ROOT, 'a-file.txt'), 'x');
   const cases = [
@@ -381,7 +382,7 @@ async function startServer(hubDir, { mode = 'live', onChange = () => {}, itemOri
   };
 }
 
-test('library-scan over HTTP: statuses and proposals in result.items, an empty plan, no internal fields; nothing is written', async () => {
+test('library-scan over HTTP: statuses and proposals in result.items, an empty plan, no internal fields; nothing is written', { skip: WIN_ONLY }, async () => {
   const h = hub();
   const s = sourceWorld('src-http-scan');
   const before = snapshotTree(ROOT).filter((l) => l.startsWith(path.basename(h)) || l.startsWith('src-http-scan'));
@@ -563,7 +564,7 @@ function contentReads(fn) {
   }
 }
 
-test('source rules: a ":" after the drive letter (alternate data streams such as ::$INDEX_ALLOCATION) is refused before the disk is touched', () => {
+test('source rules: a ":" after the drive letter (alternate data streams such as ::$INDEX_ALLOCATION) is refused before the disk is touched', { skip: WIN_ONLY }, () => {
   const h = hub();
   for (const src of ['C:\\::$INDEX_ALLOCATION', 'C:\\:$I30:$INDEX_ALLOCATION', HOME + '::$INDEX_ALLOCATION', path.join(HOME, '.claude') + '::$INDEX_ALLOCATION', ROOT + '::$INDEX_ALLOCATION', path.join(ROOT, 'x:stream'), 'C:/a:b']) {
     const r = checkSource(src, { hubDir: h, homeDir: HOME });

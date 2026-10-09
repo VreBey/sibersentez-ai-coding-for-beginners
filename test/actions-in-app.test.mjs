@@ -100,7 +100,12 @@ describe('preload: the page gets exactly the bridge functions', () => {
     const p = loadPreload();
     assert.deepEqual(p.required, ['electron']);
     assert.deepEqual(Object.keys(p.exposed), ['sibersentezTerminal', 'sibersentezShell'], 'the terminal bridge is checked in test/terminal.test.mjs');
-    assert.deepEqual(Object.keys(p.exposed.sibersentezShell), ['setActionsMode', 'pickProjectFolder', 'createIdeaProject', 'pickLibraryFolder', 'setLanguage', 'saveProjectIdea', 'setAttention']);
+    assert.deepEqual(Object.keys(p.exposed.sibersentezShell), ['setActionsMode', 'pickProjectFolder', 'createIdeaProject', 'pickLibraryFolder', 'setLanguage', 'setTheme', 'saveProjectIdea', 'setAttention', 'reportError', 'openLogs']);
+    // The look: its own channel with one of the three choices; anything else never reaches the shell
+    for (const theme of ['dark', 'light', 'system']) await p.exposed.sibersentezShell.setTheme(theme);
+    assert.deepEqual(p.invokes.splice(0), [['sibersentez:set-theme', 'dark'], ['sibersentez:set-theme', 'light'], ['sibersentez:set-theme', 'system']]);
+    for (const bad of ['Light', 'auto', '', null, 1, { theme: 'dark' }]) assert.equal(JSON.stringify(await p.exposed.sibersentezShell.setTheme(bad)), '{"ok":false,"reason":"invalid"}');
+    assert.deepEqual(p.invokes, []);
     assert.equal(typeof p.exposed.sibersentezShell.setActionsMode, 'function');
     // The library picker invokes its own channel with no argument, whatever the page passes
     await p.exposed.sibersentezShell.pickLibraryFolder('C:\\ignored', { path: 'x' });

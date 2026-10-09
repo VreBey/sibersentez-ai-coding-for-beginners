@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the permission prompt helper (public/js/promptHelp.js). Same keys in en and tr; placeholders use
 // {name}. Merged into the string table by public/js/i18n.js.
 export default {
@@ -17,6 +18,7 @@ export default {
     phAskText: 'When I run the project this error appears: “{line}”. Find the cause, fix it and tell me what you changed.',
     phFoot_code: 'The sentence goes into the project’s AI tool without Enter (or into the project’s job box when no AI tool runs): read it, then send it.',
     phFoot_error: 'SiberSentez never runs these commands: copy one and run it yourself in a new PowerShell window, then try again.',
+    phFoot_error_unix: 'SiberSentez never runs these commands: copy one and run it yourself in a new terminal, then try again.',
     phFoot: 'Answer in the terminal: type the number, or use the arrow keys and Enter. Esc usually means No.',
     phRisky: 'This command can delete files, change history or run something from the internet. Read it; if you are not sure, choose No and ask the AI to explain it first.',
     phWide: 'An answer like “don’t ask again” or “allow always” gives a lasting or wide permission. As a beginner, prefer the plain “Yes” so you see each step.',
@@ -64,6 +66,7 @@ export default {
     phAskText: 'Projeyi çalıştırınca şu hata çıkıyor: “{line}”. Nedenini bul, düzelt ve neyi değiştirdiğini söyle.',
     phFoot_code: 'Cümle, projenin yapay zekâ aracına Enter’a basılmadan yazılır (çalışan bir araç yoksa projenin iş kutusuna): oku, sonra gönder.',
     phFoot_error: 'SiberSentez bu komutları çalıştırmaz: birini kopyala, yeni bir PowerShell penceresinde kendin çalıştır, sonra yeniden dene.',
+    phFoot_error_unix: 'SiberSentez bu komutları çalıştırmaz: birini kopyala, yeni bir terminalde kendin çalıştır, sonra yeniden dene.',
     phFoot: 'Cevabı terminalde ver: numarayı yaz ya da ok tuşları ve Enter’ı kullan. Esc genelde “Hayır” demektir.',
     phRisky: 'Bu komut dosya silebilir, geçmişi değiştirebilir ya da internetten bir şey çalıştırabilir. Oku; emin değilsen “Hayır”ı seç ve yapay zekâdan önce açıklamasını iste.',
     phWide: '“Bir daha sorma” ya da “her zaman izin ver” gibi cevaplar kalıcı ya da geniş izin verir. Yeni başlıyorsan her adımı görmek için düz “Evet”i (Yes) seç.',

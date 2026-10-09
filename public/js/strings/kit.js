@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the SiberSentez kit (docs/kit.md): the tags its items brought into server/tags.mjs, the kit's category
 // folders, the plan reason of a kit update, the reason of an item offered in an empty folder and why Try has nothing
 // to copy (it takes library and kit items). Same keys in en and

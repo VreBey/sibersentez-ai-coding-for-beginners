@@ -2,7 +2,8 @@
 // Usage: node server/index.mjs [--open]
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { HOST, PORT, PUBLIC_DIR, HUB_DIR, ACTIONS, APP_DIR, INSTANCE, HOME_DIR, CLAUDE_DIR, PROJECTS_DIR, resolveActionModeNow } from './config.mjs';
+import path from 'node:path';
+import { HOST, PORT, PUBLIC_DIR, HUB_DIR, ACTIONS, APP_DIR, INSTANCE, SESSION_KEY, HOME_DIR, CLAUDE_DIR, PROJECTS_DIR, resolveActionModeNow } from './config.mjs';
 import { cleanupTrials, sweepLeftovers } from './install.mjs';
 import { Catalog } from './catalog.mjs';
 import { Ingest } from './ingest.mjs';
@@ -15,6 +16,7 @@ import { createFit } from './fit.mjs';
 import { createProjectChannel, shellChangeHandler } from './memory.mjs';
 import { UsageLedger, scanOlderLogs } from './usage.mjs';
 import { envFlags } from './tools.mjs';
+import { PLATFORM } from './platform.mjs';
 
 const catalog = new Catalog();
 // The projects only: the skills and agents are scanned once the logs are read (reloadCatalog after initialScan below,
@@ -166,11 +168,18 @@ if (process.parentPort && typeof process.parentPort.on === 'function') {
   process.on('message', (msg) => answerShell(msg, (reply) => process.send(reply)));
 }
 
-const server = http.createServer(createHandler({ ingest, catalog, clients, port: PORT, publicDir: PUBLIC_DIR, actions, instance: INSTANCE, fit, usage: ledger }));
+const server = http.createServer(createHandler({ ingest, catalog, clients, port: PORT, publicDir: PUBLIC_DIR, actions, instance: INSTANCE, sessionKey: SESSION_KEY, fit, usage: ledger }));
 
 function openBrowser(url) {
   try {
-    spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    // Linux and macOS: the system's opener by its full path (plan G1)
+    if (!PLATFORM.windows) {
+      spawn(PLATFORM.mac ? '/usr/bin/open' : '/usr/bin/xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+      return;
+    }
+    // cmd.exe by absolute path (review A7), never one found in the working folder
+    const cmdExe = path.win32.join(process.env.SystemRoot || process.env.windir || 'C:\\Windows', 'System32', 'cmd.exe');
+    spawn(cmdExe, ['/c', 'start', '', url], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
   } catch {
     /* if the browser cannot open, the address is printed to the console */
   }

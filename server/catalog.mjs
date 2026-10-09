@@ -19,11 +19,12 @@ import { libraryItems, hasStreamColon, isDriveRoot, realPath, within, checkSourc
 import { isBroadFolder } from './install.mjs';
 import { readKit, kitCounts, KIT_SOURCE } from './kit.mjs';
 import { readSources, originOf } from './github.mjs';
-import { normPath, slugify, readFrontmatter, truncate } from './util.mjs';
+import { normPath, slugify, readFrontmatter, truncate, PROJECT_ID_RE } from './util.mjs';
 import { DirLister, exists, isLocalPath, isLowerCased, localExists, toolsOnly } from './fsutil.mjs';
 import { readPlan } from './plan.mjs';
 import { ADAPTERS } from './adapters/index.mjs';
 import { ProjectMemory, SIBERSENTEZ_VIA } from './memory.mjs';
+import { PLATFORM, PROGRAM_HOME_FOLDERS, configRoot, normalizeDir, isSystemFolder, tempFolders, programDataFolders } from './platform.mjs';
 
 export { BUILTIN_AGENTS, readHeadCwd, resolveSlug } from './adapters/claude-code.mjs';
 
@@ -47,7 +48,6 @@ const PROJECT_NOTE = 'Not in the registry; found in AI tool records.';
 // An unregistered project the user added in the desktop app ("New project")
 const ADDED_NOTE = 'Added in SiberSentez as a new project.';
 // A project id as a request names it (the same rule as server/actions.mjs)
-const PROJECT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
 // New project (docs/start-flow.md, step 2): system and synced folders a folder the user picks may never be, named by
 // environment variables (any letter case; the same list as the desktop shell's checkProjectFolder, reason 'broad'):
@@ -102,9 +102,8 @@ export class Catalog {
     this.homeDir = homeDir;
     this.projectsDir = projectsDir || path.join(claudeDir, 'projects');
     this.env = env && typeof env === 'object' ? env : {};
-    // Roaming application data (VS Code-style editors keep their workspaces there)
-    const appData = typeof this.env.APPDATA === 'string' ? this.env.APPDATA.trim() : '';
-    this.appDataDir = appData && path.isAbsolute(appData) ? appData : path.join(homeDir, 'AppData', 'Roaming');
+    // Where desktop programs keep their settings (VS Code-style editors keep their workspaces there; platform.mjs)
+    this.appDataDir = configRoot(this.env, homeDir);
     this.adapters = adapters;
     this.toolRank = new Map(adapters.map((a, i) => [a.id, i])); // roster "tools" and project "via" follow this order
     this.memory = memory || new ProjectMemory({ hubDir: this.hubDir });
@@ -223,7 +222,7 @@ export class Catalog {
     const ideas = new Map(); // project id -> { idea, own }
     for (const m of this.memory.list()) {
       const n = normPath(m.path);
-      if (!n || !isLocalPath(m.path) || n.includes(SCRATCH_MARKER) || this.isBroad(n) || /windows\/system32$/.test(n)) continue;
+      if (!n || !isLocalPath(m.path) || n.includes(SCRATCH_MARKER) || this.isBroad(n) || isSystemFolder(n)) continue;
       const pid = this.resolve(m.path, hints.get(n));
       const p = pid ? this.getProject(pid) : null;
       if (!p) continue;
@@ -324,8 +323,7 @@ export class Catalog {
     if (/^[\\/]{2}/.test(folder)) return fail('network');
     if (!isLocalPath(folder)) return fail('not-local');
     if (hasStreamColon(folder) || /[<>"|?*\u0000-\u001f\u007f-\u009f]/.test(folder)) return fail('invalid');
-    let dir = path.win32.normalize(folder);
-    if (dir.length > 3) dir = dir.replace(/[\\/]+$/, '');
+    const dir = normalizeDir(folder);
     const home = normPath(this.homeDir);
     const why = (p) => {
       const n = normPath(p);
@@ -581,12 +579,22 @@ export class Catalog {
   isBroad(n) {
     if (!this.broad) {
       const h = this.homeDir;
-      const temps = [path.join(h, 'AppData', 'Local', 'Temp'), this.env.TEMP, this.env.TMP].filter((t) => typeof t === 'string' && path.isAbsolute(t.trim())).map((t) => t.trim());
+      // The platform's temp folders and program data places (platform.mjs; plan G2)
+      const temps = tempFolders(this.env, h);
       this.broad = new Set([h, path.join(h, 'Desktop'), path.join(h, 'Documents'), path.join(h, 'Downloads'), ...temps].map(normPath));
-      this.appDataRoot = normPath(path.join(h, 'AppData'));
-      this.tempRoots = temps.map(normPath).filter((t) => t.startsWith(this.appDataRoot + '/'));
+      this.appDataRoots = programDataFolders(h).map(normPath);
+      this.appDataRoot = this.appDataRoots[0] || '';
+      this.tempRoots = temps.map(normPath).filter((t) => this.appDataRoots.some((a) => t.startsWith(a + '/')));
+      this.homeKey = h ? normPath(h) : '';
     }
     if (this.broad.has(n) || /^[a-z]:$/.test(n)) return true;
+    // Linux and macOS: the home folder's program folders (~/.npm, ~/.nvm, ~/.cargo...: platform.mjs) and what is below
+    // them are the programs' own, as AppData is on Windows; a hidden folder of the person's own (~/.dotfiles) is not.
+    // The system's own folders (/usr, /etc/nginx...) never become projects from a tool record either (review G)
+    if (!PLATFORM.windows) {
+      if (this.homeKey && PROGRAM_HOME_FOLDERS.some((d) => n === `${this.homeKey}/${d}` || n.startsWith(`${this.homeKey}/${d}/`))) return true;
+      if (isSystemFolder(n)) return true;
+    }
     return this.inAppData(n);
   }
 
@@ -601,7 +609,7 @@ export class Catalog {
     if (!n) return null;
     this.isBroad(n); // builds the broad and temp lists
     if (this.isSystemFolder(n) || /windows\/system32$/.test(n)) return 'broad';
-    const temps = [path.join(this.homeDir, 'AppData', 'Local', 'Temp'), this.env.TEMP, this.env.TMP].filter((t) => typeof t === 'string' && path.isAbsolute(t.trim())).map((t) => normPath(t.trim()));
+    const temps = tempFolders(this.env, this.homeDir).map(normPath);
     if (temps.some((t) => n.startsWith(t + '/'))) return 'temp';
     const docs = normPath(path.join(this.homeDir, 'Documents', 'Codex'));
     if (n.startsWith(docs + '/') && /^\d{4}-\d{2}-\d{2}\/[^/]+$/.test(n.slice(docs.length + 1))) return 'chat';
@@ -610,8 +618,7 @@ export class Catalog {
 
   // n (normPath form) is <home>\AppData or below it, and not inside a temp folder that lies within AppData
   inAppData(n) {
-    const a = this.appDataRoot;
-    if (!a || !n || (n !== a && !n.startsWith(a + '/'))) return false;
+    if (!n || !(this.appDataRoots || []).some((a) => a && (n === a || n.startsWith(a + '/')))) return false;
     return !this.tempRoots.some((t) => n.startsWith(t + '/'));
   }
 

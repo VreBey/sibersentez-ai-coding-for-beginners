@@ -1,3 +1,4 @@
+// @ts-check
 // App-issued identities bind a launched job to its plan, tasks and review. No user paths enter an id.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -72,7 +73,7 @@ export function readCurrentJob(folder, xfs = fs) {
 
 // Moves an unknown marker (a small plain file only) to current-job.json.bak-<random> so a new job can start; the
 // contents are kept for the person, never deleted. Returns true when the marker is out of the way.
-export function setAsideCurrentJob(folder, xfs = fs) {
+function setAsideCurrentJob(folder, xfs = fs) {
   if (readCurrentJob(folder, xfs).problem !== 'unknown') return false;
   try {
     xfs.renameSync(path.join(folder, CURRENT_JOB_FILE), path.join(folder, `${CURRENT_JOB_FILE}.bak-${crypto.randomBytes(4).toString('hex')}`));

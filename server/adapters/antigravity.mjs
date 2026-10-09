@@ -1,3 +1,4 @@
+// @ts-check
 // Antigravity source adapter (see adapters/index.mjs; contract docs/adapters-wave1.md).
 //   projects: every single-folder workspace in <APPDATA>/Antigravity IDE/User/workspaceStorage (workspace.json
 //             "folder"). Antigravity CLI conversations are SQLite: not read in this wave.

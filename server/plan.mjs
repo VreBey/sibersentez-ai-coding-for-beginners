@@ -1,3 +1,4 @@
+// @ts-check
 // The project's "what it will do" layer. For projects with a CCGS layout:
 //   production/stage.txt                 → stage (e.g. "Systems Design")
 //   production/review-mode.txt           → review mode (full / lean)

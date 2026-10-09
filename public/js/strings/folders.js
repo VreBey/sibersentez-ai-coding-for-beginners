@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the folders that are not projects (docs/folders.md). Same keys in en and tr; placeholders use {name}.
 // Merged into STRINGS by ../i18n.js.
 export default {

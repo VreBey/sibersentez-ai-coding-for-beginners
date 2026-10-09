@@ -1,3 +1,4 @@
+// @ts-check
 // Which AI tools see a project or a roster item (docs/tool-view.md). The server tags every project with the adapters
 // that found it (`via`) and every roster item with the adapters that read it (`tools`); the snapshot's `tools` names
 // the adapters and says which are present. Pure helpers here; the views draw the tags and the filter with them.
@@ -11,8 +12,8 @@ const HUE = Object.freeze({ 'claude-code': '#e08a5e', codex: '#5fbf9a', 'gemini-
 export const ADAPTER_OF_TOOL = Object.freeze({ claude: 'claude-code', codex: 'codex', gemini: 'gemini-cli', copilot: 'copilot', cursor: 'cursor', qwen: 'qwen', opencode: 'opencode' });
 
 export const toolIdsOf = (x) => (Array.isArray(x?.via) ? x.via : Array.isArray(x?.tools) ? x.tools : []);
-export const toolShort = (id, tools = []) => SHORT[id] || tools.find((x) => x.id === id)?.name || id;
-export const toolHue = (id) => HUE[id] || '#9aa4b8';
+const toolShort = (id, tools = []) => SHORT[id] || tools.find((x) => x.id === id)?.name || id;
+const toolHue = (id) => HUE[id] || '#9aa4b8';
 
 // Tags and the filter mean something only when more than one tool left traces on this computer: with one tool every
 // card would carry the same tag

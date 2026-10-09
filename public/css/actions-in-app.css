@@ -13,10 +13,10 @@
   width: 456px; max-width: calc(100vw - 24px);
   display: flex; flex-direction: column; gap: 10px; padding: 14px;
   border-radius: 14px; border: 1px solid var(--line-2);
-  background: #10131c; box-shadow: var(--shadow), 0 0 0 1px rgba(var(--shade-rgb), 0.35);
+  background: var(--raised); box-shadow: var(--shadow), 0 0 0 1px rgba(var(--shade-rgb), 0.35);
   color: var(--text-2); font-size: 13px; text-align: left;
   /* Softer text on this panel stays at about 5.9:1 */
-  --muted: #8f98ae;
+ 
   animation: asw-in 0.14s ease-out;
 }
 @keyframes asw-in { from { opacity: 0; transform: translateY(-4px); } }
@@ -47,13 +47,13 @@
 
 .asw-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .asw-name { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 650; }
-.asw-now { padding: 0 7px; border-radius: 999px; background: rgba(var(--accent-rgb), 0.16); color: #c9d5ff; font: 700 10px/1.7 var(--font); letter-spacing: 0.04em; text-transform: uppercase; }
+.asw-now { padding: 0 7px; border-radius: 999px; background: rgba(var(--accent-rgb), 0.16); color: var(--accent-ink); font: 700 10px/1.7 var(--font); letter-spacing: 0.04em; text-transform: uppercase; }
 .asw-desc { color: var(--text-2); font-size: 12.5px; line-height: 1.4; }
 
-.asw-error { margin: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(var(--stop-rgb), 0.45); background: rgba(var(--stop-rgb), 0.1); color: #ffd9d9; font-size: 12.5px; line-height: 1.4; }
+.asw-error { margin: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(var(--stop-rgb), 0.45); background: rgba(var(--stop-rgb), 0.1); color: var(--stop-ink); font-size: 12.5px; line-height: 1.4; }
 
 .asw-confirm { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; border-radius: 11px; border: 1px solid rgba(var(--stop-rgb), 0.45); background: rgba(var(--stop-rgb), 0.07); }
-.asw-confirm-title { margin: 0; color: #ffd9d9; font-weight: 650; }
+.asw-confirm-title { margin: 0; color: var(--stop-ink); font-weight: 650; }
 .asw-confirm-body { margin: 0; color: var(--text-2); font-size: 12.5px; line-height: 1.45; }
 .asw-confirm-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px; }
 

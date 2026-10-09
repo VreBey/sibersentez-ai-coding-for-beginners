@@ -1,3 +1,4 @@
+// @ts-check
 // The workshop building's scene (docs/hq.md), pure: no DOM, no clock, no store. The approved drawing
 // (public/img/building/hq-tower.png, 1536 x 1024; the "SiberSentez Bina Onayli" package of 2026-10-01) is a three-floor
 // house with a lift on the right: six rooms, one per kind. sceneFrom() turns one project's data (the snapshot below)
@@ -34,7 +35,7 @@ export const ROOM_KINDS = Object.freeze(['dev', 'gamedev', 'design', 'server', '
 // The lift's shaft (actors ride it between floors) and the doors each floor has (the room wall and the lift's)
 export const LIFT_X = 1320;
 export const LIFT_BOX = Object.freeze({ x: 1280, y: 225, w: 100, h: 675 });
-export const DOOR_XS = Object.freeze([706, 1215]);
+const DOOR_XS = Object.freeze([706, 1215]);
 // Where a newcomer comes from: the lift's ground floor
 const ENTRY = Object.freeze({ x: LIFT_X, y: 854 });
 
@@ -145,7 +146,7 @@ export function countByCategory(toolCounts) {
 export const MOVE_CELL = Object.freeze({ w: 256, h: 384 });
 // Fitting a cell over the typing atlas' square: the seated pose's chair corner (32, 374 in the cell) lands where the
 // typing atlas has it, at the typing figure's height (measured on both drawings)
-export const MOVE_FIT = Object.freeze({
+const MOVE_FIT = Object.freeze({
   person: { x: 0.2187, y: 0.9538, k: 0.9019 / 261 },
   robot: { x: 0.2368, y: 0.9312, k: 0.8748 / 249 },
 });
@@ -163,8 +164,8 @@ export const WALK_FACING = -1;
 export const LEAVE_MS = SIT_MS + WALK_MS;
 export const WAVE_MS = 450;
 export const REST_MS = Object.freeze([1800, 900, 1400, 1200]);
-export const TYPE_FRAME_MS = 170;
-export const FPS_MOVING = 12;
+const TYPE_FRAME_MS = 170;
+const FPS_MOVING = 12;
 export const WAIT_RING_MS = 1600;
 // A finished agent stays this long: it stands up, its result card travels to its lead, the lead's screen lights up
 export const DONE_MS = 2300;
@@ -226,7 +227,7 @@ export function waitRing(time, ms = WAIT_RING_MS) {
 // Which way the actors face at a room's furniture: at the computers from behind, at the racks, easels, meeting table
 // and lounge from the side, in the library towards the viewer
 const SEAT_VIEWS = Object.freeze({ dev: 'back', gamedev: 'back', design: 'right', server: 'right', meeting: 'right', library: 'front', lounge: 'right' });
-export function seatGeometry(room, seat) {
+function seatGeometry(room, seat) {
   const x = room.seats[seat];
   const feet = FLOORS[room.floor].feet;
   const activity = { server: 'rack', library: 'read', lounge: 'rest', meeting: 'meeting', design: 'draw' }[room.kind] || 'desk';

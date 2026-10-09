@@ -26,27 +26,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn as nodeSpawn } from 'node:child_process';
-import { isLegacyHub, listLibrary, findLibraryItem, scanSource, publicScanItems, planImport, executeImport, writeCatalog, publicPlan, validName, normRel, lstat, treeHash, sameHash, CATEGORY_RE, MAX_REL_PATH } from './library.mjs';
-import { TARGETS, defaultTargets, resolveProject, readInstalls, planInstall, executeInstall, planRemove, executeRemove, planTrial, makeTrial } from './install.mjs';
-import { createPointAsync, planRestore, applyRestore, recordJobPoint, POINT_ID_RE } from './restore.mjs';
-import { createFit, planApplyImports, KEY_RE, normalizeIdea, normalizeJob } from './fit.mjs';
+import { isLegacyHub, listLibrary, findLibraryItem, scanSource, publicScanItems, planImport, executeImport, writeCatalog, publicPlan, normRel, lstat, treeHash, sameHash } from './library.mjs';
+import { resolveProject, readInstalls, planInstall, executeInstall, planRemove, executeRemove, planTrial, makeTrial } from './install.mjs';
+import { createPointAsync, planRestore, applyRestore, recordJobPoint } from './restore.mjs';
+import { createFit, planApplyImports } from './fit.mjs';
 // "Start with AI" (docs/ai-start.md)
-import { sharedToolDetector, toolById, TOOL_IDS, envValue } from './tools.mjs';
-import { firstMessageText, jobMessageText, planFirstMessage, writeFirstMessage, launchPrompt, toolArgs, jobArgs, versionAtLeast, resumeArgs, launcherText, pickLaunchDir, buildAiArgv, buildAiFallbackArgv, newLauncherName, cleanupLaunchers, SAFE_LAUNCH_RE, FIRST_DIR } from './launch.mjs';
+import { sharedToolDetector, toolById } from './tools.mjs';
+import { firstMessageText, jobMessageText, planFirstMessage, writeFirstMessage, launchPrompt, toolArgs, jobArgs, versionAtLeast, resumeArgs, launcherText, pickLaunchDir, buildAiArgv, buildAiFallbackArgv, newLauncherName, cleanupLaunchers, SAFE_LAUNCH_RE, FIRST_DIR, shellLauncherText } from './launch.mjs';
 import { newJobId, readCurrentJob, writeCurrentJob, markerError, CURRENT_JOB_FILE } from './job-id.mjs';
-import { createGitHub, cleanupIncoming, parseGitHubUrl, parseRepoName, describeDownload, planDownloadImport, readSources, findSource, updateSources, sourceRow, diffItems, FETCH_ID_RE } from './github.mjs';
+import { createGitHub, cleanupIncoming, parseRepoName, describeDownload, planDownloadImport, readSources, findSource, updateSources, sourceRow, diffItems } from './github.mjs';
 import { reviewItem } from './review.mjs';
+import { PROJECT_ID_RE } from './util.mjs';
+import { PLATFORM, appDataDir, terminalShell, editorCandidates, homeOf } from './platform.mjs';
 import { readKit } from './kit.mjs';
+import { createValidators, ACTION_NAMES, UUID_RE, UNSAFE_RE, GITHUB_SET, SKILL_SET, buildArgv, isDir, isFile, reject, GITHUB_ACTIONS } from './actionInput.mjs';
+export { LAUNCH_ACTIONS, SKILL_ACTIONS, GITHUB_ACTIONS, ACTION_NAMES, MAX_SKILL_ITEMS, buildArgv } from './actionInput.mjs';
 
-// 'new' (a new Claude Code session) stays for the server and the skill trial; the context menu offers 'terminal'
-export const LAUNCH_ACTIONS = Object.freeze(['resume', 'fork', 'new', 'terminal', 'explorer', 'vscode']);
-export const SKILL_ACTIONS = Object.freeze(['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply']);
-// An AI tool started in a terminal, with the project's idea as its first message (docs/ai-start.md)
-export const AI_ACTIONS = Object.freeze(['start-ai']);
-// Bringing skills and agents from GitHub (docs/github-import.md): the only actions that reach the internet, and only in
-// live mode
-export const GITHUB_ACTIONS = Object.freeze(['github-fetch', 'github-import', 'github-discard', 'github-check-update']);
-export const ACTION_NAMES = Object.freeze([...LAUNCH_ACTIONS, ...SKILL_ACTIONS, ...AI_ACTIONS, ...GITHUB_ACTIONS]);
 
 // App folder (parent of server/): working directory of started processes, computed without importing config.mjs.
 // In the installed app this is ...\resources\app.asar: realWorkDir turns it into a folder the OS can enter.
@@ -79,66 +74,18 @@ export function realWorkDir(dir) {
 // fit with room (it was 4096 when a job was 300 characters)
 const MAX_BODY = 16384;
 const REPEAT_MS = 3000;
-const MAX_PACKAGES = 10;
-const MAX_TITLE = 40;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const PACKAGE_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
-// The project id goes into argv (-n): it starts with a letter or digit so it is never read as an option
-const PROJECT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
-// Windows Terminal treats ';' as a command separator even inside quotes and does not escape '"'; explorer gets the path
-// verbatim, quoted. Control characters (C0, DEL, C1, line separators) must not appear in any argument.
-const UNSAFE_RE = /[;"\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 // A launcher path cmd may take as its own argument in SiberSentez's terminal: spaces and any letter are fine (node-pty
 // hands cmd a Unicode command line), but nothing cmd would expand (%) or treat as an operator
 const DOCK_LAUNCHER_RE = /^[A-Za-z]:\\[^%!^&|<>"\u0000-\u001f\u007f]+$/;
-const DRIVE_DIR_RE = /^[A-Za-z]:[\\/]/;
 const JSON_TYPE_RE = /^application\/json\s*(?:;\s*charset=utf-8\s*)?$/i;
 
-// Required and allowed body fields per action; any other field is rejected
-const FIELDS = {
-  resume: { required: ['sessionId'], optional: ['projectId', 'packages'] },
-  fork: { required: ['sessionId'], optional: ['projectId', 'packages'] },
-  new: { required: ['projectId'], optional: ['packages'] },
-  terminal: { required: [], optional: ['projectId', 'sessionId'] },
-  // open: 'index.html' opens the project's own web page in the default browser instead of the folder (docs/run-hint.md)
-  explorer: { required: [], optional: ['projectId', 'sessionId', 'open'] },
-  vscode: { required: [], optional: ['projectId', 'sessionId'] },
-};
-// Actions whose arguments reach Windows Terminal (tab title and last guard apply)
-const TERMINAL_ACTIONS = new Set(['resume', 'fork', 'new', 'terminal']);
-const TARGET_ACTIONS = new Set(['terminal', 'explorer', 'vscode']); // projectId or sessionId, one of them
 const PROGRAM_CODES = { resume: 'wt', fork: 'wt', new: 'wt', explorer: 'explorer', vscode: 'vscode' };
 
-// Skill flow bodies (docs/skills-flow.md §4). Error codes are English; the page maps them to text.
-const SKILL_FIELDS = {
-  'library-scan': { required: ['source'], optional: [] },
-  'library-import': { required: ['source', 'items'], optional: [] },
-  // A listed skill or agent into the library, from where it lives on this disk (docs/skills-flow.md §5.1)
-  'library-adopt': { required: ['items'], optional: [] },
-  'skills-preview': { required: ['projectId', 'items'], optional: ['targets'] },
-  'skills-install': { required: ['projectId', 'items'], optional: ['targets'] },
-  'skills-remove': { required: ['projectId', 'items'], optional: ['targets', 'plan'] },
-  'skills-trial': { required: ['projectId', 'items'], optional: [] },
-  'skills-apply': { required: ['projectId'], optional: ['keys', 'targets'] },
-  // Restore points (docs/restore.md): what going back would do, and going back
-  'restore-preview': { required: ['projectId', 'pointId'], optional: [] },
-  'restore-apply': { required: ['projectId', 'pointId'], optional: ['planId'] },
-  // GitHub import (docs/github-import.md §6)
-  'github-fetch': { required: ['url'], optional: [] },
-  'github-import': { required: ['fetchId', 'items'], optional: [] },
-  'github-discard': { required: ['fetchId'], optional: [] },
-  'github-check-update': { required: ['items'], optional: [] },
-};
-const GITHUB_SET = new Set(GITHUB_ACTIONS);
-// The skill flow and the GitHub import: English error codes and log notes, one shared validation
-const SKILL_SET = new Set([...SKILL_ACTIONS, ...GITHUB_ACTIONS]);
 // Actions that write in live mode (one at a time). A GitHub fetch writes the download into the hub's incoming/ folder.
 const WRITING = new Set(['library-import', 'library-adopt', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-apply', ...GITHUB_ACTIONS]);
-export const MAX_SKILL_ITEMS = 25;
 // Names per list in a restore reply (the counts are whole)
 const RESTORE_LIST_MAX = 50;
-const MAX_URL = 500;
 // HTTP status of a GitHub error code (never 403 or 429: the page reads those as "refused" and "asked again too soon")
 const GITHUB_STATUS = { 'not-public': 404, 'ref-not-found': 404, 'path-not-found': 404, 'fetch-missing': 404, 'not-github': 502, 'redirect-refused': 502, network: 502, 'fetch-failed': 502, 'git-failed': 502, 'rate-limited': 503, timeout: 504, 'too-large': 413, 'too-many-files': 413, 'tar-corrupt': 422, 'tar-unsafe-path': 422, 'reparse-point': 409, 'git-missing': 500 };
 
@@ -156,31 +103,6 @@ export function readActionMode(env = {}) {
   return 'off';
 }
 
-// Pure: builds argv from a validated context. Touches neither the file system nor any process.
-// ctx: { dir, title, sessionId, newSessionId, projectId, packageDirs (resolved package folders), codeExe, file (explorer: a web page to open instead of the folder) }
-export function buildArgv(action, ctx) {
-  const plugins = (ctx.packageDirs || []).flatMap((d) => ['--plugin-dir', d]);
-  const terminal = ['wt.exe', '-w', 'sibersentez', 'new-tab', '-d', ctx.dir, '--title', ctx.title, '--suppressApplicationTitle', 'claude'];
-  switch (action) {
-    case 'resume':
-      return [...terminal, '--resume', ctx.sessionId, ...plugins];
-    case 'fork':
-      return [...terminal, '--resume', ctx.sessionId, ...plugins, '--fork-session'];
-    case 'new':
-      return [...terminal, '-n', ctx.projectId, '--session-id', ctx.newSessionId, ...plugins];
-    case 'terminal':
-      // A new tab with the default profile in the folder; no command, so no AI tool is started
-      return ['wt.exe', '-w', 'sibersentez', 'new-tab', '-d', ctx.dir, '--title', ctx.title];
-    case 'explorer':
-      // explorer splits on commas; the path is passed verbatim, quoted, with windowsVerbatimArguments
-      return ['explorer.exe', `"${ctx.file || ctx.dir}"`];
-    case 'vscode':
-      return [ctx.codeExe, ctx.dir];
-    default:
-      throw new Error(`unknown action: ${action}`);
-  }
-}
-
 // Pure: the terminal action's fallback when Windows Terminal cannot be started: Windows PowerShell in its own
 // console window. `start` opens that window: a console program spawned detached gets no console at all (libuv sets
 // DETACHED_PROCESS), and one spawned attached would share the server's console and die with it. Nothing from the
@@ -188,35 +110,6 @@ export function buildArgv(action, ctx) {
 // the empty argument is start's window title.
 export function buildShellFallbackArgv({ cmdExe, powershellExe }) {
   return [cmdExe, '/d', '/c', 'start', '', powershellExe, '-NoExit'];
-}
-
-function isDir(p) {
-  try {
-    return fs.statSync(p).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-function isFile(p) {
-  try {
-    return fs.statSync(p).isFile();
-  } catch {
-    return false;
-  }
-}
-
-const reject = (status, error, extra = {}) => ({ ok: false, status, body: { ok: false, error, ...extra } });
-
-// Folder path: character check first (the file system is never touched with an odd path), then whether the folder exists
-function checkDir(raw, missing) {
-  if (typeof raw !== 'string' || !raw) return reject(404, missing);
-  if (UNSAFE_RE.test(raw)) return reject(409, 'folder-path-unsafe');
-  if (!DRIVE_DIR_RE.test(raw)) return reject(409, 'folder-path-unsupported');
-  let dir = path.win32.normalize(raw);
-  if (dir.length > 3) dir = dir.replace(/\\+$/, '');
-  if (!isDir(dir)) return reject(404, missing);
-  return { ok: true, dir };
 }
 
 // Short name of the target for the log. An unregistered project id derives from the folder path (it may contain the user name):
@@ -291,7 +184,8 @@ export function createActions({
   spawn = nodeSpawn,
   now = Date.now,
   log = (line) => console.log(line),
-  codeExe = path.join(process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Local'), 'Programs', 'Microsoft VS Code', 'Code.exe'),
+  // VS Code's command (platform.mjs editorCandidates): the first that exists, else the most likely one
+  codeExe = editorCandidates(process.env).find((p) => isFile(p)) || editorCandidates(process.env)[0],
   cmdExe = path.win32.join(SYSTEM_ROOT, 'System32', 'cmd.exe'),
   powershellExe = path.win32.join(SYSTEM_ROOT, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
   homeDir = null,
@@ -302,6 +196,8 @@ export function createActions({
   // launcher, default process.env), launchDirs (launcher folders, default <hub>\launch, %LOCALAPPDATA%\SiberSentez\launch)
   ai = {},
   github = null,
+  // The platform's rules (server/platform.mjs); tests pass another one
+  plat = PLATFORM,
 } = {}) {
   if (!['off', 'dry', 'live'].includes(mode)) mode = 'off';
   // Every started process runs here (never inside app.asar, never in a project folder unless noted)
@@ -323,6 +219,10 @@ export function createActions({
   let tokenBuf = token ? Buffer.from(token, 'utf8') : null;
   const recent = new Map(); // action|project|session -> time of the last accepted request
   let writing = false; // a live skill action that writes is running
+  // Going back now runs without holding the server (review A2): a project being put back takes no AI start, and a
+  // project whose start copy is being taken cannot be put back, until the other is done
+  const restoring = new Set(); // project ids
+  const starting = new Set(); // project ids
 
   const list = () => (mode === 'off' ? [] : [...ACTION_NAMES]);
 
@@ -349,256 +249,8 @@ export function createActions({
   }
 
   // Action and id validation. On success { ok, action, argv, ctx, key }.
-  function validate(body) {
-    if (!body || typeof body !== 'object' || Array.isArray(body)) return reject(400, 'body-not-object');
-    const action = body.action;
-    if (typeof action !== 'string' || !ACTION_NAMES.includes(action)) return reject(400, 'unknown-action');
-    if (SKILL_SET.has(action)) return validateSkill(body);
-    if (action === 'start-ai') return validateAiStart(body);
-    const spec = FIELDS[action];
-    for (const k of Object.keys(body)) {
-      if (k !== 'action' && !spec.required.includes(k) && !spec.optional.includes(k)) return reject(400, 'unexpected-field');
-    }
-    for (const k of spec.required) if (body[k] === undefined || body[k] === null || body[k] === '') return reject(400, `eksik alan: ${k}`);
-    for (const k of ['projectId', 'sessionId']) if (body[k] !== undefined && typeof body[k] !== 'string') return reject(400, 'bad-field');
-    if (body.packages !== undefined && (!Array.isArray(body.packages) || body.packages.some((p) => typeof p !== 'string'))) return reject(400, 'bad-field');
-    if (body.packages && body.packages.length > MAX_PACKAGES) return reject(400, 'too-many-packages');
-    if (TARGET_ACTIONS.has(action) && body.projectId === undefined && body.sessionId === undefined) return reject(400, 'projectId ya da sessionId gerekli');
-    const packages = [...new Set(body.packages || [])];
-
-    // Oturum: ingest'te bilinmeli
-    let session = null;
-    if (body.sessionId !== undefined) {
-      if (!UUID_RE.test(body.sessionId)) return reject(400, 'bad-session-id');
-      session = ingest?.sessions?.get(body.sessionId) || null;
-      if (!session) return reject(404, 'session-not-found');
-      if (action === 'resume' && session.live) return reject(409, 'session-live', { hint: 'fork' });
-      // Continue and copy run Claude Code's --resume: another tool's session (server/toolLogs.mjs) is not Claude's
-      if ((action === 'resume' || action === 'fork') && (session.tool || 'claude') !== 'claude') return reject(400, 'resume-claude-only');
-    }
-
-    // Project: must be in the catalog and must not be a broad folder
-    let project = null;
-    if (body.projectId !== undefined) {
-      if (!PROJECT_ID_RE.test(body.projectId)) return reject(400, 'bad-project-id');
-      project = catalog?.getProject?.(body.projectId) || null;
-      if (!project) return reject(404, 'project-not-found');
-      if (project.broad) return reject(409, 'broad-folder');
-      if (session && session.projectId !== project.id) return reject(400, 'session-project-mismatch');
-    } else if (session?.projectId) {
-      project = catalog?.getProject?.(session.projectId) || null; // only for the tab title
-    }
-
-    const folder = session ? checkDir(session.cwd, 'folder-missing') : checkDir(project.path, 'folder-missing');
-    if (!folder.ok) return folder;
-
-    // Without the working directory spawn fails with ENOENT and a misleading "wt.exe not found": reported separately
-    if (!isDir(appCwd)) return reject(500, 'app-folder-missing');
-
-    // Packages (per-session --plugin-dir): accepted only when the hub has that category folder,
-    // library/<category> (legacy hub: kutuphane/<category>)
-    const packageDirs = [];
-    for (const p of packages) {
-      if (!PACKAGE_RE.test(p)) return reject(400, 'bad-package-name');
-      if (!hubDir || !isDir(hubDir)) return reject(404, 'hub-missing');
-      const dir = [path.join(hubDir, 'library', p), path.join(hubDir, 'kutuphane', p)].find(isDir);
-      if (!dir) return reject(404, 'package-folder-missing');
-      packageDirs.push(dir);
-    }
-
-    // External programs
-    if (action === 'vscode' && !isFile(codeExe)) return reject(501, 'vscode-missing');
-
-    // "Open in the browser" (docs/run-hint.md): only the literal 'index.html', a plain file at the project's own root
-    // (never a link, never a session's folder); explorer opens it with the program Windows has for web pages
-    let file = null;
-    if (body.open !== undefined) {
-      if (action !== 'explorer' || body.open !== 'index.html' || !project || session) return reject(400, 'bad-field');
-      const f = path.join(folder.dir, 'index.html');
-      let st = null;
-      try {
-        st = fs.lstatSync(f);
-      } catch {
-        st = null;
-      }
-      if (!st || !st.isFile()) return reject(404, 'file-missing');
-      if (UNSAFE_RE.test(f)) return reject(409, 'command-unsafe');
-      file = f;
-    }
-
-    const ctx = { dir: folder.dir, sessionId: session?.id, projectId: project?.id, packageDirs, codeExe, file };
-    if (action === 'new') ctx.newSessionId = crypto.randomUUID();
-    if (TERMINAL_ACTIONS.has(action)) {
-      const name = String(project?.name || path.win32.basename(folder.dir) || '').trim();
-      const title = Array.from(name).slice(0, MAX_TITLE).join('') || (action === 'terminal' ? 'Terminal' : 'Claude');
-      if (UNSAFE_RE.test(title) || title.startsWith('-')) return reject(409, 'project-name-unsafe');
-      ctx.title = title;
-    }
-    const argv = buildArgv(action, ctx);
-    // Last guard: no argument passed to Windows Terminal may carry a separator or a quote (hub path included)
-    if (TERMINAL_ACTIONS.has(action) && argv.slice(1).some((a) => UNSAFE_RE.test(String(a)))) return reject(409, 'command-unsafe');
-    return { ok: true, action, argv, ctx, key: `${action}|${project?.id || ''}|${session?.id || ''}${file ? '|page' : ''}` };
-  }
-
-  // ---------------- skill flow (docs/skills-flow.md) ----------------
-
-  // [{ kind, name }] with exactly these keys; duplicates dropped
-  function checkItems(items) {
-    if (!Array.isArray(items) || !items.length) return reject(400, 'bad-items');
-    if (items.length > MAX_SKILL_ITEMS) return reject(400, 'too-many-items');
-    const out = [];
-    const seen = new Set();
-    for (const it of items) {
-      if (!it || typeof it !== 'object' || Array.isArray(it)) return reject(400, 'bad-items');
-      const keys = Object.keys(it);
-      if (keys.length !== 2 || !keys.includes('kind') || !keys.includes('name')) return reject(400, 'bad-items');
-      if (it.kind !== 'skill' && it.kind !== 'agent') return reject(400, 'bad-kind');
-      if (!validName(it.name)) return reject(400, 'bad-name');
-      const k = `${it.kind}:${it.name}`.toLowerCase();
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push({ kind: it.kind, name: it.name });
-    }
-    return { ok: true, items: out };
-  }
-
-  // skills-apply keys: candidate keys of the fit (kind:name or kind:name@label); duplicates dropped
-  function checkKeys(keys) {
-    if (!Array.isArray(keys) || !keys.length) return reject(400, 'bad-keys');
-    if (keys.length > MAX_SKILL_ITEMS) return reject(400, 'too-many-items');
-    const out = [];
-    for (const k of keys) {
-      if (typeof k !== 'string' || !KEY_RE.test(k)) return reject(400, 'bad-keys');
-      if (!validName(KEY_RE.exec(k)[2])) return reject(400, 'bad-name');
-      if (!out.includes(k)) out.push(k);
-    }
-    return { ok: true, keys: out };
-  }
-
-  // ['claude'|'agents'], returned in a fixed order
-  function checkTargets(t) {
-    if (!Array.isArray(t) || !t.length || t.length > TARGETS.length) return reject(400, 'bad-targets');
-    for (const x of t) if (!TARGETS.includes(x)) return reject(400, 'bad-targets');
-    return { ok: true, targets: TARGETS.filter((x) => t.includes(x)) };
-  }
-
-  // library-import picks: [{ path (relative, from a scan), category, replace? }]
-  function checkPicks(items) {
-    if (!Array.isArray(items) || !items.length) return reject(400, 'bad-items');
-    if (items.length > MAX_SKILL_ITEMS) return reject(400, 'too-many-items');
-    const out = [];
-    for (const it of items) {
-      if (!it || typeof it !== 'object' || Array.isArray(it)) return reject(400, 'bad-items');
-      for (const k of Object.keys(it)) if (!['path', 'category', 'replace'].includes(k)) return reject(400, 'bad-items');
-      if (typeof it.path !== 'string' || !it.path || it.path.length > MAX_REL_PATH) return reject(400, 'bad-items');
-      if (typeof it.category !== 'string' || !CATEGORY_RE.test(it.category)) return reject(400, 'bad-category');
-      if (it.replace !== undefined && typeof it.replace !== 'boolean') return reject(400, 'bad-items');
-      out.push({ path: it.path, category: it.category, replace: it.replace === true });
-    }
-    return { ok: true, picks: out };
-  }
-
-  // Body shape first (400), then the hub (no-hub, legacy-hub), then the project (resolveProject). On success
-  // { ok, skill: true, action, ctx, key }; the key holds a digest of the request so the rate limit stops a repeat,
-  // not the next batch.
-  function validateSkill(body) {
-    const action = body.action;
-    const spec = SKILL_FIELDS[action];
-    for (const k of Object.keys(body)) if (k !== 'action' && !spec.required.includes(k) && !spec.optional.includes(k)) return reject(400, 'unexpected-field');
-    for (const k of spec.required) if (body[k] === undefined || body[k] === null || body[k] === '') return reject(400, 'missing-field');
-    const ctx = {};
-    if (GITHUB_SET.has(action)) {
-      // GitHub import (docs/github-import.md §6): a link, a download id, import picks or library items
-      if (action === 'github-fetch') {
-        if (typeof body.url !== 'string' || body.url.length > MAX_URL) return reject(400, 'bad-url');
-        const p = parseGitHubUrl(body.url);
-        if (!p.ok) return reject(p.status, p.error);
-        ctx.repo = p;
-      } else if (action === 'github-check-update') {
-        const items = checkItems(body.items);
-        if (!items.ok) return items;
-        ctx.checks = items.items;
-      } else {
-        if (typeof body.fetchId !== 'string' || !FETCH_ID_RE.test(body.fetchId)) return reject(400, 'bad-fetch-id');
-        ctx.fetchId = body.fetchId;
-        if (action === 'github-import') {
-          const picks = checkPicks(body.items);
-          if (!picks.ok) return picks;
-          ctx.picks = picks.picks;
-        }
-      }
-    } else if (action === 'library-adopt') {
-      // Items by kind and name; where each lives is the server's own knowledge (catalog.itemOrigin), never the page's
-      const items = checkItems(body.items);
-      if (!items.ok) return items;
-      const adopt = [];
-      for (const it of items.items) {
-        const o = typeof catalog?.itemOrigin === 'function' ? catalog.itemOrigin(it.kind, it.name) : null;
-        if (!o) return reject(404, 'item-not-found');
-        adopt.push({ kind: it.kind, name: it.name, source: o.source, pick: o.pick });
-      }
-      ctx.adopt = adopt;
-    } else if (action === 'library-scan' || action === 'library-import') {
-      if (typeof body.source !== 'string' || body.source.length > 260) return reject(400, 'bad-source');
-      ctx.source = body.source;
-      if (action === 'library-import') {
-        const picks = checkPicks(body.items);
-        if (!picks.ok) return picks;
-        ctx.picks = picks.picks;
-      }
-    } else {
-      if (typeof body.projectId !== 'string' || !PROJECT_ID_RE.test(body.projectId)) return reject(400, 'bad-project-id');
-      if (action === 'restore-preview' || action === 'restore-apply') {
-        if (typeof body.pointId !== 'string' || !POINT_ID_RE.test(body.pointId)) return reject(400, 'bad-point-id');
-        ctx.pointId = body.pointId;
-        // The preview's digest: going back refuses a plan that changed since the person saw it
-        if (body.planId !== undefined && (typeof body.planId !== 'string' || !/^[0-9a-f]{16}$/.test(body.planId))) return reject(400, 'bad-field');
-        ctx.planId = body.planId || null;
-      } else if (action === 'skills-apply') {
-        // No keys: the automatic selection of the fit
-        ctx.keys = null;
-        if (body.keys !== undefined) {
-          const k = checkKeys(body.keys);
-          if (!k.ok) return k;
-          ctx.keys = k.keys;
-        }
-      } else {
-        const items = checkItems(body.items);
-        if (!items.ok) return items;
-        ctx.items = items.items;
-      }
-      if (body.targets !== undefined) {
-        const t = checkTargets(body.targets);
-        if (!t.ok) return t;
-        ctx.targets = t.targets;
-      }
-      if (body.plan !== undefined && typeof body.plan !== 'boolean') return reject(400, 'bad-field');
-      ctx.planOnly = body.plan === true;
-    }
-    if (!hubDir || !isDir(hubDir)) return reject(404, 'no-hub');
-    if (isLegacyHub(hubDir)) return reject(409, 'legacy-hub');
-    if (ctx.items || action === 'skills-apply' || ctx.pointId) {
-      const r = resolveProject({ catalog, projectId: body.projectId, hubDir, homeDir, claudeDir });
-      if (!r.ok) return reject(r.status, r.error);
-      ctx.project = r.project;
-      ctx.dir = r.dir;
-      if (!ctx.targets) ctx.targets = defaultTargets(r.project.via);
-    }
-    if (action === 'skills-trial') {
-      if (!isDir(appCwd)) return reject(500, 'app-folder-missing');
-      const name = String(ctx.project.name || path.win32.basename(ctx.dir) || '').trim();
-      const title = Array.from(name).slice(0, MAX_TITLE).join('') || 'Claude';
-      if (UNSAFE_RE.test(title) || title.startsWith('-') || UNSAFE_RE.test(ctx.dir)) return reject(409, 'unsafe-path');
-      ctx.title = title;
-    }
-    const github = ctx.repo ? [ctx.repo.name, ctx.repo.ref, ctx.repo.path] : ctx.fetchId || '';
-    const digest = crypto
-      .createHash('sha256')
-      .update(JSON.stringify([ctx.source || '', ctx.picks || ctx.items || ctx.adopt || ctx.keys || ctx.checks || [], ctx.targets || [], !!ctx.planOnly, github, ctx.pointId || '']))
-      .digest('hex')
-      .slice(0, 16);
-    return { ok: true, skill: true, action, ctx, key: `${action}|${body.projectId || ''}|${digest}` };
-  }
+  // The request checks (plan D8: server/actionInput.mjs)
+  const { validate } = createValidators({ catalog, ingest, hubDir, codeExe, homeDir, claudeDir, appCwd, plat });
 
   function changed() {
     // Every fit depends on the library and the installs: computed again on the next request
@@ -746,7 +398,7 @@ export function createActions({
         return { status: 200, body: { ...base, targets: ctx.targets, plan: publicPlan(plan), result: { executed: true, removed: r.removed, forgotten: r.forgotten } }, note: 'live' };
       }
       if (action === 'skills-apply') return applySkills(ctx, execute, base);
-      if (action === 'restore-preview' || action === 'restore-apply') return runRestore(action, ctx, execute, base);
+      if (action === 'restore-preview' || action === 'restore-apply') return await runRestore(action, ctx, execute, base);
       if (action === 'skills-trial') {
         const t = planTrial({ hubDir, projectId: project.id, items: ctx.items, library: listLibrary(hubDir), via: project.via, now: now() });
         const plan = publicPlan(t.plan);
@@ -844,10 +496,10 @@ export function createActions({
   // Restore points (docs/restore.md). Preview (any mode) and a dry apply plan only: nothing is written. A live apply
   // keeps the present as a point first, then goes back. The lists in the reply are cut at RESTORE_LIST_MAX names each;
   // the counts are whole.
-  function runRestore(action, ctx, execute, base) {
+  async function runRestore(action, ctx, execute, base) {
     const args = { hubDir, projectId: ctx.project.id, dir: ctx.dir, id: ctx.pointId, now };
-    // An AI session still working in the project would write while the files are put back
-    if (action === 'restore-apply' && execute && aiActiveIn(ctx.project.id)) return failed(409, 'ai-working', 'restore');
+    // An AI session still working in the project would write while the files are put back; so would one starting
+    if (action === 'restore-apply' && execute && (aiActiveIn(ctx.project.id) || starting.has(ctx.project.id))) return failed(409, 'ai-working', 'restore');
     const plan = planRestore(args);
     if (!plan.ok) return failed(plan.problem === 'point-missing' ? 404 : 409, plan.problem, 'restore');
     // The project's own files first, the team's notes (.sibersentez/) after them, counted apart: the page names the
@@ -858,7 +510,13 @@ export function createActions({
     const notes = (list) => list.filter(isNote).length;
     const summary = { point: plan.point, planId: plan.planId, changed: cut(plan.changed), missing: cut(plan.missing), added: cut(plan.added), counts: { changed: plan.changed.length, missing: plan.missing.length, added: plan.added.length }, notes: { changed: notes(plan.changed), missing: notes(plan.missing), added: notes(plan.added) } };
     if (action === 'restore-preview' || !execute) return { status: 200, body: { ...base, ...summary, result: { executed: false } }, note: action === 'restore-preview' ? 'plan' : 'dry' };
-    const r = applyRestore({ ...args, planId: ctx.planId });
+    restoring.add(ctx.project.id);
+    let r;
+    try {
+      r = await applyRestore({ ...args, planId: ctx.planId });
+    } finally {
+      restoring.delete(ctx.project.id);
+    }
     if (!r.ok) return failed(r.problem === 'point-missing' ? 404 : 409, r.problem, 'restore', summary);
     return { status: 200, body: { ...base, ...summary, before: r.before, result: { executed: true, restored: r.restored, removed: r.removed, failed: r.failed.slice(0, RESTORE_LIST_MAX) } }, note: r.failed.length ? 'partial' : 'live' };
   }
@@ -1099,7 +757,6 @@ export function createActions({
   // the first-message file, and wt.exe only ever gets cmd.exe and the launcher (server/launch.mjs).
   // job (string, optional): "Do a job" (docs/kit-in-app.md), the job the person typed; the first message then asks for
   // the kit's team flow. Never with withIdea or resume.
-  const AI_START_KEYS = ['action', 'tool', 'projectId', 'sessionId', 'withIdea', 'inDock', 'resume', 'job'];
   const toolDetector = () => ai.tools || sharedToolDetector();
   const aiEnv = () => ai.env || process.env;
   // Exists at all (an app execution alias in WindowsApps cannot be followed by stat)
@@ -1111,39 +768,6 @@ export function createActions({
       return false;
     }
   };
-
-  function validateAiStart(body) {
-    for (const k of Object.keys(body)) if (!AI_START_KEYS.includes(k)) return reject(400, 'unexpected-field');
-    if (body.tool === undefined || body.tool === null || body.tool === '') return reject(400, 'missing-field');
-    if (typeof body.tool !== 'string' || !TOOL_IDS.includes(body.tool)) return reject(400, 'bad-tool');
-    if (body.withIdea !== undefined && typeof body.withIdea !== 'boolean') return reject(400, 'bad-field');
-    if (body.inDock !== undefined && typeof body.inDock !== 'boolean') return reject(400, 'bad-field');
-    if (body.resume !== undefined && typeof body.resume !== 'boolean') return reject(400, 'bad-field');
-    const resume = body.resume === true;
-    if (resume && !toolById(body.tool)?.resume) return reject(400, 'resume-not-supported');
-    if (resume && (typeof body.sessionId !== 'string' || body.withIdea === true)) return reject(400, 'bad-field');
-    let job = '';
-    if (body.job !== undefined) {
-      if (typeof body.job !== 'string' || resume || body.withIdea === true) return reject(400, 'bad-field');
-      job = normalizeJob(body.job);
-      if (!job) return reject(400, 'bad-field');
-    }
-    const target = {};
-    if (body.projectId !== undefined) target.projectId = body.projectId;
-    if (body.sessionId !== undefined) target.sessionId = body.sessionId;
-    const t = validate({ action: 'terminal', ...target });
-    if (!t.ok) return t;
-    // A session that is open cannot be continued a second time (its copy, fork, can)
-    if (resume && ingest?.sessions?.get(t.ctx.sessionId)?.live) return reject(409, 'session-live', { hint: 'fork' });
-    // The session must be one of the tool that continues it (another tool's log is read too: server/toolLogs.mjs)
-    if (resume && (ingest?.sessions?.get(t.ctx.sessionId)?.tool || 'claude') !== body.tool) return reject(400, 'resume-other-tool');
-    // The idea saved with the project (docs/start-flow.md); a session uses its project's idea
-    const pid = t.ctx.projectId ?? (t.ctx.sessionId ? ingest?.sessions?.get(t.ctx.sessionId)?.projectId : undefined);
-    const project = pid ? catalog?.getProject?.(pid) || null : null;
-    const idea = body.withIdea === true && typeof project?.idea === 'string' ? project.idea.trim() : '';
-    const ctx = { ...t.ctx, tool: body.tool, idea: resume || job ? '' : idea, job, inDock: body.inDock === true, resume, pointProjectId: project ? project.id : null };
-    return { ok: true, aiStart: true, action: 'start-ai', ctx, key: `start-ai|${t.ctx.projectId || ''}|${t.ctx.sessionId || ''}|${body.tool}${resume ? '|resume' : ''}` };
-  }
 
   async function startAi(v) {
     const { ctx } = v;
@@ -1170,10 +794,12 @@ export function createActions({
 
     // 2. Where the launcher goes, and whether wt can take its path as it is (server/launch.mjs)
     const env = aiEnv();
-    const local = envValue(env, 'LOCALAPPDATA');
-    const candidates = ai.launchDirs || [hubDir ? path.join(hubDir, 'launch') : null, local ? path.win32.join(local, 'SiberSentez', 'launch') : null];
-    const where = pickLaunchDir(candidates.filter(Boolean), (d) => UNSAFE_RE.test(d));
-    if (!where.ok || !SAFE_LAUNCH_RE.test(cmdExe)) return fail(409, 'launch-path-unsafe', 'launch-path');
+    // Linux and macOS (plan G1): no Windows Terminal, the tool starts in SiberSentez's own terminal only
+    if (!plat.windows && !ctx.inDock) return fail(501, 'no-terminal', 'missing');
+    const appData = appDataDir(env, plat);
+    const candidates = ai.launchDirs || [hubDir ? path.join(hubDir, 'launch') : null, appData ? plat.path.join(appData, 'launch') : null];
+    const where = pickLaunchDir(candidates.filter(Boolean), (d) => UNSAFE_RE.test(d), plat);
+    if (!where.ok || (plat.windows && !SAFE_LAUNCH_RE.test(cmdExe))) return fail(409, 'launch-path-unsafe', 'launch-path');
 
     // 3. The first message: planned read-only here, written only in live mode
     const jobId = ctx.job ? newJobId() : null;
@@ -1190,27 +816,42 @@ export function createActions({
         if (markerErr) return fail(409, markerErr, 'job-identity');
       }
     }
-    const launcher = newLauncherName();
+    const launcher = newLauncherName(undefined, plat);
     // In SiberSentez's own terminal the pseudo console starts in the project folder itself and cmd gets the launcher by
     // its full path (no Windows Terminal argument in between): relative mode needs no cd line there, so a project folder
     // with Turkish letters starts too (docs/ai-start.md). A launcher path cmd would expand stays on the old way.
-    const direct = ctx.inDock && DOCK_LAUNCHER_RE.test(path.join(where.dir, launcher));
+    const direct = ctx.inDock && (!plat.windows || DOCK_LAUNCHER_RE.test(path.join(where.dir, launcher)));
+    const toolArgsFor = (file) => (ctx.resume ? resumeArgs(tool, ctx.sessionId) : [...(ctx.job ? jobArgs(tool, rec.version) : []), ...toolArgs(tool, file ? launchPrompt(file) : null)]);
+    const shell = plat.windows ? null : terminalShell(env, plat, (p) => fs.existsSync(p));
     const makeLauncher = (file) =>
-      launcherText({ toolName: tool.name, file: rec.chosen.file, ext: rec.chosen.ext, args: ctx.resume ? resumeArgs(tool, ctx.sessionId) : [...(ctx.job ? jobArgs(tool, rec.version) : []), ...toolArgs(tool, file ? launchPrompt(file) : null)], cdDir: where.mode === 'relative' && !direct ? ctx.dir : null, env });
+      !plat.windows
+        ? shellLauncherText({ toolName: tool.name, file: rec.chosen.file, args: toolArgsFor(file), shell })
+        : launcherText({ toolName: tool.name, file: rec.chosen.file, ext: rec.chosen.ext, args: toolArgsFor(file), cdDir: where.mode === 'relative' && !direct ? ctx.dir : null, env });
     let lt = makeLauncher(first?.file);
     if (!lt.ok) return fail(409, lt.error, 'launcher');
-    const argv = buildAiArgv({ mode: where.mode, dir: ctx.dir, launchDir: where.dir, launcher, title: ctx.title, cmdExe });
-    const fallbackArgv = buildAiFallbackArgv({ mode: where.mode, launchDir: where.dir, launcher, cmdExe });
+    // Linux and macOS: sh runs the launcher by its full path; nothing parses the argument
+    const shArgv = ['/bin/sh', plat.path.join(where.dir, launcher)];
+    const argv = plat.windows ? buildAiArgv({ mode: where.mode, dir: ctx.dir, launchDir: where.dir, launcher, title: ctx.title, cmdExe }) : shArgv;
+    const fallbackArgv = plat.windows ? buildAiFallbackArgv({ mode: where.mode, launchDir: where.dir, launcher, cmdExe }) : shArgv;
     // Last guard: nothing that reaches Windows Terminal carries a separator, a quote or a control character
-    if (argv.slice(1).some((a) => UNSAFE_RE.test(String(a)))) return fail(409, 'launch-path-unsafe', 'launch-path');
+    if (plat.windows && argv.slice(1).some((a) => UNSAFE_RE.test(String(a)))) return fail(409, 'launch-path-unsafe', 'launch-path');
     const about = { name: tool.name, via: rec.via || null, version: rec.version || null, ready: rec.ready || 'unknown' };
     const firstInfo = (f) => (f ? { file: `.sibersentez/${f.file}`, op: f.op, gitignore: f.gitignore } : null);
     if (base.mode === 'dry') {
       return { status: 200, body: { ...base, argv, fallbackArgv, about, launcher: { mode: where.mode, text: lt.text }, firstMessage: firstInfo(first), result: { executed: false, written: [] } }, note: 'dry' };
     }
 
-    // 4. Live: a restore point of the project, the first message, the launcher, then the terminal
-    const restorePoint = await takeStartPoint(ctx.pointProjectId, ctx.job || '', jobId);
+    // 4. Live: a restore point of the project, the first message, the launcher, then the terminal. Not while the
+    // project is being put back (its files are half old, half new until that is done)
+    const pid = ctx.pointProjectId;
+    if (pid && restoring.has(pid)) return fail(409, 'restore-running', 'restore-running');
+    if (pid) starting.add(pid);
+    let restorePoint;
+    try {
+      restorePoint = await takeStartPoint(pid, ctx.job || '', jobId);
+    } finally {
+      if (pid) starting.delete(pid);
+    }
     const written = [];
     if (text) {
       const w = writeFirstMessage(ctx.dir, text, fs, jobId);
@@ -1227,11 +868,12 @@ export function createActions({
       if (!active.ok) return fail(active.error === 'first-message-failed' ? 500 : 409, active.error, 'job-identity', { written });
       written.push(`.sibersentez/${CURRENT_JOB_FILE}`);
     }
-    const launcherFile = path.join(where.dir, launcher);
+    const launcherFile = plat.path.join(where.dir, launcher);
     try {
       fs.mkdirSync(where.dir, { recursive: true });
       cleanupLaunchers(where.dir, { now: now() });
-      fs.writeFileSync(launcherFile, lt.text, { encoding: 'ascii', flag: 'wx' });
+      // The cmd launcher is ASCII (launcherText checks it); the sh one UTF-8, readable by its owner only
+      fs.writeFileSync(launcherFile, lt.text, plat.windows ? { encoding: 'ascii', flag: 'wx' } : { encoding: 'utf8', flag: 'wx', mode: 0o600 });
     } catch (e) {
       console.error('launcher could not be written:', logCode(e));
       return fail(500, 'launcher-failed', 'launcher', { written });
@@ -1243,7 +885,7 @@ export function createActions({
     // desktop shell redeems it (terminalTarget) and runs the same launcher in a pseudo console, as the Command Prompt
     // fallback would (fallbackArgv without its "start")
     if (ctx.inDock) {
-      const program = direct ? { file: cmdExe, args: ['/d', '/v:off', '/k', launcherFile] } : { file: fallbackArgv[5], args: fallbackArgv.slice(6) };
+      const program = !plat.windows ? { file: '/bin/sh', args: [launcherFile] } : direct ? { file: cmdExe, args: ['/d', '/v:off', '/k', launcherFile] } : { file: fallbackArgv[5], args: fallbackArgv.slice(6) };
       const launchId = rememberDockLaunch({ dir: direct ? ctx.dir : fallbackCwd, title: ctx.title, projectId: ctx.pointProjectId || ctx.projectId || null, program, launcherFile, tool: tool.id, jobId });
       return { status: 200, body: { ...body, argv: [program.file, ...program.args], terminal: 'dock', launchId }, note: 'live' };
     }
@@ -1285,7 +927,7 @@ export function createActions({
     // Search path: libuv looks up a bare program name in the working directory first. The trusted app folder is
     // used instead of the project folder (it may be a cloned foreign repo); wt gets the tab folder through -d.
     const opts = { shell: false, detached: true, stdio: 'ignore', cwd: appCwd };
-    if (action === 'explorer') opts.windowsVerbatimArguments = true;
+    if (action === 'explorer' && plat.windows) opts.windowsVerbatimArguments = true;
     if (action === 'vscode') {
       // when ELECTRON_RUN_AS_NODE is set, Code.exe takes the folder for a Node script
       const env = { ...process.env };
@@ -1297,7 +939,7 @@ export function createActions({
     } catch (e) {
       const why = launchFailure(e, appCwd);
       if (why === 'workdir') return { status: 500, body: { ok: false, error: 'app-folder-missing' }, note: 'workdir' };
-      if (why === 'missing') return { status: 501, body: { ok: false, error: `${PROGRAM_CODES[action]}-missing` }, note: 'missing' };
+      if (why === 'missing') return { status: 501, body: { ok: false, error: action === 'explorer' && !plat.windows ? 'file-manager-missing' : `${PROGRAM_CODES[action]}-missing` }, note: 'missing' };
       return { status: 500, body: { ok: false, error: 'launch-failed' }, note: 'launch' };
     }
     return { status: 200, body: base, note: 'live' };
@@ -1456,8 +1098,9 @@ export function createActions({
     // The setup terminal (installing an AI tool from the tools panel): a plain shell in the user's home folder, no
     // program, no project. Only this exact request; the home folder must be a real local folder.
     if (req?.setup !== undefined) {
-      const home = envValue(ai.env || process.env, 'USERPROFILE');
-      if (req.setup !== true || Object.keys(req).length !== 1 || !home || !/^[A-Za-z]:\\/.test(home)) return { ok: false, reason: 'refused', status: 400 };
+      // The platform's home folder (USERPROFILE, HOME; platform.mjs), a local absolute one
+      const home = homeOf(ai.env || process.env, plat);
+      if (req.setup !== true || Object.keys(req).length !== 1 || !home) return { ok: false, reason: 'refused', status: 400 };
       try {
         if (!fs.statSync(home).isDirectory()) return { ok: false, reason: 'refused', status: 404 };
       } catch {
@@ -1468,7 +1111,8 @@ export function createActions({
     const body = { action: 'terminal' };
     if (typeof req?.projectId === 'string') body.projectId = req.projectId;
     if (typeof req?.sessionId === 'string') body.sessionId = req.sessionId;
-    const v = validate(body);
+    // SiberSentez's own terminal: the terminal action's folder and title checks, not Windows Terminal's platform rule
+    const v = validate(body, true);
     if (!v.ok) return { ok: false, reason: 'refused', status: v.status };
     return { ok: true, dir: v.ctx.dir, title: v.ctx.title, projectId: v.ctx.projectId || null };
   }

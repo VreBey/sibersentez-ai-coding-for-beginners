@@ -1,3 +1,4 @@
+// @ts-check
 // "What changed" in the project drawer (docs/changes.md): the files an AI tool created or changed, newest first, from
 // GET /api/projects/<id>/changes. changesSectionHtml is pure (tested in node); createChanges keeps the answers (asked
 // again after 20 s, so the next draw shows what the AI just did).
@@ -35,7 +36,7 @@ export function changesSectionHtml(p, data) {
 }
 
 // Answers per project. onData(projectId): an answer arrived (the drawer redraws when that project is open).
-export function createChanges({ fetchJson = fetchChanges, onData = () => {}, now = () => Date.now(), ttl = 20000 } = {}) {
+export function createChanges({ fetchJson = fetchChanges, onData = (_projectId) => {}, now = () => Date.now(), ttl = 20000 } = {}) {
   const cache = new Map();
   function get(projectId) {
     const e = cache.get(projectId);

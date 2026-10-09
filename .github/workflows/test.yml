@@ -1,6 +1,7 @@
 name: Tests
 
-# Every push and pull request: the whole test suite on Windows (the product is Windows only). No secrets are used and
+# Every push and pull request: the whole test suite on Windows (the released platform), on Linux and, experimentally,
+# on macOS (plan G). No secrets are used and
 # nothing is published; the installer is built by hand (npm run dist), not here.
 on:
   push:
@@ -29,3 +30,50 @@ jobs:
         env:
           TEMP: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
+      # Types and lint (plan D7): the files with // @ts-check on their first line, and tools/lint.mjs
+      - run: npm run typecheck
+      - run: npm run lint
+      # Coverage (plan D2): fails when lines, branches or functions drop under the floor set in package.json
+      # (2026-10-09: 82 / 87.9 / 86.1 %); the report is in the log
+      - run: npm run coverage
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+      # After the tests, so a new advisory never hides their result: what ships in the app (node-pty) has no known
+      # advisory; the build tools are checked by hand (docs/release.md)
+      - run: npm audit --omit=dev --audit-level=low
+
+  # Linux (plan G2): the same suite on Ubuntu; node-pty is built from source by npm ci (the runner has a compiler, make
+  # and Python). Tests written with Windows' own paths are skipped there (test/lib/winonly.mjs); Linux' own behaviour,
+  # the sh launcher in a real pseudo terminal included, is tested in test/platform*.test.mjs.
+  test-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
+
+  # macOS (plan G3): experimental, never tried on a Mac; a failure here is reported, it does not fail the run
+  test-macos:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test

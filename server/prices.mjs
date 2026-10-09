@@ -1,3 +1,4 @@
+// @ts-check
 // Anthropic API prices used for the "API equivalent" estimate of live usage tracking (docs/usage.md §4).
 // Dollars per million tokens. The table is dated: PRICED_AT is shown next to every dollar amount, and a model that is
 // not in the table is never priced at $0 — it is reported as "price unknown" and the total says it is incomplete.
@@ -5,12 +6,12 @@
 // Source: the claude-api skill's pricing reference, read on 2026-09-25.
 
 export const PRICED_AT = '2026-09-25';
-export const CACHE_WRITE_5M = 1.25;
-export const CACHE_WRITE_1H = 2;
+const CACHE_WRITE_5M = 1.25;
+const CACHE_WRITE_1H = 2;
 
 // Model id -> { input, output, cacheRead } in $ / million tokens. Dated ids (claude-haiku-4-5-20251001) are matched by
 // the longest id here that they start with, followed by '-', '@' or '[' (see priceOf).
-export const PRICES = Object.freeze({
+const PRICES = Object.freeze({
   'claude-fable-5-1': Object.freeze({ input: 10, output: 50, cacheRead: 0.25 }),
   'claude-fable-5': Object.freeze({ input: 10, output: 50, cacheRead: 1 }),
   'claude-opus-5-5': Object.freeze({ input: 4, output: 20, cacheRead: 0.2 }),

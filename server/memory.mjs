@@ -20,8 +20,9 @@ import path from 'node:path';
 import { normPath } from './util.mjs';
 import { folderSpelling, isLowerCased, localExists } from './fsutil.mjs';
 import { normalizeIdea, IDEA_MAX } from './fit.mjs';
+import { writeFileAtomic } from './atomic.mjs';
 
-export const MEMORY_VERSION = 1;
+const MEMORY_VERSION = 1;
 const HOUR = 3600000;
 // The tool id of a folder the user added in SiberSentez itself
 export const SIBERSENTEZ_VIA = 'sibersentez';
@@ -35,7 +36,7 @@ const toMs = (v) => {
 };
 const iso = (t) => (t ? new Date(t).toISOString() : null);
 
-export function memoryFile(hubDir) {
+function memoryFile(hubDir) {
   return hubDir ? path.join(hubDir, 'registry', 'discovered.json') : null;
 }
 
@@ -196,18 +197,11 @@ export class ProjectMemory {
       this.timer = null;
     }
     if (!this.file || !this.dirty) return false;
-    const tmp = `${this.file}.tmp-${process.pid}-${this.saves}`;
     try {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
-      fs.writeFileSync(tmp, JSON.stringify(this.toJSON(), null, 2) + '\n', 'utf8');
-      fs.renameSync(tmp, this.file);
+      writeFileAtomic(this.file, JSON.stringify(this.toJSON(), null, 2) + '\n');
     } catch (e) {
       this.log(`project memory could not be written (${e?.code || 'error'}); will retry`);
-      try {
-        fs.rmSync(tmp, { force: true });
-      } catch {
-        /* nothing to clean */
-      }
       return false;
     }
     for (const e of this.entries.values()) e.savedLastSeenAt = e.lastSeenAt;

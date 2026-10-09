@@ -13,17 +13,17 @@
 .ai-none p { margin: 0; flex: 1 1 200px; }
 .ai-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0 0; color: var(--muted); }
 .ai-link { padding: 2px 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.ai-link:hover { color: #a9bcff; }
+.ai-link:hover { color: color-mix(in srgb, var(--accent) 70%, var(--text-strong)); }
 .ai-link[disabled] { color: var(--muted); text-decoration: none; cursor: default; }
 .ai-link:focus-visible, .ai-idea input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- the tools panel (a dialog over the page and the drawer) ---------- */
-.ai-panel-scrim { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; background: rgba(3, 4, 8, 0.62); backdrop-filter: blur(3px); }
+.ai-panel-scrim { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; background: var(--scrim); backdrop-filter: blur(3px); }
 .ai-panel-scrim[hidden] { display: none; }
 .ai-panel {
   width: min(760px, 100%); max-height: min(88vh, 900px); overflow: auto; padding: 20px 22px 18px; border-radius: var(--radius);
-  background-color: #0f121b; background-image: linear-gradient(180deg, #131826, #0c0f16); border: 1px solid var(--line-2); box-shadow: var(--shadow);
-  --muted: #8f98ae;
+  background-color: var(--raised); background-image: none; border: 1px solid var(--line-2); box-shadow: var(--shadow);
+ 
 }
 .ai-panel:focus { outline: none; }
 .ai-panel-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
@@ -41,7 +41,7 @@
 .ai-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid var(--line-2); color: var(--text-2); }
 .ai-chip.ok { color: var(--busy); border-color: rgba(var(--busy-rgb), 0.4); background: rgba(var(--busy-rgb), 0.08); }
 .ai-chip.off { color: var(--muted); }
-.ai-chip.ready-yes { color: #d9ffe9; }
+.ai-chip.ready-yes { color: var(--busy-ink); }
 .ai-chip.ready-no { color: var(--idle); border-color: rgba(var(--idle-rgb), 0.45); }
 .ai-chip.ready-unknown { color: var(--text-2); }
 .ai-warn { color: var(--idle); }
@@ -141,11 +141,14 @@ textarea.job-text { resize: vertical; min-height: 4.6em; max-height: 20em; line-
 .jr-files li { padding-left: 14px; position: relative; }
 .jr-files li::before { position: absolute; left: 0; color: var(--muted); }
 .jr-files .jr-changed::before { content: '~'; }
-.jr-files .jr-added::before { content: '+'; color: var(--ok, #4fd18b); }
-.jr-files .jr-deleted::before { content: '−'; color: var(--warn, #e0a050); }
+.jr-files .jr-added::before { content: '+'; color: var(--busy); }
+.jr-files .jr-deleted::before { content: '−'; color: var(--idle); }
 .jr-checks { margin: 0 0 8px; padding-left: 18px; font-size: 13px; color: var(--text-2); }
 .jr-checks li { margin: 2px 0; }
 .jr-go { margin: 4px 0 10px; }
+/* The result's four ways in one row (review B3) */
+.jr-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.jr-acts-note { margin: 0 0 10px; }
 
 /* The tool jobs start with first, the others folded (review U13) */
 .ai-chosen-h { margin: 10px 0 4px; font-weight: 600; }
@@ -162,7 +165,7 @@ textarea.job-text { resize: vertical; min-height: 4.6em; max-height: 20em; line-
 .wz-steps li.done { color: var(--text-2); }
 .wz-steps li.done .wz-n { background: rgba(var(--accent-rgb), 0.2); border-color: var(--accent); }
 .wz-steps li.now { color: var(--text); font-weight: 600; }
-.wz-steps li.now .wz-n { background: var(--accent); border-color: var(--accent); color: #0b0e18; }
+.wz-steps li.now .wz-n { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .wz-h { margin: 0; font: 650 17px var(--display); color: var(--text); display: flex; align-items: center; gap: 8px; }
 .wz p { margin: 0; }
 .wz-for { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }

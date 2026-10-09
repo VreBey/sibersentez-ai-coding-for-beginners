@@ -1,3 +1,4 @@
+// @ts-check
 // Codex source adapter (see adapters/index.mjs; contract docs/adapters-wave1.md).
 //   root: CODEX_HOME (ctx.env), else ~/.codex
 //   projects: <root>/sessions/YYYY/MM/DD/rollout-*.jsonl and <root>/archived_sessions/**/rollout-*.jsonl. The working
@@ -21,7 +22,7 @@ const ROLLOUT = /^rollout-.*\.jsonl$/i;
 // The first "cwd": "<JSON string>" in an over-long first line
 const CWD_RE = /"cwd"\s*:\s*("(?:[^"\\\r\n]|\\.)*")/;
 
-export const codexHome = (ctx) => envRoot(ctx, 'CODEX_HOME', '.codex');
+const codexHome = (ctx) => envRoot(ctx, 'CODEX_HOME', '.codex');
 
 function cwdOf(o) {
   if (!o || typeof o !== 'object') return null;
@@ -141,7 +142,7 @@ export function tomlNameDescription(file) {
 
 // Agent files <dir>/*.toml. Their name and description are cached by file time and size (ctx.fileMeta): an unchanged
 // file is not reopened on the next pass; an unreadable one is not cached.
-export function tomlAgentItems(dir, ctx, extra) {
+function tomlAgentItems(dir, ctx, extra) {
   const out = [];
   const meta = (file) => (typeof ctx?.fileMeta === 'function' ? ctx.fileMeta(file, 'codex-toml', tomlNameDescription) : tomlNameDescription(file));
   for (const f of listFiles(dir, listerOf(ctx))) {

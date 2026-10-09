@@ -1,3 +1,4 @@
+// @ts-check
 // "Do a job" progress (docs/kit-in-app.md): the kit's team keeps its hand-off files in the project's .sibersentez folder
 // (docs/kit-v2.md §3.2). This reads three of them, read-only, and says which of the four steps the job is at
 // (Plan → Build → Check → Finish, then done once the result is accepted) with the task counts and the last verdict. Nothing is run or written, no action mode
@@ -10,7 +11,7 @@ import { isRealDir, hasStreamColon } from './library.mjs';
 import { readSmall } from './suggest.mjs';
 import { documentJobId, jobIdLine, validJobId, readCurrentJob, CURRENT_JOB_FILE } from './job-id.mjs';
 
-export const TEAM_DIR = '.sibersentez';
+const TEAM_DIR = '.sibersentez';
 // A project that has only the folder of the product's old name (renamed 2026-09-30) is read from there
 const LEGACY_TEAM_DIR = '.orkestra';
 const STATUSES = new Set(['todo', 'doing', 'done', 'blocked']);

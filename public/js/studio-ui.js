@@ -1,3 +1,4 @@
+// @ts-check
 // Studio Pro (docs/shell.md): a one-line subtitle under each screen's title, and the menu buttons named for screen
 // readers and tooltips when the menu shows icons only. Texts come from the string table (strings/nav.js).
 import { t } from './i18n.js';
@@ -15,7 +16,7 @@ function enhance() {
     line.textContent = t(`screenSub_${key}`);
     head.after(line);
   }
-  for (const button of document.querySelectorAll('.side button')) {
+  for (const button of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('.side button'))) {
     const label = button.querySelector('[data-i18n]')?.textContent?.trim();
     if (label && !button.hasAttribute('aria-label')) button.setAttribute('aria-label', label);
     if (label && !button.hasAttribute('title')) button.title = label;

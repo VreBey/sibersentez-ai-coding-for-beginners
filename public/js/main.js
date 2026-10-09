@@ -12,7 +12,8 @@ import { createTimelineView } from './views/timeline.js';
 import { createFeedView, renderMiniFeed, bindOpen } from './views/feed.js';
 import { createSettingsView } from './views/settings.js';
 import { createTodayRecent } from './views/today.js';
-import { createChecklist, hasOwnProject } from './views/checklist.js';
+import { createChecklist, hasOwnProject, checklistModel } from './views/checklist.js';
+import { createLearnPath } from './views/learnPath.js';
 import { firstScreenParts } from './firstScreen.js';
 import { createDrawer, resetFlows } from './views/drawer.js';
 import { createNotifier } from './notify.js';
@@ -37,10 +38,15 @@ import { createGuide, shouldAutoOpen, startStep, readSeen } from './guide.js';
 import { createTour, TOUR_EXAMPLE_KEY } from './tour.js';
 import { openToolsPanel, needTools, toolsState, installedTools, onToolsChange, loadTools, setSetupTyper, setWizardDone } from './views/tools.js';
 import { setRunTyper, setRunOpener, setRunAsker } from './runHint.js';
+import { startTheme } from './theme.js';
 import { sessionTool, sessionToolName, canContinueTool } from './jobId.js';
 import { diagnosticsText, collectDiagnostics } from './diagnostics.js';
 import { hintHtml, initHints } from './hints.js';
+import { installPageErrors } from './pageErrors.js';
+import { whileVisible, everyVisible } from './whileVisible.js';
 
+// First in this file, so an error anywhere below is caught too (review A4); the imports above run before it
+const pageErrors = installPageErrors();
 const $ = (s) => document.querySelector(s);
 
 // The product was renamed (2026-09-30): this browser's settings under the old names are copied to the new ones once
@@ -77,6 +83,8 @@ const params = new URLSearchParams(location.search);
 const QA = params.has('qa');
 // Language of the new, localized strings (i18n.js): ?lang= from the desktop shell, else the browser's
 setLanguage(pickLanguage({ setting: params.get('lang'), browser: navigator.language }));
+// The look (theme-boot.js already set it before the first paint): kept, the shell told, the system followed
+startTheme();
 
 // The static texts of index.html: data-i18n = the text, data-i18n-html = trusted markup from the string table,
 // data-i18n-attr = "attribute:key;attribute:key". The HTML holds the English text; this fills in the page language.
@@ -566,8 +574,15 @@ const views = {
     openTools: () => openToolsPanel(),
     openGuide: () => guide.show(),
     openActions: shellBridge(window) ? () => actSwitch.open() : null,
+    openLogs:
+      typeof window.sibersentezShell?.openLogs === 'function'
+        ? async () => {
+            const r = await window.sibersentezShell.openLogs().catch(() => null);
+            if (!r?.ok) actionToastHere({ tone: 'err', title: t('setLogsFailed') });
+          }
+        : null,
     copyDiagnostics: async () => {
-      const text = diagnosticsText({ ...(await collectDiagnostics({ loadTools, toolsState })), mode: actionsState().mode, lang: language(), desktop: !!shellBridge(window) });
+      const text = diagnosticsText({ ...(await collectDiagnostics({ loadTools, toolsState })), mode: actionsState().mode, lang: language(), desktop: !!shellBridge(window), pageErrors: pageErrors.count() });
       try {
         await navigator.clipboard.writeText(text);
         actionToastHere({ tone: 'ok', title: t('setDiagCopied'), code: text });
@@ -596,6 +611,28 @@ const checklist = createChecklist($('#todayChecklist'), {
   // "Watch the example": the Building's own example plays (the card is on the Building already); nothing runs
   demo: () => workshop.playExample(),
 });
+// "Learn by doing" (plan C5, views/learnPath.js): after the first ten minutes, five small jobs on the shown project
+const learnPath = createLearnPath($('#todayLearn'), {
+  ready: () => store.loaded && hasOwnProject([...store.projects.values()]) && checklistModel({ tools: toolsState(), mode: actionsState().mode, projects: [...store.projects.values()], sessions: [...store.sessions.values()], askOnStart: !!shellBridge(window) }).done,
+  write: (text) => {
+    const box = $('#wsGiveText');
+    if (!box) return;
+    // A job of their own is in the box: it stays; they decide (review B/C)
+    if (box.value.trim() && box.value.trim() !== text) {
+      box.focus();
+      return actionToastHere({ tone: 'info', title: t('lpTitle'), body: t('lpBoxBusy') });
+    }
+    box.value = text;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.focus();
+    box.scrollIntoView?.({ block: 'center' });
+  },
+  restore: () => {
+    const id = $('[data-ws="project"]')?.value || store.sortedProjects().find((x) => hasOwnProject([x]))?.id;
+    if (id) open({ type: 'project', id, section: 'restore' });
+  },
+  afterHide: () => $('#wsGiveText')?.focus(),
+});
 // Advanced views (docs/direction.md §3.3, Settings): off by default. Off hides every .adv-only element (the Feed's
 // numbers, its timeline switch and the orchestra scene, the drawer's tiles, the most used charts); nothing is deleted.
 function applyAdvanced() {
@@ -608,6 +645,7 @@ onPrefs(applyAdvanced);
 // Only while Today shows (renderChrome draws it when Today opens)
 const todayShown = () => !$('#tab-today').hidden;
 onToolsChange(() => todayShown() && checklist.render());
+onToolsChange(() => todayShown() && learnPath.render());
 onActionsChange(() => todayShown() && checklist.render());
 // Every screen; the menu's keys 1-5 name NAV_KEYS (Timeline shares the Feed item: a switch on that screen). 'today' is
 // the Building (the Workshop, docs/simplify.md)
@@ -674,11 +712,15 @@ window.addEventListener('pagehide', () => {
 const MIN_GAP = { projects: 1500, roster: 8000, timeline: 5000, feed: 1000 };
 const lastRender = { projects: 0, roster: 0, timeline: 0, feed: 0 };
 let pending = false;
+// A hidden window draws nothing; one full draw as soon as it shows again (plan D5). The notifications and the window
+// title do not wait (notify.js)
+const drawWhenShown = whileVisible(() => schedule(true));
 function schedule(force = false) {
   if (pending) return;
   pending = true;
   setTimeout(() => {
     pending = false;
+    if (document.hidden) return drawWhenShown();
     renderChrome();
     const now = Date.now();
     // A screen without a gap (Today, Settings: drawn by renderChrome) has nothing to wait for; before, its undefined
@@ -703,6 +745,7 @@ function renderChrome() {
   if (active === 'today') {
     todayRecent.render();
     checklist.render();
+    learnPath.render();
   }
   // The orchestra scene's rail sits on the Feed screen with it
   if (active === 'feed') {
@@ -828,10 +871,10 @@ $('#miniFeed').addEventListener('click', (e) => bindOpen(e, open));
 function tickClock() {
   $('#clock').textContent = new Date().toLocaleTimeString(language() === 'tr' ? 'tr-TR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
-setInterval(tickClock, 1000);
+everyVisible(tickClock, 1000);
 tickClock();
 // Relative times ("12 s ago") are updated in place without rewriting the DOM
-setInterval(() => fillAgo(document), 5000);
+everyVisible(() => fillAgo(document), 5000);
 
 function renderConn() {
   const c = $('#conn');
@@ -1006,10 +1049,12 @@ function connect() {
   let greeted = false;
   es.addEventListener('hello', (e) => {
     streamRetries = 0;
+    store.lost = false;
     store.setStatus(true);
     const d = JSON.parse(e.data);
     store.setScan(d.scan);
     renderConn();
+    schedule();
     if (d.scan?.state === 'ready') loadSnapshot();
     // A reconnect may have missed an `actions` event (docs/actions-toggle.md §3.5): ask for the mode again
     if (greeted) initActions();
@@ -1041,8 +1086,11 @@ function connect() {
   });
   es.onerror = () => {
     serverLost = true;
+    store.lost = true;
     store.setStatus(false);
     renderConn();
+    // The job cards say the connection is lost (review B8) instead of showing the last state as live
+    schedule();
     // A non-200 answer closes an EventSource for good: in a plain browser the page stayed frozen (the desktop app
     // reloads its page). Open a new one after a growing pause (docs/backlog.md "Long-running load")
     if (es.readyState === 2) {

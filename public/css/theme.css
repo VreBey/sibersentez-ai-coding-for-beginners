@@ -1,6 +1,11 @@
-/* SiberSentez — calm turquoise dusk. Values only; original variable names preserved.
-   Variable Segoe and Cascadia are optional local fonts; Segoe UI and Consolas are fallbacks. */
-:root {
+/* SiberSentez — calm turquoise dusk (dark) and calm turquoise daylight (light). Every colour of the page lives here
+   (docs/theme.md). Variable Segoe and Cascadia are optional local fonts; Segoe UI and Consolas are fallbacks; Linux and macOS get
+   their own system fonts after them (DejaVu Sans, the usual Linux default, is too wide for the side bar).
+
+   The dark block also applies to every element marked "dusk": the building scene, the old stage and the terminal
+   dock stay an evening window in both themes (the pixel drawing is a skyline at dusk; a terminal keeps its colours). */
+:root,
+.dusk {
   /* Surfaces */
   --bg: #0F1624;
   --bg-2: #131C2B;
@@ -9,10 +14,31 @@
   --panel-2: #223044;
   --line: #FFFFFF12;
   --line-2: #FFFFFF29;
+  /* The app's frame and its cards: the menu, the top bar, a card and its hover, a quieter strip (toolbars, the
+     drawer, the side rail), a raised surface (menus, the palette, toasts), a field (inputs, selects), an inset (a
+     sunken box inside a card), the borders and the scrim behind a dialog */
+  --side-bg: #101925;
+  --topbar-bg: #0D131EED;
+  --card: #162232;
+  --card-hover: #1B2A3D;
+  --panel-low: #131E2C;
+  --raised: #172436;
+  --field: #101B2A;
+  --inset: #0D182780;
+  --border: #344257;
+  --border-2: #45576F;
+  --border-hover: #67798E;
+  --scrim: #03081399;
+  --scrim-soft: #03081366;
+  --field-border: #64768E;
   /* Text */
   --text: #EDF2F7;
   --text-2: #BFCBDC;
   --muted: #98A9BF;
+  --text-strong: #FFFFFF;
+  --quiet: #8A93A6;
+  /* A session left open (attention.css); declared here so a dusk element resolves it with the dark grey */
+  --left: var(--quiet);
   /* Colours with a meaning: accent (links, the chosen item), gold (the library, skills), busy (working, success),
      idle (waiting for you, warnings), stop (errors, danger), orange (running agents), pink and teal (accents) */
   --accent: #39B6C7;
@@ -23,6 +49,23 @@
   --pink: #CF98BE;
   --teal: #86C8CD;
   --orange: #DE7D2C;
+  --waiting: #FF8F6B;
+  --commit: #FFB454;
+  /* Text on an accent fill, and the inks: text on a tint of its own colour (a red note, a green result) */
+  --on-accent: #152132;
+  --accent-ink: #DFE6FF;
+  --stop-ink: #FFD9D9;
+  --busy-ink: #D9FFE9;
+  --idle-ink: #FFF1C9;
+  --warn-ink: #FFCF9A;
+  --prompt-ink: #F4EFE0;
+  /* The identity hues (a project's, a tool's, a kind of step's: public/js) are written for a dark page; as text they
+     are mixed with --text by this much (color-mix), and a project's initials with --text-strong by --mark-ink */
+  --hue-ink: 100%;
+  --mark-ink: 60%;
+  /* The mark's two strokes */
+  --brand-1: #1596AB;
+  --brand-2: #DE7D2C;
   /* The same colours as channels, for tints */
   --accent-rgb: 57, 182, 199;
   --gold-rgb: 222, 125, 44;
@@ -32,15 +75,15 @@
   --orange-rgb: 222, 125, 44;
   --teal-rgb: 134, 200, 205;
   --pink-rgb: 207, 152, 190;
-  /* Light on dark (white tints over a surface) and shade (black shadows and scrims): a light theme swaps them */
+  /* Light on dark (white tints over a surface) and shade (black shadows and scrims): the light theme turns both navy */
   --tint-rgb: 255, 255, 255;
   --shade-rgb: 0, 0, 0;
   /* Shape and type */
   --radius: 14px;
   --radius-sm: 8px;
-  --font: "Segoe UI Variable Text", "Segoe UI", sans-serif;
-  --display: "Segoe UI Variable Display", "Segoe UI", sans-serif;
-  --mono: "Cascadia Mono", Consolas, monospace;
+  --font: "Segoe UI Variable Text", "Segoe UI", "Ubuntu Sans", Ubuntu, Cantarell, "Noto Sans", system-ui, sans-serif;
+  --display: "Segoe UI Variable Display", "Segoe UI", "Ubuntu Sans", Ubuntu, Cantarell, "Noto Sans", system-ui, sans-serif;
+  --mono: "Cascadia Mono", Consolas, "Ubuntu Sans Mono", "Ubuntu Mono", Menlo, monospace;
   --shadow: 0 18px 50px #050A144D;
   /* Modern HQ building (cutaway-hq.js, hq.css): the night behind the art, the name plates, their gold words, the
      dimming of a quiet floor and the light of a tool call */
@@ -78,18 +121,101 @@
   color-scheme: dark;
 }
 
-/* WCAG contrast verification: opaque sRGB token pairs, relative luminance.
-   --text / --bg: 16.07:1 (minimum 4.5:1, PASS)
-   --text / --panel: 14.19:1 (minimum 4.5:1, PASS)
-   --text-2 / --bg: 11.02:1 (minimum 4.5:1, PASS)
-   --text-2 / --panel: 9.74:1 (minimum 4.5:1, PASS)
-   --muted / --bg: 7.55:1 (minimum 4.5:1, PASS)
-   --muted / --panel: 6.67:1 (minimum 4.5:1, PASS)
-   --accent / --panel: 6.61:1 (minimum 3:1, PASS)
-   --busy / --panel: 8.30:1 (minimum 3:1, PASS)
-   --idle / --panel: 10.47:1 (minimum 3:1, PASS)
-   --stop / --panel: 6.74:1 (minimum 3:1, PASS)
-   --gold / --panel: 5.39:1 (minimum 3:1, PASS)
-   --orange / --panel: 5.39:1 (minimum 3:1, PASS)
-   These ratios do not certify composited tints, opacity, or the whole application.
-*/
+/* Light: the same names with daylight values (public/js/theme.js sets data-theme; "dusk" elements keep the dark
+   block above). The building's figures and furniture (--hq-person-*, --hq-skin*, --hq-metal*, --hq-chair-body,
+   --hq-shoe, --hq-mark) are drawn only inside the dusk scene and have no light values. */
+:root[data-theme="light"] {
+  --bg: #F2F5F8;
+  --bg-2: #E9EEF3;
+  --panel: #FFFFFF;
+  --panel-solid: #FFFFFF;
+  --panel-2: #EDF1F5;
+  --line: #0F1E3214;
+  --line-2: #0F1E3229;
+  --side-bg: #E8EDF2;
+  --topbar-bg: #F2F5F8E6;
+  --card: #FFFFFF;
+  --card-hover: #F7F9FB;
+  --panel-low: #F8FAFC;
+  --raised: #FFFFFF;
+  --field: #FFFFFF;
+  --inset: #F3F6F9;
+  --border: #D5DCE5;
+  --border-2: #BAC5D2;
+  --border-hover: #93A2B5;
+  --scrim: #1A263A59;
+  --scrim-soft: #1A263A33;
+  --field-border: #7D8A9C;
+  --text: #102033;
+  --text-2: #33465C;
+  --muted: #56677C;
+  --text-strong: #0A1626;
+  --quiet: #586172;
+  --accent: #076773;
+  --gold: #97520E;
+  --busy: #1A6F49;
+  --idle: #7E5800;
+  --stop: #A92C38;
+  --pink: #A23F7C;
+  --teal: #1C6F75;
+  --orange: #97520E;
+  --waiting: #A0380F;
+  --commit: #9A5600;
+  --on-accent: #FFFFFF;
+  --accent-ink: #075E6A;
+  --stop-ink: #9A1F2B;
+  --busy-ink: #145C3B;
+  --idle-ink: #6B4A00;
+  --warn-ink: #8A4A08;
+  --prompt-ink: #4A3E22;
+  --hue-ink: 35%;
+  --mark-ink: 42%;
+  --brand-1: #1596AB;
+  --brand-2: #DE7D2C;
+  --accent-rgb: 7, 103, 115;
+  --gold-rgb: 151, 82, 14;
+  --busy-rgb: 26, 111, 73;
+  --idle-rgb: 126, 88, 0;
+  --stop-rgb: 169, 44, 56;
+  --orange-rgb: 151, 82, 14;
+  --teal-rgb: 28, 111, 117;
+  --pink-rgb: 162, 63, 124;
+  --tint-rgb: 16, 32, 51;
+  --shade-rgb: 26, 38, 58;
+  --shadow: 0 12px 32px #1A263A1F;
+  /* The workshop's frame around the scene: the give box, the counters, the cards, the guide */
+  --hq-bg: #111B2B;
+  --hq-plate: #FFFFFF;
+  --hq-card: #FFFFFF;
+  --hq-note: #EAF4F6;
+  --hq-line: #C2CCD8;
+  --hq-text: #102033;
+  --hq-note-text: #33465C;
+  --hq-gold: #8A5A12;
+  --hq-gold-2: #7A4E0E;
+  --hq-focus: #076773;
+  --hq-hover: #076773;
+  --hq-shade: #FFFFFF;
+  --hq-scrim: rgba(26, 38, 58, 0.45);
+  --hq-shell: #F6F8FB;
+  --hq-surface: #FFFFFF;
+  --hq-raised: #F2F5F8;
+  --hq-border: #D5DCE5;
+  --hq-soft: #5D6E83;
+  --hq-glow: rgba(7, 103, 115, 0.07);
+  color-scheme: light;
+}
+
+/* A dusk element sets its own text colour: color is inherited as the parent's computed value, so without this the
+   light page's dark text would reach the evening window */
+.dusk {
+  color: var(--text);
+}
+
+/* WCAG contrast (opaque sRGB pairs, relative luminance; test/theme.test.mjs computes them again for both blocks):
+   dark   --text/--bg 16.07, --text/--panel 14.19, --text-2/--bg 11.02, --muted/--bg 7.55, --muted/--panel 6.67,
+          --accent/--panel 6.61, --busy 8.30, --idle 10.47, --stop 6.74, --gold 5.39 (on --panel)
+   light  --text/--bg 15.04, --text/--panel 16.45, --text-2/--bg 8.84, --muted/--bg 5.29, --muted/--panel 5.79,
+          --accent/--panel 6.57, --on-accent/--accent 6.57; a meaning colour on a 16% tint of itself over --bg at
+          least 4.5; an identity hue as text (35% with --text) on a 14% tint of itself at least 5.2
+   The test also checks the tints the page uses; it does not certify opacity or the whole application. */

@@ -199,3 +199,16 @@ tell me what you changed.") to `main.js` `onFix`: the project's running AI tab g
 (`askAi`, which types nothing while the tool's screen asks something); with no AI tab the project's drawer opens with
 the sentence in its job box. Nothing is ever sent by itself. A setup error (scripts disabled, Git, Node.js, sign-in,
 limits, network) keeps the setup check's box with its fixes, and neither kind marks the tab as asking.
+
+## Screen readers (2026-10-09, plan C2)
+
+- **Settings › General › "Terminal for screen readers"** (off by default) turns on xterm.js's own screen reader mode in
+  every terminal tab at once (new and open ones): the output goes into an accessible text area that NVDA and other
+  readers read line by line. Off, the terminal is a canvas-like grid a reader cannot follow.
+- **Known limits:** a tool that redraws its screen (a menu, a progress bar, Claude Code's input box) is read again
+  and again, so the reading gets busy; colours and the cursor's place are not read; the AI tools' own menus are
+  answered with the arrow keys and Enter as they say, which a reader announces only as text changes. The job box, the
+  plan and result buttons and the "What the AI asks" note say the same things in plain page text, which readers
+  handle well: they are the advised way, the terminal the way to watch.
+- The tab's close button is 24 × 24 px (WCAG 2.2 2.5.8, target size).
+- Not tried with NVDA yet: the owner's check (roadmap F1).

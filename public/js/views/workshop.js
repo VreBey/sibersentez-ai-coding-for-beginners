@@ -14,7 +14,7 @@ import { sessionState } from '../attention.js';
 import { apiErrorHtml, projectApiError, apiErrorWords } from '../apiError.js';
 import { permModeChip } from '../permMode.js';
 import { nextStep } from '../nextStep.js';
-import { firstScreenParts } from '../firstScreen.js';
+import { firstScreenParts, primaryIsNext } from '../firstScreen.js';
 import { hasOwnProject } from './checklist.js';
 import { askJobPoint, startPointOf, startPointsVersion, startPointText } from '../restore.js';
 
@@ -27,7 +27,7 @@ const PREVIEWS = { dev: 25000, library: 25000, server: 47000, design: 128000, me
 export const word = (key, vars) => t(`ws${key[0].toUpperCase()}${key.slice(1)}`, vars);
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 // A moment on the rewind: the clock for live data, minutes and seconds for the example
-export function formatTime(ms) {
+function formatTime(ms) {
   if (ms > 86400000) return new Date(ms).toLocaleTimeString(language() === 'tr' ? 'tr-TR' : 'en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   return `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 }
@@ -59,16 +59,18 @@ const TEMPLATE = () => `
       <select data-ws="speed" aria-label="${esc(word('speed'))}">${[1, 2, 4].map((n) => `<option value="${n}">${n}×</option>`).join('')}</select>
       <select data-ws="room" aria-label="${esc(word('room'))}">${['', ...ROOM_KEYS].map((k) => `<option value="${k}">${esc(word(k || 'room'))}</option>`).join('')}</select>
       <button type="button" data-ws="fit">${esc(word('fit'))}</button>
+      <button type="button" data-ws="view" aria-pressed="false">${esc(word('listView'))}</button>
       <small data-ws="label"></small>
     </div>
-    <section class="ws-stage" data-ws="stage">
+    <section class="ws-stage dusk" data-ws="stage">
       <canvas data-ws="canvas" tabindex="-1" aria-label="${esc(word('canvasLabel'))}"></canvas>
       <button type="button" class="ws-sign" data-ws="sign">${esc(word('resting'))}</button>
       <div class="ws-nav" data-ws="nav"></div>
+      <p class="ws-list-empty" data-ws="list-empty" hidden>${esc(word('listEmpty'))}</p>
       <div class="ws-empty" data-ws="empty" hidden></div>
-      <div class="ws-guide" data-ws="guide" hidden><article role="dialog" aria-modal="true" aria-labelledby="wsGuideTitle"><h2 id="wsGuideTitle">${esc(word('guideTitle'))}</h2><p>${esc(word('guideBody'))}</p><button type="button" data-ws="guide-close">${esc(word('understood'))}</button></article></div>
       <div class="ws-hint">${esc(word('hint'))}</div>
     </section>
+    <div class="ws-guide" data-ws="guide" hidden><article role="dialog" aria-modal="true" aria-labelledby="wsGuideTitle"><h2 id="wsGuideTitle">${esc(word('guideTitle'))}</h2><p>${esc(word('guideBody'))}</p><button type="button" data-ws="guide-close">${esc(word('understood'))}</button></article></div>
     <nav class="ws-rooms" data-ws="rooms" aria-label="${esc(word('room'))}"></nav>
     <section class="ws-timeline">
       <div class="ws-timeline-head"><strong>${esc(word('what'))}</strong><time data-ws="clock"></time><span data-ws="event-text"></span><button type="button" data-ws="live">${esc(word('live'))}</button></div>
@@ -264,7 +266,7 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
           card.append(row);
         } else if (scene.resultReady === a.id) {
           const r = scene.job?.review;
-          html(`<section class="ws-result"><h3>${esc(word('resultTitle'))}</h3><p>${esc(jobNowText(scene.job))}</p>${r?.verdict ? `<p class="ws-note">${esc(word('resultReview', { verdict: r.verdict }))}</p>` : ''}<p class="ws-note">${esc(word('resultHint'))}</p></section>`);
+          html(`<section class="ws-result"><h3>${esc(word('resultTitle'))}</h3><p>${esc(jobNowText(scene.job, { offline: mode === 'live' && store.lost }))}</p>${r?.verdict ? `<p class="ws-note">${esc(word('resultReview', { verdict: r.verdict }))}</p>` : ''}<p class="ws-note">${esc(word('resultHint'))}</p></section>`);
           const row = document.createElement('div');
           row.className = 'ws-actions';
           // Open / run it first among the ways to look (docs/run-hint.md): the person sees the result before saying yes
@@ -392,6 +394,8 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
   }
   function renderNavigation() {
     const sig = scene.actors.map((a) => `${a.id}:${a.state}`).join('|');
+    // The list says so when nobody is at work in the shown project
+    $('list-empty').hidden = scene.actors.length > 0;
     if (sig === keys.nav) return;
     keys.nav = sig;
     const nav = $('nav');
@@ -534,6 +538,25 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     dirty = true;
     renderToolbar();
   });
+  // Building / List (review U18): the same data and the same buttons; the choice is kept in this browser
+  const LIST_KEY = 'sibersentez.workshop.view';
+  const setList = (on) => {
+    root.classList.toggle('ws-list-mode', on);
+    $('view').setAttribute('aria-pressed', String(on));
+    try {
+      localStorage.setItem(LIST_KEY, on ? 'list' : 'building');
+    } catch {
+      /* kept for this page only */
+    }
+    dirty = true;
+  };
+  $('view').addEventListener('click', () => setList(!root.classList.contains('ws-list-mode')));
+  try {
+    if (localStorage.getItem(LIST_KEY) === 'list') setList(true);
+  } catch {
+    /* no storage: the Building */
+  }
+
   $('fit').addEventListener('click', () => {
     view.room = null;
     view.floor = null;
@@ -762,7 +785,7 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     box.hidden = !job && !err;
     if (!job && !err) return;
     const body = $('jobbox-body');
-    body.innerHTML = `${apiErrorHtml(err)}${job?.title ? `<p class="ws-job-title">${esc(job.title)}</p>` : ''}${job ? stepsHtml(job, { idle: mode === 'live' && store.loaded && aiIdleIn({ sessions: store.sessions.values(), projectId: scene.project.id, dock: store.dockRunning?.() || [] }) }) : ''}`;
+    body.innerHTML = `${apiErrorHtml(err)}${job?.title ? `<p class="ws-job-title">${esc(job.title)}</p>` : ''}${job ? stepsHtml(job, { offline: mode === 'live' && store.lost, idle: mode === 'live' && store.loaded && aiIdleIn({ sessions: store.sessions.values(), projectId: scene.project.id, dock: store.dockRunning?.() || [] }) }) : ''}`;
     if (!job) return;
     // What the restore point of this job's start holds (a full copy, a lean one, one no longer kept, none): from this
     // page's start, else the server's record of it (asked on every frame above; the box draws again when it changes)
@@ -841,6 +864,10 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
       go.hidden = !next.act;
       if (next.act) go.textContent = word(`nextGo_${next.key}`);
     }
+    // One primary action (review B1): the strip's button when the person is needed, else Start
+    const nextFirst = primaryIsNext(next.key, !!next.act);
+    $('next-go').classList.toggle('primary', nextFirst);
+    $('give-go').classList.toggle('quiet', nextFirst);
     return next;
   }
   $('next-go').addEventListener('click', (e) => {
@@ -851,7 +878,14 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
       $('live').click();
       return requestAnimationFrame(() => ($('next-go').hidden ? $('live') : $('next-go')).focus());
     }
-    if (act === 'open-lead') return selectActor(scene.planPending || scene.resultReady);
+    if (act === 'open-lead') {
+      selectActor(scene.planPending || scene.resultReady);
+      // The lead's card holds the answer; beside the building it is often below the fold or under the terminal (tried
+      // on Linux, 2026-10-09: "Open the result" seemed to do nothing), so it comes into sight, its first action focused
+      const card = $('card');
+      card.scrollIntoView?.({ block: 'start' });
+      return card.querySelector('button:not(.close), a[href]')?.focus({ preventScroll: true });
+    }
     if (act === 'open-session') return dispatch('open-session', scene.waiting[0], e.currentTarget);
     if (act === 'resume') {
       const last = stoppedLead(scene.project.id);
@@ -963,7 +997,7 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     const sceneSign = scene.planPending ? 'signPlan' : scene.resultReady ? 'signResult' : scene.waiting.length ? 'waiting' : scene.actors.some((a) => a.state === 'busy') ? 'working' : scene.actors.some((a) => a.state === 'running') ? 'signRunning' : scene.closed ? 'closed' : 'resting';
     sign.textContent = word(mode === 'live' && liveMode ? SIGN_OF_STEP[next.key] || sceneSign : sceneSign);
     sign.classList.toggle('waiting', scene.waiting.length > 0 && !scene.resultReady);
-    sign.title = scene.job ? `${word('lamps')}: ${jobNowText(scene.job)}` : '';
+    sign.title = scene.job ? `${word('lamps')}: ${jobNowText(scene.job, { offline: mode === 'live' && store.lost })}` : '';
     const empty = $('empty');
     // No project to show (review U10): the Building folds to one short card, its controls, counts, timeline and team
     // panel out of sight; a project, or the example, brings it all back
@@ -999,13 +1033,16 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
 
   // ---------- the loop ----------
   const visible = () => !dead && !document.hidden && root.offsetParent !== null;
+  // The list (Building / List) shows no picture: the picture is not drawn meanwhile, everything else goes on (review B/C
+  // round 2: the list, the strip and the job box stopped too)
+  const picture = () => !root.classList.contains('ws-list-mode');
   function animate(time) {
     if (dead) return;
     frame = requestAnimationFrame(animate);
     const delta = Math.min(1000, time - lastFrame);
     lastFrame = time;
     if (!visible()) return;
-    if (r.resize()) dirty = true;
+    if (picture() && r.resize()) dirty = true;
     if (mode === 'demo') {
       if (playing && liveMode) {
         liveNow += delta * speed;
@@ -1027,7 +1064,7 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     const interval = frameInterval({ reduced: reducedQuery.matches, moving: !!scene?.moving && !(mode === 'demo' && !playing) });
     if ((dirty && time - lastPaint >= 1000 / 12) || time - lastPaint >= interval) {
       build();
-      r.draw(scene, current);
+      if (picture()) r.draw(scene, current);
       renderUi();
       lastPaint = time;
       dirty = false;

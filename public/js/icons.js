@@ -1,3 +1,4 @@
+// @ts-check
 // A small line icon set (24x24 view box, stroke = currentColor)
 const P = {
   prompt: '<path d="M4 5h16v11H9l-5 4z"/>',

@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of "What changed" (public/js/changes.js). Same keys in en and tr; placeholders use {count}. Merged into
 // the string table by public/js/i18n.js.
 export default {

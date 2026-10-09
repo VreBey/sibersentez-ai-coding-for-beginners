@@ -1,14 +1,16 @@
+// @ts-check
 // The Settings screen (docs/shell.md): what used to sit in the header and the footer, in a few plain groups.
 // settingsHtml is pure (tested in node); createSettingsView wires its buttons. Nothing here writes a setting the
 // server or the desktop shell owns: the actions mode goes through the actions panel, the tools panel checks the tools.
 import { esc } from '../format.js';
 import { icon } from '../icons.js';
-import { t, modeName, language } from '../i18n.js';
+import { t, modeName, language, tOs } from '../i18n.js';
 import { actionsState, onActionsChange } from '../actions.js';
-import { costShown, setCostShown, advancedShown, setAdvancedShown, onPrefs } from '../usage.js';
+import { costShown, setCostShown, advancedShown, setAdvancedShown, onPrefs, terminalReaderOn, setTerminalReader } from '../usage.js';
 import { installedTools, toolsState, onToolsChange, needTools } from './tools.js';
 import { preferredTool, readTool, saveTool } from './job.js';
 import { updatesOn, setUpdatesOn, updatesState, updateRowHtml, onUpdates } from '../updates.js';
+import { THEME_CHOICES, themeChoice, setThemeChoice } from '../theme.js';
 
 const LANG_NAMES = { tr: 'Türkçe', en: 'English' };
 
@@ -24,9 +26,16 @@ const btn = (act, label, ic = '') => `<button type="button" class="act-btn" data
 
 // The language row: a choice in the desktop app (auto follows Windows), the language in words elsewhere
 function languageRow(lang, choice, canLang) {
-  if (!canLang) return row(t('setLanguage', { lang: LANG_NAMES[lang] || lang }), t('setLanguageText'));
+  if (!canLang) return row(t('setLanguage', { lang: LANG_NAMES[lang] || lang }), tOs('setLanguageText'));
   const opt = (v, label) => `<option value="${v}"${v === choice ? ' selected' : ''}>${esc(label)}</option>`;
-  return row(t('setLanguagePick'), t('setLanguagePickText'), `<select data-set-lang data-fk="set:lang" aria-label="${esc(t('setLanguagePick'))}">${opt('auto', t('setLanguageAuto'))}${opt('tr', LANG_NAMES.tr)}${opt('en', LANG_NAMES.en)}</select>`);
+  return row(t('setLanguagePick'), t('setLanguagePickText'), `<select data-set-lang data-fk="set:lang" aria-label="${esc(t('setLanguagePick'))}">${opt('auto', tOs('setLanguageAuto'))}${opt('tr', LANG_NAMES.tr)}${opt('en', LANG_NAMES.en)}</select>`);
+}
+
+// The look (plan E4): dark, light or like the system; it changes at once, nothing loads again
+function themeRow(choice) {
+  const label = { dark: t('setThemeDark'), light: t('setThemeLight'), system: tOs('setThemeSystem') };
+  const opts = THEME_CHOICES.map((v) => `<option value="${v}"${v === choice ? ' selected' : ''}>${esc(label[v])}</option>`).join('');
+  return row(t('setThemeTitle'), t('setThemeText'), `<select data-set-theme data-fk="set:theme" aria-label="${esc(t('setThemeTitle'))}">${opts}</select>`);
 }
 
 const toggle = (attr, fk, on, label) => `<label class="set-switch"><input type="checkbox" ${attr} data-fk="${fk}" aria-label="${esc(label)}"${on ? ' checked' : ''}><span>${esc(t(on ? 'setOn' : 'setOff'))}</span></label>`;
@@ -37,7 +46,7 @@ export const SOURCE_URL = 'https://sibersentez.com';
 // app names no personal account and the place can change without an update (like SOURCE_URL)
 export const SPONSOR_URL = 'https://sibersentez.com/destek';
 
-// s: { mode, lang, cost, advanced, canSwitch, langChoice ('auto'|'en'|'tr'), canLang } -> HTML
+// s: { mode, lang, cost, advanced, canSwitch, langChoice ('auto'|'en'|'tr'), canLang, theme ('dark'|'light'|'system') } -> HTML
 // The tool jobs start with (docs/simplify.md): a choice among the installed tools
 // looking: the tools are still being looked for (not "none found": opening Settings first said so, 2026-10-02)
 function toolRow(tools, tool, looking = false) {
@@ -46,7 +55,8 @@ function toolRow(tools, tool, looking = false) {
   return row(t('setToolTitle'), t('setToolText'), `<select data-set-tool data-fk="set:tool" aria-label="${esc(t('setToolLabel'))}">${opts}</select>`);
 }
 
-export function settingsHtml({ mode = 'off', lang = 'en', cost = false, advanced = false, canSwitch = false, langChoice = 'auto', canLang = false, tools = [], tool = '', toolsLooking = false, updates = updatesState(), updatesChecked = updatesOn() } = {}) {
+// canLogs: the desktop app can open its log folder (review A4); a browser has none
+export function settingsHtml({ mode = 'off', lang = 'en', cost = false, advanced = false, canSwitch = false, langChoice = 'auto', canLang = false, tools = [], tool = '', toolsLooking = false, updates = updatesState(), updatesChecked = updatesOn(), canLogs = false, theme = themeChoice() } = {}) {
   const modeText = t(`setMode_${['off', 'dry', 'live'].includes(mode) ? mode : 'off'}`);
   return [
     group('actions', 'action', t('setActions'), [
@@ -56,12 +66,12 @@ export function settingsHtml({ mode = 'off', lang = 'en', cost = false, advanced
     group('usage', 'cpu', t('setUsage'), [
       row(t('setCostTitle'), t('setCostText'), toggle('data-set-cost', 'set:cost', cost, t('setCostTitle'))),
     ]),
-    group('general', 'globe', t('setGeneral'), [languageRow(lang, langChoice, canLang), row(t('setAdvancedTitle'), t('setAdvancedText'), toggle('data-set-advanced', 'set:advanced', advanced, t('setAdvancedTitle'))), row(t('updTitle'), t('updText'), `${toggle('data-set-updates', 'set:updates', updatesChecked, t('updTitle'))}<div class="upd-state" aria-live="polite">${updateRowHtml(updates)}</div>`)]),
-    group('help', 'prompt', t('setHelp'), [row(t('setGuideTitle'), t('setGuideText'), btn('guide', t('setGuideOpen'))), row(t('setDiagTitle'), t('setDiagText'), btn('diag', t('setDiagCopy'))), row(t('setLicenseTitle'), t('setLicenseText', { url: SOURCE_URL })), row(t('setSupportTitle'), t('setSupportText'), `<a class="act-btn" href="${SPONSOR_URL}" target="_blank" rel="noopener noreferrer" data-fk="set:support">${icon('heart')}<span>${esc(t('setSupportOpen'))}</span></a>`)]),
+    group('general', 'globe', t('setGeneral'), [languageRow(lang, langChoice, canLang), themeRow(theme), row(t('setAdvancedTitle'), t('setAdvancedText'), toggle('data-set-advanced', 'set:advanced', advanced, t('setAdvancedTitle'))), row(t('setReaderTitle'), t('setReaderText'), toggle('data-set-reader', 'set:reader', terminalReaderOn(), t('setReaderTitle'))), row(t('updTitle'), t('updText'), `${toggle('data-set-updates', 'set:updates', updatesChecked, t('updTitle'))}<div class="upd-state" aria-live="polite">${updateRowHtml(updates)}</div>`)]),
+    group('help', 'prompt', t('setHelp'), [row(t('setGuideTitle'), t('setGuideText'), btn('guide', t('setGuideOpen'))), row(t('setDiagTitle'), tOs('setDiagText'), btn('diag', t('setDiagCopy'))), ...(canLogs ? [row(t('setLogsTitle'), t('setLogsText'), btn('logs', t('setLogsOpen')))] : []), row(t('setLicenseTitle'), tOs('setLicenseText', { url: SOURCE_URL })), row(t('setSupportTitle'), t('setSupportText'), `<a class="act-btn" href="${SPONSOR_URL}" target="_blank" rel="noopener noreferrer" data-fk="set:support">${icon('heart')}<span>${esc(t('setSupportOpen'))}</span></a>`)]),
   ].join('');
 }
 
-export function createSettingsView(root, { openTools = () => {}, openGuide = () => {}, openActions = null, copyDiagnostics = () => {} } = {}) {
+export function createSettingsView(root, { openTools = () => {}, openGuide = () => {}, openActions = null, copyDiagnostics = () => {}, openLogs = null } = {}) {
   // The language the desktop app passed (?lang=) is the one chosen; none means "follow Windows"
   const bridge = () => (typeof globalThis.sibersentezShell?.setLanguage === 'function' ? globalThis.sibersentezShell : null);
   let langChoice = 'auto';
@@ -75,9 +85,9 @@ export function createSettingsView(root, { openTools = () => {}, openGuide = () 
     // The tools are looked for once, on the first screen that needs them (Settings can be the first one)
     needTools();
     const st = toolsState();
-    const html = settingsHtml({ toolsLooking: st.status === 'idle' || st.status === 'loading', mode: actionsState().mode, lang: language(), cost: costShown(), advanced: advancedShown(), canSwitch: typeof openActions === 'function', langChoice, canLang: !!bridge(), tools: installedTools(toolsState()).map((x) => ({ id: x.id, name: x.name })), tool: preferredTool(installedTools(toolsState()), readTool())?.id || '' });
+    const html = settingsHtml({ toolsLooking: st.status === 'idle' || st.status === 'loading', mode: actionsState().mode, lang: language(), cost: costShown(), advanced: advancedShown(), canSwitch: typeof openActions === 'function', langChoice, canLang: !!bridge(), tools: installedTools(toolsState()).map((x) => ({ id: x.id, name: x.name })), tool: preferredTool(installedTools(toolsState()), readTool())?.id || '', canLogs: typeof openLogs === 'function' });
     if (root._html === html) return;
-    const fk = root.contains(document.activeElement) ? document.activeElement.dataset?.fk : null;
+    const fk = root.contains(document.activeElement) ? /** @type {HTMLElement} */ (document.activeElement).dataset?.fk : null;
     root._html = html;
     root.innerHTML = html;
     if (fk) root.querySelector(`[data-fk="${CSS.escape(fk)}"]`)?.focus({ preventScroll: true });
@@ -88,10 +98,16 @@ export function createSettingsView(root, { openTools = () => {}, openGuide = () 
     else if (act === 'guide') openGuide();
     else if (act === 'actions') openActions?.();
     else if (act === 'diag') copyDiagnostics();
+    else if (act === 'logs') openLogs?.();
   });
   root.addEventListener('change', (e) => {
     if (e.target.matches?.('[data-set-cost]')) setCostShown(e.target.checked);
     if (e.target.matches?.('[data-set-advanced]')) setAdvancedShown(e.target.checked);
+    if (e.target.matches?.('[data-set-reader]')) setTerminalReader(e.target.checked);
+    if (e.target.matches?.('[data-set-theme]')) {
+      setThemeChoice(e.target.value);
+      render();
+    }
     // "A new version is out" (roadmap F3a): on, the page asks its own server now and at every start; off, never
     if (e.target.matches?.('[data-set-updates]')) Promise.resolve(setUpdatesOn(e.target.checked)).finally(render);
     if (e.target.matches?.('[data-set-tool]')) {

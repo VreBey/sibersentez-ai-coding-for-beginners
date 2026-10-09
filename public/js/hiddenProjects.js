@@ -1,3 +1,4 @@
+// @ts-check
 // Projects the person hid from the lists (2026-10-02): a folder found once in the AI tools' records ("proje", "deneme")
 // stayed in Projects for good. Hiding touches nothing on disk and tells the server nothing: the ids are kept in this
 // browser only (localStorage; the desktop app keeps its own profile), and a hidden project folds away with the other

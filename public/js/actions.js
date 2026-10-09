@@ -1,3 +1,4 @@
+// @ts-check
 // Action client: talks to the server's action endpoints (GET /api/actions, POST /api/action).
 // Actions are off by default; if /api/actions answers 404 (or cannot be reached at all) the mode is 'off'
 // and the UI behaves like the read-only panel it is today. The token lives in memory only and is written nowhere.
@@ -45,7 +46,7 @@ export const ACTION_NAMES = Object.freeze(Object.keys(ACTION_FIELDS));
 const MAX_PACKAGES = 10;
 
 let state = { mode: 'off', token: null };
-let fetchImpl = (...a) => globalThis.fetch(...a);
+let fetchImpl = (input, init) => globalThis.fetch(input, init);
 let initPromise = null;
 let initSeq = 0; // two quick mode changes: only the latest answer counts
 const listeners = new Set();
@@ -256,5 +257,5 @@ export function _resetActionsForTest() {
   initPromise = null;
   inflight.clear();
   listeners.clear();
-  fetchImpl = (...a) => globalThis.fetch(...a);
+  fetchImpl = (input, init) => globalThis.fetch(input, init);
 }

@@ -1,3 +1,4 @@
+// @ts-check
 // Gemini CLI source adapter (see adapters/index.mjs; contract docs/adapters-wave1.md).
 //   root: ~/.gemini
 //   projects: projects.json {"projects": {"<absolute path>": "<id>"}} (the keys) and the .project_root marker in

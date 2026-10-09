@@ -1,3 +1,4 @@
+// @ts-check
 // "Start with AI" (docs/ai-start.md): the first-message file, the launcher and the command lines that open an AI tool
 // in Windows Terminal. Pure apart from the small file helpers at the end (injectable fs), so every rule is tested
 // without starting anything.
@@ -15,10 +16,15 @@
 // The launcher's first line (NO_CWD_SEARCH_LINE) stops cmd from looking a bare program name up in the project folder.
 // Paths inside the launcher are written with %USERPROFILE%, %LOCALAPPDATA%, ... where they start with one, so the file
 // stays ASCII and holds no user name; a path that is still not plain ASCII is refused (the plain terminal still works).
+//
+// Linux and macOS (plan G1, G2): no Windows Terminal. The tool starts in SiberSentez's own terminal only, from a small
+// sh launcher (<id>.sh, shellLauncherText) run as `/bin/sh <launcher>` in the project folder; every path in it is
+// single-quoted, so no character of a folder name is read as shell syntax.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { newJobId, validJobId, jobMessageName } from './job-id.mjs';
+import { PLATFORM, isLocalAbsolute, platformOf } from './platform.mjs';
 
 export const FIRST_DIR = '.sibersentez';
 // The folder's name before the product was renamed (2026-09-30)
@@ -44,7 +50,7 @@ export function takeOverLegacyFolder(dir, xfs = fs) {
     return false;
   }
 }
-export const FIRST_BASE = 'ilk-mesaj';
+const FIRST_BASE = 'ilk-mesaj';
 // Other names tried when .sibersentez/ilk-mesaj.md already holds something else: ilk-mesaj-2.md ... ilk-mesaj-9.md
 export const FIRST_NAMES = Object.freeze([`${FIRST_BASE}.md`, ...Array.from({ length: 8 }, (_, i) => `${FIRST_BASE}-${i + 2}.md`)]);
 export const GITIGNORE_TEXT = '*\n';
@@ -214,15 +220,15 @@ export function batchPath(p, env) {
 
 // A launcher path that may be a bare argument of wt.exe and cmd.exe: drive, then folders of letters, digits, _ . ~ -
 export const SAFE_LAUNCH_RE = /^[A-Za-z]:\\(?:[A-Za-z0-9_.~-]+\\)*[A-Za-z0-9_.~-]+$/;
-export const LAUNCHER_NAME_RE = /^[0-9a-f]{12}\.cmd$/;
-export const newLauncherName = (rand = crypto.randomBytes) => `${rand(6).toString('hex')}.cmd`;
+export const LAUNCHER_NAME_RE = /^[0-9a-f]{12}\.(?:cmd|sh)$/;
+export const newLauncherName = (rand = crypto.randomBytes, plat = PLATFORM) => `${rand(6).toString('hex')}${plat.windows ? '.cmd' : '.sh'}`;
 
 // The first line of every launcher. cmd looks a bare program name up in the working folder before PATH, and the
 // working folder is the project, which may not be trusted: an npm shim (gemini.cmd, ...) calls a bare `node`, so a
 // node.exe, node.bat or node.cmd in the project would run instead of Node.js. With this variable set cmd (and every
 // program started from this shell, through CreateProcess's search) skips the working folder. It stays set in the shell
 // that remains open after the tool: a program in the project folder is started there as .\name.
-export const NO_CWD_SEARCH_LINE = '@set NoDefaultCurrentDirectoryInExePath=1';
+const NO_CWD_SEARCH_LINE = '@set NoDefaultCurrentDirectoryInExePath=1';
 
 // The tool ended, the shell stays open (docs/embedded-terminal.md §7): the launcher leaves <launcher>.ended next to
 // itself once the tool's line returns, and the desktop shell sees it, so an open tab is never taken for a working AI.
@@ -255,10 +261,45 @@ export function launcherText({ toolName, file, ext, args, cdDir = null, env }) {
   return { ok: true, text };
 }
 
+// The sh launcher (pure; Linux and macOS): the same work as the cmd one. "$0" is the launcher's own absolute path
+// (it is run as /bin/sh <full path>), so the ended mark is taken before any cd and never lands in the project; after
+// the tool the person's own shell takes the terminal over (as cmd /k keeps it). Every path single-quoted ('\'' for a
+// quote in it); a path with a line break or a NUL, or not absolute, is refused. The text is UTF-8: a Turkish folder
+// name is fine here.
+const POSIX = platformOf('linux');
+const shQuote = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
+const SH_PATH_OK = (p) => isLocalAbsolute(p, POSIX) && !/[\u0000-\u001f\u007f]/.test(p);
+export function shellLauncherText({ toolName, file, args, cdDir = null, shell }) {
+  if (!SH_PATH_OK(file)) return { ok: false, error: 'tool-path-unsafe' };
+  if (!shell || !SH_PATH_OK(shell.file) || !(shell.args || []).every((a) => /^-[a-z]+$/.test(a))) return { ok: false, error: 'tool-path-unsafe' };
+  const lines = ['#!/bin/sh', `# SiberSentez: starts ${String(toolName).replace(/[^A-Za-z0-9 .-]/g, '')} in the project folder (docs/ai-start.md). Removed after 24 hours.`, 'ended="$0.ended"'];
+  if (cdDir) {
+    if (!SH_PATH_OK(cdDir)) return { ok: false, error: 'folder-path-unsafe' };
+    lines.push(`cd -- ${shQuote(cdDir)} || exit 1`);
+  }
+  for (const a of args) if (!PROMPT_SAFE_RE.test(a) && !/^-{1,2}[a-z]+(?:=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$/.test(a)) return { ok: false, error: 'tool-path-unsafe' };
+  // Every argument quoted, options too (review G: an option was written bare)
+  const tail = args.map(shQuote).join(' ');
+  // The tool's own folder first on PATH: a tool nvm installed runs "#!/usr/bin/env node", and nvm's PATH lives only in
+  // the shell's profile, which an app started from the desktop never read (review G). Ctrl+C reaches the tool, never
+  // the launcher (a handler, not an ignore: the tool still gets it), so the ended mark and the shell always follow.
+  const dir = file.slice(0, file.lastIndexOf('/')) || '/';
+  // ${PATH:+:$PATH}: an empty PATH adds no empty entry (one that would mean the project folder); a folder with a ':'
+  // in its name would split PATH, so then it is left as it is
+  const pathLine = dir.includes(':') ? [] : [`PATH=${shQuote(dir)}\${PATH:+:$PATH}; export PATH`];
+  lines.push(...pathLine, "trap ':' INT", `${shQuote(file)}${tail ? ' ' + tail : ''}`, "trap - INT", ': > "$ended" 2>/dev/null', `exec ${shQuote(shell.file)}${(shell.args || []).map((a) => ' ' + a).join('')}`);
+  return { ok: true, text: lines.join('\n') + '\n' };
+}
+
 // Where the launcher goes and how wt reaches it (pure). candidates: SiberSentez's launcher folders in order (the hub's
 // launch folder, then %LOCALAPPDATA%\SiberSentez\launch); unsafe(p): the Windows Terminal argument guard.
 // { ok: true, mode: 'absolute' | 'relative', dir } or { ok: false }.
-export function pickLaunchDir(candidates, unsafe) {
+export function pickLaunchDir(candidates, unsafe, plat = PLATFORM) {
+  // Linux and macOS: the first local absolute folder; sh gets the launcher as an argument, nothing parses it
+  if (!plat.windows) {
+    const d = candidates.find((x) => typeof x === 'string' && SH_PATH_OK(x));
+    return d ? { ok: true, mode: 'absolute', dir: d } : { ok: false };
+  }
   const list = candidates.filter((d) => typeof d === 'string' && /^[A-Za-z]:\\/.test(d));
   const abs = list.find((d) => SAFE_LAUNCH_RE.test(d));
   if (abs) return { ok: true, mode: 'absolute', dir: abs };

@@ -246,7 +246,7 @@
 .wait-chip.wait-chip.on {
   border-color: rgba(var(--orange-rgb), 0.55);
   background: rgba(var(--orange-rgb), 0.2);
-  color: #fff;
+  color: var(--text-strong);
 }
 .wait-chip.wait-chip.on:hover {
   border-color: var(--waiting);
@@ -324,8 +324,8 @@
 /* Contrast floor (an accessibility pass with axe-core, 2026-10-08): small text that fell under 4.5:1 on its background.
    A project's initials take a lighter tint of its colour (6.6:1), the feed's session, kind and time and the roster's
    "Other" source a brighter grey (6.1:1 and 5.6:1); the kind is no longer dimmed further. */
-.pmark { color: color-mix(in srgb, var(--pc) 60%, #fff); }
-.ev-meta, .ev time { color: #93a1b5; }
+.pmark { color: color-mix(in srgb, var(--pc) var(--mark-ink), var(--text-strong)); }
+.ev-meta, .ev time { color: var(--muted); }
 .ev-kind { opacity: 1; }
 .s-other { --sc: #a3abbc; }
 /* Empty until the first data arrives (the waiting chip) or until there is something to list (the Building's recent

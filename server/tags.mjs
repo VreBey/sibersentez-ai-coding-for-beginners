@@ -1,3 +1,4 @@
+// @ts-check
 // Tag dictionary of the automatic skill fit (docs/auto-skills.md §2.2). One dictionary gives tags to projects (from
 // manifest signals, file extensions and folder names) and to items (from name, description and category).
 //

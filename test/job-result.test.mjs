@@ -96,8 +96,8 @@ test('the answers are asked per project and job, again after a while; a job from
 
 test('the drawer shows it under the job, before "How to run it"', () => {
   const drawer = fs.readFileSync(new URL('../public/js/views/drawer.js', import.meta.url), 'utf8');
-  assert.ok(drawer.indexOf('${jobResultSection(p)}') > 0 && drawer.indexOf('${jobResultSection(p)}') < drawer.indexOf("${built ? runHint.html(p) : ''}"));
-  assert.ok(drawer.includes('return jobResult.html(p, d, jobId ? startPointOf(p.id, jobId) : null, waiting ? { steps: stepsHtml(d), go } : {});'));
+  assert.ok(drawer.indexOf('${jobResultSection(p)}') > 0 && drawer.indexOf('${jobResultSection(p)}') < drawer.indexOf("${built ? runHint.html(p, { quiet: resultFirst }) : ''}"));
+  assert.ok(drawer.includes('return jobResult.html(p, d, startPoint, waiting ? { steps: stepsHtml(d, { offline: store.lost }), go, cost, tips, back: backOpts } : { cost, tips, back: backOpts });'));
   // The way to the job's AI session goes where the Building's result card goes (review U08)
   assert.ok(drawer.includes("if (act === 'open-ai') return void window.dispatchEvent(new CustomEvent('hq-action', { detail: { action: 'open-ai-terminal', projectId: p.id, sessionId: btn.dataset.jobSession || null } }));"));
 });

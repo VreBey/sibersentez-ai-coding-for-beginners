@@ -198,7 +198,7 @@ describe('shell: who may use the bridge', () => {
 
 // ------------------------------------------------------------------ the shell's folder rules
 describe('shell: which folder can be a project (checkProjectFolder)', () => {
-  test('an ordinary folder is accepted as written', () => {
+  test('an ordinary folder is accepted as written', { skip: WINDOWS_ONLY }, () => {
     const w = world();
     const d = w.dir('my-game');
     assert.deepEqual(checkProjectFolder(d, w.rules()), { ok: true, path: d });
@@ -208,7 +208,7 @@ describe('shell: which folder can be a project (checkProjectFolder)', () => {
     assert.equal(checkProjectFolder(inDesktop, w.rules()).ok, true, 'a new folder inside the Desktop is fine');
   });
 
-  test('refused: a drive root, the home folder and its parents, Desktop / Documents / Downloads themselves', () => {
+  test('refused: a drive root, the home folder and its parents, Desktop / Documents / Downloads themselves', { skip: WINDOWS_ONLY }, () => {
     const w = world();
     const r = w.rules();
     assert.equal(checkProjectFolder(path.parse(w.base).root, r).reason, 'drive-root');
@@ -243,7 +243,7 @@ describe('shell: which folder can be a project (checkProjectFolder)', () => {
     assert.equal(checkProjectFolder(path.join(intoHub, 'looks-fine'), w.rules()).reason, 'hub', 'the real form is checked too');
   });
 
-  test('refused: network, WSL and device paths (never touched), relative paths, stream names and reserved characters, a missing folder, a file', () => {
+  test('refused: network, WSL and device paths (never touched), relative paths, stream names and reserved characters, a missing folder, a file', { skip: WINDOWS_ONLY }, () => {
     const w = world();
     const r = w.rules();
     let touched = 0;
@@ -497,7 +497,7 @@ describe('server: which folder can be a project (catalog rules) and adding it', 
     assert.ok(c.getProject('reg-one').via.includes('sibersentez'));
   });
 
-  test('refused: home, its parents, Desktop, AppData, the hub, the personal Claude folder, the program folder, links, missing folders, network paths, a folder holding listed projects', () => {
+  test('refused: home, its parents, Desktop, AppData, the hub, the personal Claude folder, the program folder, links, missing folders, network paths, a folder holding listed projects', { skip: WINDOWS_ONLY }, () => {
     const w = world();
     const c = w.catalog();
     const add = (p, o) => c.addProjectFolder(p, o).reason;
@@ -531,7 +531,7 @@ describe('server: which folder can be a project (catalog rules) and adding it', 
     assert.equal(c.memory.list().filter((m) => m.via.includes('sibersentez')).length, 1, 'nothing refused was remembered');
   });
 
-  test('refused as broad: the Windows folder, the program folders and ProgramData with everything below them, a OneDrive root itself (a folder inside OneDrive is fine); variable names in any letter case; also through a junction', () => {
+  test('refused as broad: the Windows folder, the program folders and ProgramData with everything below them, a OneDrive root itself (a folder inside OneDrive is fine); variable names in any letter case; also through a junction', { skip: WINDOWS_ONLY }, () => {
     assert.deepEqual([...SYSTEM_TREE_VARS], ['SystemRoot', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramData'], 'the list the shell uses too');
     assert.deepEqual([...ONEDRIVE_ROOT_VARS], ['OneDrive', 'OneDriveConsumer', 'OneDriveCommercial']);
     const w = world();
@@ -977,6 +977,7 @@ describe('page: the idea kept with the project, and "Then: open a terminal"', ()
 // ================================================================== shell: system folders, the hub both ways, the tray
 // (the desktop shell's part: electron/helpers.mjs systemFolderRules, checkProjectFolder, newProjectFromTray)
 import { systemFolderRules, newProjectFromTray, SYSTEM_TREE_VARS as SHELL_TREE_VARS, SYSTEM_ROOT_VARS as SHELL_ROOT_VARS } from '../electron/helpers.mjs';
+import { WIN_ONLY as WINDOWS_ONLY } from './lib/winonly.mjs';
 
 const WIN_ONLY = { skip: process.platform !== 'win32' && 'Windows paths and junctions' };
 

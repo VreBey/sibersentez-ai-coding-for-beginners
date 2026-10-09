@@ -1,3 +1,4 @@
+// @ts-check
 // The SiberSentez kit (docs/kit.md): SiberSentez's own skills and agents, shipped with the app and only ever read.
 //
 // Where it lives: <app>/kit when the app runs from its source folder; next to the app archive in the installed app
@@ -21,9 +22,9 @@ import { readFrontmatter } from './util.mjs';
 import { listItemsIn, isRealDir, lstat, validName } from './library.mjs';
 import { TAG_BY_ID, sortTags } from './tags.mjs';
 
-export const KIT_ENV = 'SIBERSENTEZ_KIT';
+const KIT_ENV = 'SIBERSENTEZ_KIT';
 export const KIT_SOURCE = 'kit';
-export const KIT_STAGES = Object.freeze(['start', 'build', 'ship', 'any']);
+const KIT_STAGES = Object.freeze(['start', 'build', 'ship', 'any']);
 export const KIT_OFFERS = Object.freeze(['empty-folder']);
 // Frontmatter bytes read for the metadata; keywords kept per item and their length
 const HEAD_BYTES = 8000;
@@ -77,7 +78,7 @@ const list = (s) =>
 
 // The metadata map of a frontmatter (the `metadata:` key and its indented `key: value` lines) and its license line.
 // Returns { license, metadata: { key: value } }; {} when the file cannot be read.
-export function readKitMeta(file) {
+function readKitMeta(file) {
   let text;
   try {
     const fd = fs.openSync(file, 'r');

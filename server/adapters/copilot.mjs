@@ -1,3 +1,4 @@
+// @ts-check
 // GitHub Copilot source adapter: Copilot CLI and Copilot Chat in VS Code (see adapters/index.mjs; contract
 // docs/adapters-wave1.md).
 //   root: COPILOT_HOME (ctx.env), else ~/.copilot
@@ -16,7 +17,7 @@ import path from 'node:path';
 import { exists, mtimeOf, safeDirs } from '../fsutil.mjs';
 import { PERSONAL, PROJECT, cleanPath, dedupeProjects, envRoot, isPersonalClaude, listerOf, manifestText, mdAgentItems, readUntilLine, skillItems, toolPluginItems, vscodeWorkspaces } from './shared.mjs';
 
-export const copilotHome = (ctx) => envRoot(ctx, 'COPILOT_HOME', '.copilot');
+const copilotHome = (ctx) => envRoot(ctx, 'COPILOT_HOME', '.copilot');
 const AGENT_SUFFIXES = ['.agent.md', '.chatmode.md'];
 
 // Value of a YAML scalar on one line: "double quoted" (JSON-style escapes), 'single quoted' ('' is a quote) or
@@ -41,7 +42,7 @@ export function yamlScalar(raw) {
 // line (readUntilLine). { cwd } (null when there is no usable cwd: line), or { error: true } when the file cannot
 // be read (locked, access denied): the caller does not cache that.
 const CWD_LINE = /^cwd:(.*)$/;
-export function readWorkspaceYaml(file) {
+function readWorkspaceYaml(file) {
   const r = readUntilLine(file, (line) => CWD_LINE.test(line));
   if (r.error) return { error: true };
   return { cwd: r.line === null ? null : cleanPath(yamlScalar(CWD_LINE.exec(r.line)[1])) };

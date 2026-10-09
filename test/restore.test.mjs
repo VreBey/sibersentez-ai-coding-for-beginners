@@ -78,14 +78,14 @@ test('a point taken before SHA-256 (its files named by SHA-1) is still planned, 
   const plan = planRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id });
   assert.equal(plan.ok, true);
   assert.deepEqual(plan.changed, ['a.txt']);
-  const r = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick });
+  const r = await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick });
   assert.equal(r.ok, true, JSON.stringify(r));
   assert.equal(fs.readFileSync(path.join(w.dir, 'a.txt'), 'utf8'), 'one');
   // A damaged old copy: caught by its SHA-1, nothing changes
   fs.writeFileSync(path.join(pd, 'files', 'a.txt'), 'xxx');
   w.write('a.txt', 'three');
   const plan2 = planRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id });
-  assert.equal(applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan2.planId, now: tick }).problem, 'point-damaged');
+  assert.equal((await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan2.planId, now: tick })).problem, 'point-damaged');
   assert.equal(fs.readFileSync(path.join(w.dir, 'a.txt'), 'utf8'), 'three');
   // A file entry with neither digest makes the manifest unreadable (the point is not listed)
   m.files = m.files.map(({ sha1, ...f }) => f);
@@ -154,7 +154,7 @@ test('plan: what changed, what was deleted and what came later; a new time with 
   assert.equal(planRestore({ hubDir: w.hub, projectId: 'other', dir: w.dir, id: p.id }).problem, 'point-missing', 'a point of another project');
 });
 
-test('going back: files put back, deleted ones brought back, later ones removed with their empty folders; the present is kept first, so the restore can be undone', () => {
+test('going back: files put back, deleted ones brought back, later ones removed with their empty folders; the present is kept first, so the restore can be undone', async () => {
   const w = world();
   w.write('index.html', 'v1');
   w.write('style.css', 'css');
@@ -163,7 +163,7 @@ test('going back: files put back, deleted ones brought back, later ones removed 
   fs.rmSync(path.join(w.dir, 'style.css'));
   w.write('src/deep/new.js', 'new');
   w.write('notes.md', 'mine');
-  const r = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, now: tick });
+  const r = await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, now: tick });
   assert.equal(r.ok, true);
   assert.deepEqual([r.restored, r.removed, r.failed], [2, 2, []]);
   assert.equal(w.read('index.html'), 'v1');
@@ -176,7 +176,7 @@ test('going back: files put back, deleted ones brought back, later ones removed 
   assert.equal(list[0].id, r.before);
   assert.equal(list[0].reason, 'before-restore');
   // Undo: back to that point
-  const undo = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: r.before, now: tick });
+  const undo = await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: r.before, now: tick });
   assert.equal(undo.ok, true);
   assert.equal(w.read('index.html'), 'v2');
   assert.equal(w.read('src/deep/new.js'), 'new');
@@ -184,11 +184,11 @@ test('going back: files put back, deleted ones brought back, later ones removed 
   assert.equal(w.has('style.css'), false);
   // Nothing to do: nothing written, no point taken
   const count = listPoints({ hubDir: w.hub, projectId: w.projectId }).length;
-  assert.deepEqual(applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: r.before, now: tick }), { ok: true, before: null, restored: 0, removed: 0, failed: [] });
+  assert.deepEqual(await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: r.before, now: tick }), { ok: true, before: null, restored: 0, removed: 0, failed: [] });
   assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).length, count);
 });
 
-test('going back never writes through a link, never trusts a damaged copy, and changes nothing when the present cannot be kept', () => {
+test('going back never writes through a link, never trusts a damaged copy, and changes nothing when the present cannot be kept', async () => {
   const w = world();
   w.write('web/index.html', 'v1');
   w.write('a.txt', 'a1');
@@ -200,7 +200,7 @@ test('going back never writes through a link, never trusts a damaged copy, and c
   fs.symlinkSync(elsewhere, path.join(w.dir, 'web'), 'junction');
   w.write('a.txt', 'a2');
   w.write('later.txt', 'later');
-  const r = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, now: tick });
+  const r = await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, now: tick });
   assert.equal(r.ok, true);
   assert.deepEqual(r.failed.map((f) => `${f.rel}:${f.error}`), ['web/index.html:link-in-path']);
   assert.deepEqual(fs.readdirSync(elsewhere), [], 'nothing written behind the junction');
@@ -210,7 +210,7 @@ test('going back never writes through a link, never trusts a damaged copy, and c
   w.write('later2.txt', 'keep me');
   const pts = listPoints({ hubDir: w.hub, projectId: w.projectId }).length;
   fs.writeFileSync(path.join(pointsDir(w.hub, w.projectId), p.id, 'files', 'a.txt'), 'tampered');
-  assert.deepEqual(applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, now: tick }), { ok: false, problem: 'point-damaged' });
+  assert.deepEqual(await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, now: tick }), { ok: false, problem: 'point-damaged' });
   assert.equal(w.read('a.txt'), 'a3');
   assert.equal(w.read('later2.txt'), 'keep me', 'nothing removed either');
   assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).length, pts, 'no point taken');
@@ -220,7 +220,7 @@ test('going back never writes through a link, never trusts a damaged copy, and c
   const p2 = createPoint({ hubDir: w2.hub, projectId: w2.projectId, dir: w2.dir, now: tick });
   w2.write('a.txt', 'two');
   w2.write('b.txt', 'later');
-  const refused = applyRestore({ hubDir: w2.hub, projectId: w2.projectId, dir: w2.dir, id: p2.id, now: tick, limits: { ...RESTORE_LIMITS, files: 1 } });
+  const refused = await applyRestore({ hubDir: w2.hub, projectId: w2.projectId, dir: w2.dir, id: p2.id, now: tick, limits: { ...RESTORE_LIMITS, files: 1 } });
   assert.equal(refused.ok, false);
   assert.equal(w2.read('a.txt'), 'two');
   assert.equal(w2.read('b.txt'), 'later');
@@ -281,7 +281,7 @@ test('drawer section: the points with plain reasons; off disables going back; th
   setLanguage('en');
 });
 
-test('audit round 1: the same size and time with other bytes is seen and kept; a file and a folder can swap; the plan the person saw is the plan applied; the point gone back to survives pruning; device names are refused', () => {
+test('audit round 1: the same size and time with other bytes is seen and kept; a file and a folder can swap; the plan the person saw is the plan applied; the point gone back to survives pruning; device names are refused', async () => {
   const w = world();
   w.write('same.txt', 'AAAA');
   w.write('docs', 'a file named docs');
@@ -299,15 +299,15 @@ test('audit round 1: the same size and time with other bytes is seen and kept; a
   assert.match(plan.planId, /^[0-9a-f]{16}$/);
   // The plan changed after the preview: refused, nothing touched
   w.write('extra.txt', 'x');
-  assert.deepEqual(applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick }), { ok: false, problem: 'plan-changed' });
+  assert.deepEqual(await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick }), { ok: false, problem: 'plan-changed' });
   assert.equal(w.read('same.txt'), 'BBBB');
   fs.rmSync(path.join(w.dir, 'extra.txt'));
-  const r = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick });
+  const r = await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick });
   assert.deepEqual([r.ok, r.restored, r.removed, r.failed], [true, 2, 1, []]);
   assert.equal(w.read('same.txt'), 'AAAA');
   assert.equal(w.read('docs'), 'a file named docs', 'the folder went first, the file took its place');
   // The bytes that were overwritten are in the point of the present (always a new copy, never a reused one)
-  const undo = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: r.before, now: tick });
+  const undo = await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: r.before, now: tick });
   assert.equal(undo.ok, true);
   assert.equal(w.read('same.txt'), 'BBBB');
   assert.equal(w.read('docs/new.md'), 'new');
@@ -319,7 +319,7 @@ test('audit round 1: the same size and time with other bytes is seen and kept; a
   const list = listPoints({ hubDir: w.hub, projectId: w.projectId });
   const oldest = list.at(-1).id;
   w.write('same.txt', 'last');
-  const back = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: oldest, now: tick });
+  const back = await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: oldest, now: tick });
   assert.equal(back.ok, true);
   assert.ok(listPoints({ hubDir: w.hub, projectId: w.projectId }).some((x) => x.id === oldest), 'the point gone back to is kept');
   // Ids grow even when the clock goes back
@@ -357,7 +357,7 @@ test('a project over the limits gets a lean point: big files and logs left out a
   w.write('Assets/Enemy.cs', 'class Enemy {}');
   const plan = planRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, limits });
   assert.deepEqual([plan.changed, plan.missing, plan.added], [['Assets/Player.cs'], [], ['Assets/Enemy.cs']], 'left out: neither changed nor added');
-  const r = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick, limits });
+  const r = await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick, limits });
   assert.equal(r.ok, true);
   assert.deepEqual([r.restored, r.removed, r.failed], [1, 1, []]);
   assert.equal(w.read('Assets/Player.cs'), 'class Player {}');
@@ -423,10 +423,10 @@ test('a point keeps the job it was taken for: one line, at most LABEL_MAX charac
   const h = restoreSectionHtml({ id: 'p', path: w.dir }, { points: [first, none] }, { mode: 'live' });
   setLanguage('en');
   assert.ok(h.includes('“Menü sayfası ekle” işinden önce') && h.includes(STRINGS.tr.rstReason_ai_start ?? STRINGS.tr['rstReason_ai-start']));
-  assert.ok(fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8').includes("await takeStartPoint(ctx.pointProjectId, ctx.job || '', jobId)"), 'start-ai names the job');
+  assert.ok(fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8').includes("await takeStartPoint(pid, ctx.job || '', jobId)"), 'start-ai names the job');
 });
 
-test('a point taken before 0.17 that still names files of a tool folder now left out (.gemini) stays listed and usable; that folder is never touched', () => {
+test('a point taken before 0.17 that still names files of a tool folder now left out (.gemini) stays listed and usable; that folder is never touched', async () => {
   const w = world();
   w.write('index.html', 'one');
   w.write('.gemini/settings.json', '{"a":1}');
@@ -447,7 +447,7 @@ test('a point taken before 0.17 that still names files of a tool folder now left
   const plan = planRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id });
   assert.equal(plan.ok, true, JSON.stringify(plan));
   assert.deepEqual([plan.changed, plan.missing, plan.added], [['index.html'], [], []], 'the tool folder is not part of going back');
-  const r = applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick });
+  const r = await applyRestore({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, id: p.id, planId: plan.planId, now: tick });
   assert.equal(r.ok, true, JSON.stringify(r));
   assert.equal(w.read('index.html'), 'one');
   assert.equal(w.read('.gemini/settings.json'), '{"a":2}', 'never written');

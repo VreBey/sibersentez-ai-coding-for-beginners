@@ -2,62 +2,79 @@
 
 Every colour, font, radius and shadow of SiberSentez is a variable in `public/css/theme.css`, loaded before every other
 stylesheet. The rest of the CSS only uses those variables, so a new look is a new version of that one file: change
-the values, keep the names. The look is designed outside this repository (with ChatGPT, decided 2026-09-29), the
-same way as the building's drawings (docs/hq.md).
+the values, keep the names. Since 2026-10-09 the look is designed in this repository (before, with ChatGPT outside it).
+
+## Two looks (plan E4, 2026-10-09)
+
+- **Dark** ("calm turquoise dusk"): the first look and the default. Its values sit in the `:root, .dusk` block.
+- **Light** ("calm turquoise daylight"): the same names with daylight values in `:root[data-theme="light"]`.
+- **Like the system**: light or dark as Windows (or the desktop) is set, and it follows a change at once.
+
+The person picks it in **Settings → General → Look**. The choice is a page preference (`localStorage`
+`sibersentez.theme`, like the other preferences, `public/js/theme.js`). `public/js/theme-boot.js` is a plain script in
+the page's head: it sets `data-theme` before the stylesheets apply, so a light choice never shows the dark page first.
+In the desktop app the page tells the shell (preload `setTheme`, channel `sibersentez:set-theme`): the window's title
+bar follows (`nativeTheme.themeSource`) and so does the window's background. The shell saves nothing; the page tells it
+again at every start.
+
+### Always dusk
+
+The building scene (`.ws-stage`), the old stage (`.stage-wrap`) and the terminal dock (`.term-dock`) carry the class
+`dusk`: the dark block applies to them in both looks, and `.dusk { color: var(--text) }` gives them their own text
+colour (a colour is inherited as the parent's value, so the light page's dark text would otherwise reach them). The pixel building is a skyline at dusk and a terminal keeps its
+own colours; in the light look they read as an evening window in a daylight page. The building's canvas reads its
+colours from its own element (`hq-render.js readPalette`), so it always gets the dusk values. The figures and
+furniture drawn there (`--hq-person-*`, `--hq-skin*`, `--hq-metal*`, `--hq-chair-body`, `--hq-shoe`, `--hq-mark`) have
+no light value. A variable that names another one (`--left: var(--quiet)`) is declared in the dark block, so each
+element resolves it in its own look; no other stylesheet sets a colour variable on `:root`. A dialog over the whole
+page (the building's guide) sits outside the scene, so it takes the page's look.
+
+### Identity hues
+
+A project's colour, a tool's, a kind of step's (`public/js/format.js`, `toolTags.js`, the source hues `--sc` and `--gc`)
+are hues, not theme colours: they were chosen for a dark page. Where one is text it goes through
+`color-mix(in srgb, <hue> var(--hue-ink), var(--text))`: `--hue-ink` is 100% in dark (the hue as it is) and 35% in
+light: every hue the code names keeps 4.5:1 as text on a 14% tint of itself (the test computes all of them; the worst
+is 5.2:1). A project's initials use `--mark-ink` the same way. Dots, bars and borders use the
+hue as it is.
 
 ## Variables
 
 | Group | Variables | Used for |
 |---|---|---|
 | Surfaces | `--bg`, `--bg-2`, `--panel`, `--panel-solid`, `--panel-2`, `--line`, `--line-2` | page, cards, menus, borders |
-| Text | `--text`, `--text-2`, `--muted` | main, secondary and quiet text |
-| Meaning | `--accent`, `--gold`, `--busy`, `--idle`, `--stop`, `--orange`, `--pink`, `--teal` | the chosen item and links; the library and skills; working and success; waiting for you and warnings; errors and danger; running agents; accents |
-| Tints | `--accent-rgb`, `--gold-rgb`, `--busy-rgb`, `--idle-rgb`, `--stop-rgb`, `--orange-rgb`, `--teal-rgb`, `--pink-rgb`, `--tint-rgb`, `--shade-rgb` | the same colours as three channels for see-through tints: `rgba(var(--accent-rgb), 0.2)`; `--tint-rgb` lightens a surface (white on dark), `--shade-rgb` darkens (shadows, scrims) |
+| Frame | `--side-bg`, `--topbar-bg`, `--card`, `--card-hover`, `--panel-low`, `--raised`, `--field`, `--field-border`, `--inset`, `--border`, `--border-2`, `--border-hover`, `--scrim`, `--scrim-soft` | the menu, the top bar, a card, a quieter strip (toolbars, the drawer, the rail), menus and toasts, inputs and their edge, a sunken box, borders, the scrim behind a dialog and the lighter one of the guide (its ring must show through) |
+| Text | `--text`, `--text-2`, `--muted`, `--text-strong`, `--quiet`, `--left` | main, secondary and quiet text; the chosen item's text; closed and left-open things |
+| Meaning | `--accent`, `--gold`, `--busy`, `--idle`, `--stop`, `--orange`, `--pink`, `--teal`, `--waiting`, `--commit` | the chosen item and links; the library and skills; working and success; waiting for you and warnings; errors and danger; running agents; accents; a session that waits; a commit |
+| Inks | `--on-accent`, `--accent-ink`, `--stop-ink`, `--busy-ink`, `--idle-ink`, `--warn-ink`, `--prompt-ink` | text on an accent fill; text on a tint of its own colour (a red note, a green result); the person's own words |
+| Mixing | `--hue-ink`, `--mark-ink` | how much of an identity hue a text keeps (above) |
+| Tints | `--accent-rgb`, `--gold-rgb`, `--busy-rgb`, `--idle-rgb`, `--stop-rgb`, `--orange-rgb`, `--teal-rgb`, `--pink-rgb`, `--tint-rgb`, `--shade-rgb` | the same colours as three channels for see-through tints: `rgba(var(--accent-rgb), 0.2)`; `--tint-rgb` lightens a surface in dark (white) and darkens it in light (navy), `--shade-rgb` makes shadows and scrims |
 | Shape and type | `--radius`, `--radius-sm`, `--font`, `--display`, `--mono`, `--shadow` | corners, text, headings, code |
+| Mark | `--brand-1`, `--brand-2` | the two strokes of the S |
+| Building | `--hq-*` | the workshop's frame (light values) and the scene (dusk only) |
 
 Each `-rgb` variable must be the same colour as its named one (`--accent` and `--accent-rgb`).
 
-About a hundred colours in the other stylesheets are still written by hand (small tints close to a token). A new
-theme that changes the palette a lot may leave them looking off; replace them with a token when that happens.
+## Rules
 
-## Rules for a new theme
-
-- Keep every variable name; add new ones only together with the CSS that uses them.
-- Dark first (`color-scheme: dark`). A light theme is a second `:root[data-theme="light"]` block later: it swaps
-  `--tint-rgb` and `--shade-rgb` as well.
-- Contrast: `--text` and `--text-2` on `--bg` and `--panel` at least 4.5:1, `--muted` at least 4.5:1 on `--bg`
-  (WCAG AA). The meaning colours on `--panel` at least 3:1.
+- Keep every variable name; a new one gets a value in both blocks (or is drawn only in the dusk scene).
+- No stylesheet writes a colour by hand (hex, `rgb()`, `hsl()`, `white`, `black`; inside `@media` too), and the page's
+  scripts write none into an inline style. The exceptions are the dusk scene's own rules (`.stage-wrap`,
+  `.stage-controls`, `.stage-clock`, `.floor-bar`, `.term-dock`, `.td-tab`), the hues `--sc`/`--gc` and a hue mixed
+  with `color-mix` (as text with `--hue-ink`, or as a see-through tint of itself). `test/theme.test.mjs` checks every stylesheet.
+- Contrast (WCAG AA), computed by the test for both blocks:
+  - `--text`, `--text-2` and `--muted` on every surface: at least 4.5:1.
+  - The inks and `--text-strong` on `--bg`, `--panel` and `--card`: at least 4.5:1.
+  - The meaning colours: at least 3:1 in dark and 4.5:1 in light, where they are often text; in light also 4.5:1 as
+    text on the tint of themselves the page puts under them (a chosen item, a waiting chip, a danger note).
+  - A field's edge (`--field-border`, every input and select) 3:1 against a card in both looks (WCAG 1.4.11).
+  - `--on-accent` on `--accent`: at least 4.5:1.
 - The meanings stay: green works, yellow waits for you, red is danger, gold is the library.
-- Fonts: system fonts only (the page loads nothing from the internet: CSP `default-src 'self'` covers fonts); an open font (OFL) can
-  come later as a file under `public/fonts/`.
-- The pixel building (`public/img/building/`, an evening skyline) sits on Today; the palette should suit it.
+- Fonts: system fonts only (the page loads nothing from the internet: CSP `default-src 'self'` covers fonts); an open
+  font (OFL) can come later as a file under `public/fonts/`.
 
-## The prompt for ChatGPT
+## Checking a change
 
-Attach `public/css/theme.css` and screenshots of Today, Projects, Skills & agents, Settings and the AI tools panel,
-then paste:
-
-```
-You are designing the visual theme of "SiberSentez", a Windows desktop app (Electron) that helps beginners use AI
-coding tools (Claude Code, Codex, Gemini CLI): it lists their projects, shows running AI sessions live in a pixel-art
-"building" at dusk, suggests and installs skills, and tracks usage. The layout is final: a menu on the left (Today,
-Projects, Skills & agents, Feed, Settings), a slim top bar, cards. The screenshots show the current look.
-
-Goal: modern, calm and simple; nothing should shout; a beginner must see at once what needs them (yellow), what is
-working (green) and what is wrong (red). Dark theme.
-
-Rules:
-1. Answer with ONE complete CSS file that replaces the attached theme.css: the same :root block, every variable
-   name kept, only the values changed. No other selectors.
-2. Every "-rgb" variable is the same colour as its named variable, written as three numbers ("124, 156, 255").
-3. Contrast (WCAG AA): --text and --text-2 on --bg and on --panel at least 4.5:1; --muted on --bg at least 4.5:1;
-   --accent, --busy, --idle, --stop, --gold on --panel at least 3:1. List the ratios you checked under the file.
-4. Keep the meanings: --busy green (working), --idle yellow/amber (waiting for you), --stop red (danger), --gold for
-   the library and skills, --accent for the chosen item and links.
-5. Fonts: only fonts every Windows 10/11 has (Segoe UI Variable, Segoe UI, Cascadia Mono); nothing downloaded.
-6. The palette must suit the pixel building at dusk (purple-orange sky, dark bricks, warm windows).
-7. After the CSS, explain in five short lines what you changed and why.
-```
-
-Put the answer into `public/css/theme.css`, run `npm test`, look at the screens (a headless screenshot or the app),
-and check the contrast ratios it listed.
+Run `npm test`. Then look at the screens in both looks. Screenshots can be taken offscreen from the desktop shell's
+Electron with no window shown: load `http://127.0.0.1:<port>/?qa=1`, set `localStorage['sibersentez.theme']`, reload,
+then `webContents.capturePage()` for each tab.

@@ -1,3 +1,4 @@
+// @ts-check
 // What went wrong when Claude Code wrote an error in place of an answer (docs/attention.md, "When the AI stops on an
 // error"). Claude Code logs such a turn as an assistant record with isApiErrorMessage: true, an `error` code and, for a
 // limit, quotaLimits { rateLimitType, resetsAt (seconds) }. Seen on the owner's machine (2026-10-02, 185 records):

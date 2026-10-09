@@ -1,8 +1,10 @@
+// @ts-check
 // Pure roster model: source labels, filtering by source and folder, library and folder counts, hub/library state.
 // No DOM access (imported by node tests: test/contextmenu.test.mjs, test/roster-folders.test.mjs).
 import { t } from './i18n.js';
 
 // A frozen table of localized strings: each read looks the text up in the current language (string ids given by key)
+/** @type {(ids: Record<string, string>) => Readonly<Record<string, string>>} */
 const localized = (ids) => Object.freeze(Object.defineProperties({}, Object.fromEntries(Object.entries(ids).map(([k, id]) => [k, { get: () => t(id), enumerable: true }]))));
 
 // Roster sources sent by the server (contract §4) in filter order. 'other' = seen only in logs,

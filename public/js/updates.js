@@ -1,3 +1,4 @@
+// @ts-check
 // "A new version is out" on the page (roadmap F3a, 2026-10-08): off unless the person turns it on in Settings; then
 // the page asks its own server (GET /api/update, which asks GitHub at most once a day, server/update.mjs) when it
 // starts. A newer version is told once per version (a notice) and shown in Settings with its release page's link.
@@ -5,8 +6,8 @@
 import { t } from './i18n.js';
 import { esc } from './format.js';
 
-export const UPDATES_KEY = 'sibersentez.updates';
-export const TOLD_KEY = 'sibersentez.updates.told';
+const UPDATES_KEY = 'sibersentez.updates';
+const TOLD_KEY = 'sibersentez.updates.told';
 const VERSION_RE = /^\d{1,4}\.\d{1,4}\.\d{1,6}$/;
 // A GitHub release page (the server names this repository's only, server/update.mjs; no account name in the page)
 const URL_RE = /^https:\/\/github\.com\/[\w.-]{1,40}\/[\w.-]{1,100}\/releases\/(?:latest|tag\/v?\d+\.\d+\.\d+[\w.-]{0,20})$/;
@@ -59,7 +60,7 @@ export function onUpdates(fn) {
 }
 
 // Asks the server when the person turned it on; never otherwise. fetchImpl: tests pass their own.
-export async function checkUpdates({ fetchImpl = (...a) => globalThis.fetch(...a) } = {}) {
+export async function checkUpdates({ fetchImpl = (input, init) => globalThis.fetch(input, init) } = {}) {
   if (!updatesOn()) return set({ status: 'off', answer: null });
   set({ status: 'checking', answer: state.answer });
   try {

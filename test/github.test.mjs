@@ -56,6 +56,7 @@ import { createFit, fitsForItem, projectProfile } from '../server/fit.mjs';
 import { listLibrary, validName } from '../server/library.mjs';
 import { ACTION_FIELDS, actionBody } from '../public/js/actions.js';
 import { githubRows, githubSelectable, githubPicks, installGroups, githubItems, originRepo } from '../public/js/rosterModel.js';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-github-'));
 after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
@@ -284,7 +285,7 @@ test('tar: a path that leaves the folder (..), an absolute path or a drive lette
   assert.throws(() => tarEntryPath('../x'), (e) => e.code === 'tar-unsafe-path');
 });
 
-test('tar: links, devices and names Windows cannot hold are skipped, never created; a second entry with the same name (any case) is skipped', () => {
+test('tar: links, devices and names Windows cannot hold are skipped, never created; a second entry with the same name (any case) is skipped', { skip: WIN_ONLY }, () => {
   const { dest, stats } = extract(
     tarOf(
       tarEntry('top/link', '', { type: '2', linkname: '/etc/passwd' }),
@@ -302,6 +303,22 @@ test('tar: links, devices and names Windows cannot hold are skipped, never creat
   assert.equal(fs.readFileSync(path.join(dest, 'a.txt'), 'utf8'), 'first');
   assert.equal(stats.files, 1);
   assert.equal(stats.skipped, 8);
+});
+
+// The same on every computer (review G): links, hard links, devices and FIFOs are never created
+test('tar: links, hard links, devices and FIFOs are skipped on every platform; only the plain file is written', () => {
+  const { dest, stats } = extract(
+    tarOf(
+      tarEntry('top/link', '', { type: '2', linkname: '/etc/passwd' }),
+      tarEntry('top/hard', '', { type: '1', linkname: 'top/a.txt' }),
+      tarEntry('top/dev', '', { type: '3' }),
+      tarEntry('top/fifo', '', { type: '6' }),
+      tarEntry('top/a.txt', 'first'),
+    ),
+  );
+  assert.deepEqual(fs.readdirSync(dest), ['a.txt']);
+  assert.equal(stats.files, 1);
+  assert.equal(stats.skipped, 4);
 });
 
 test('tar: pax long paths and GNU long names are used; the ustar prefix is joined', () => {
@@ -363,7 +380,7 @@ test('tar: a bad checksum, a cut archive, data after the end or a broken gzip st
 
 // ---------------- git (§3) ----------------
 
-test('git: found by absolute path on PATH (a relative entry such as . is never used), else the usual install folders; none -> null', () => {
+test('git: found by absolute path on PATH (a relative entry such as . is never used), else the usual install folders; none -> null', { skip: WIN_ONLY }, () => {
   const seen = [];
   const isFile = (p) => {
     seen.push(p);
@@ -527,7 +544,7 @@ function endlessGit(calls, { grow = true } = {}) {
   };
 }
 
-test('download with git: the size is checked while git runs; past the limit (or the time limit) the whole process tree is ended and the folder deleted', async () => {
+test('download with git: the size is checked while git runs; past the limit (or the time limit) the whole process tree is ended and the folder deleted', { skip: WIN_ONLY }, async () => {
   const hub = hubAt();
   const calls = [];
   const gh = createGitHub({ hubDir: hub, spawn: endlessGit(calls), request: blockedNet(), gitExe: GIT_EXE, limits: { maxBytes: 64 * 1024 }, timeouts: { cloneMs: 5000, watchMs: 20, killWaitMs: 2000 } });

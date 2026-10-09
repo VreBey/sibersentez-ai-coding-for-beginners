@@ -41,16 +41,16 @@ const SKIP = new Set(CENSUS_SKIP);
 // KIT_KEYWORDS_CAP words; emptyFolder for an item the kit offers in a folder with nothing in it yet.
 export const SCORE = Object.freeze({ stack: 5, topic: 2, installedIn: 3, usedIn: 2, idea: 5, ideaWord: 1, kitKeyword: 4, emptyFolder: 8 });
 export const IDEA_WORDS_CAP = 3;
-export const KIT_KEYWORDS_CAP = 4;
+const KIT_KEYWORDS_CAP = 4;
 // A kit item reaches high without a shared stack when its keywords matched at least this many words of the idea
-export const KIT_HIGH_WORDS = 2;
+const KIT_HIGH_WORDS = 2;
 export const HIGH_SCORE = 8;
 export const MEDIUM_SCORE = 4;
 // Automatic selection: every high candidate, at most this many per kind (highest score first)
 export const SELECT_CAPS = Object.freeze({ skill: 4, agent: 1 });
-export const MAX_REASONS = 2;
-export const MAX_ACTIVE = 50;
-export const MAX_EXCLUDED_SAMPLE = 20;
+const MAX_REASONS = 2;
+const MAX_ACTIVE = 50;
+const MAX_EXCLUDED_SAMPLE = 20;
 // Items read from one project's tool folders; places listed in a candidate's alsoIn
 const MAX_PROJECT_ITEMS = 1000;
 const MAX_ALSO_IN = 20;
@@ -172,7 +172,7 @@ export function census(root, { maxDepth = CENSUS.maxDepth, maxEntries = CENSUS.m
 const MANIFEST_FILES = new Set(['package.json', 'pyproject.toml', 'requirements.txt', 'go.mod', 'cargo.toml', 'pubspec.yaml', 'project.godot', 'dockerfile']);
 
 // File extensions -> tags; min: how many files it takes
-export const EXT_RULES = Object.freeze([
+const EXT_RULES = Object.freeze([
   { exts: ['.unity', '.prefab', '.asmdef', '.uxml', '.uss'], tags: ['unity'], min: 1 },
   { exts: ['.meta'], tags: ['unity'], min: 10 },
   { exts: ['.uproject', '.uplugin', '.uasset', '.umap'], tags: ['unreal'], min: 1 },
@@ -210,7 +210,7 @@ export const EXT_RULES = Object.freeze([
 ]);
 
 // File names -> tags (exact lower-case names or patterns)
-export const FILE_RULES = Object.freeze([
+const FILE_RULES = Object.freeze([
   { names: ['project.godot'], tags: ['godot'] },
   { names: ['dockerfile', 'docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml', '.gitlab-ci.yml', 'jenkinsfile', 'azure-pipelines.yml'], tags: ['devops'] },
   { names: ['tsconfig.json'], tags: ['typescript'] },
@@ -224,7 +224,7 @@ export const FILE_RULES = Object.freeze([
 ]);
 
 // Folder names -> tags (exact lower-case names or patterns)
-export const DIR_RULES = Object.freeze([
+const DIR_RULES = Object.freeze([
   { names: ['test', 'tests', '__tests__', 'spec', 'specs', 'e2e', 'testing', 'editmode', 'playmode'], tags: ['testing'] },
   { names: ['docs', 'documentation'], tags: ['docs'] },
   { names: ['design'], tags: ['design'] },
@@ -271,6 +271,7 @@ export function censusTags(c) {
 // census and the manifest signals of the sub folders the census found (a Unity project in a sub folder, a monorepo
 // app), then the tags those imply. Returns { tags: Map(tag -> from), stacks, primary, topics (Sets), entries,
 // truncated, folders (for the fingerprint), root }.
+/** @param {any} p @param {{ broad?: (dir: string) => boolean, homeDir?: string | null }} [options] */
 export function projectProfile(p, { broad = () => false, homeDir = null } = {}) {
   const tags = new Map();
   const add = (list, from) => {
@@ -584,7 +585,7 @@ export function autoSelect(candidates, caps = SELECT_CAPS) {
 // with other content: one row per name, docs/kit.md §6): the user's library, else the SiberSentez kit, else the best
 // project copy (one in a project where the item was used, then the most recently changed, then the project id in
 // byte order). usedIn: Set of the project ids the item was used in.
-export function chooseOccurrence(occ, usedIn = new Set()) {
+function chooseOccurrence(occ, usedIn = new Set()) {
   const lib = occ.find((o) => o.source === 'library');
   if (lib) return lib;
   const kit = occ.find((o) => o.source === KIT_SOURCE);
@@ -609,6 +610,7 @@ const placeOf = (o) => (o.source === 'project' ? `project:${o.projectId}` : o.so
 // whole library); an install or an import calls invalidate(), which forgets it at once
 export const LIBRARY_SIG_MS = 5000;
 
+/** @param {{ catalog: any, ingest?: any, hubDir?: string, homeDir?: string, claudeDir?: string, kitDir?: string, limits?: any, now?: () => number }} options */
 export function createFit({ catalog, ingest = null, hubDir, homeDir, claudeDir, kitDir, limits = LIMITS, now = Date.now } = {}) {
   const hub = hubDir !== undefined ? hubDir : catalog?.hubDir ?? null;
   const home = homeDir !== undefined ? homeDir : catalog?.homeDir ?? null;

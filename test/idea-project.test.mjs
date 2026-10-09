@@ -21,6 +21,7 @@ import {
   freeProjectFolder,
   ideaParentDialogOptions,
   ideaProjectRequest,
+  ideaProjectsBase,
   projectFolderName,
   projectReply,
 } from '../electron/helpers.mjs';
@@ -29,6 +30,7 @@ import { createNewProjectFlow, newProjectOutcome, qaProjectBridge, projectBridge
 import { folderNameOf, ideaWhereText, ideaDialogHtml, NAME_MAX, IDEA_FIELD_MAX } from '../public/js/views/newIdea.js';
 import { STRINGS, setLanguage, t } from '../public/js/i18n.js';
 import { IDEA_MAX as SERVER_IDEA_MAX } from '../server/memory.mjs';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-idea-project-'));
@@ -96,7 +98,17 @@ describe('shell: the request and the steps', () => {
     assert.deepEqual(ideaProjectRequest({ ...FROM_PAGE, name: '???', idea: '', choose: false }), { ok: false, reason: 'bad-name' });
   });
 
-  test('a free folder name: the name, then "(2)" ... "(99)", then none', () => {
+  test('the folder new projects go into: Documents/SiberSentez, never the hub when Documents is the home itself', () => {
+    const home = path.resolve(TMP, 'home');
+    const docs = path.join(home, 'Belgeler');
+    assert.equal(ideaProjectsBase(docs, home), path.join(docs, IDEA_PROJECTS_DIR));
+    // A Linux home without XDG user folders (WSL): Electron answers the home, whose SiberSentez folder is the hub
+    assert.equal(ideaProjectsBase(home, home), path.join(home, 'Documents', IDEA_PROJECTS_DIR));
+    assert.equal(ideaProjectsBase(home + path.sep, home), path.join(home, 'Documents', IDEA_PROJECTS_DIR));
+    assert.equal(ideaProjectsBase(null, home), path.join(home, 'Documents', IDEA_PROJECTS_DIR), 'no answer at all');
+  });
+
+  test('a free folder name: the name, then "(2)" ... "(99)", then none', { skip: WIN_ONLY }, () => {
     const base = 'C:\\Users\\x\\Documents\\SiberSentez';
     const taken = new Set([path.win32.join(base, 'Site'), path.win32.join(base, 'Site (2)')]);
     assert.equal(freeProjectFolder(base, 'Site', (p) => taken.has(p)), path.win32.join(base, 'Site (3)'));
@@ -255,7 +267,7 @@ describe('preload and main.mjs', () => {
     const h = bodyOf(src, 'onCreateIdeaProjectRequest');
     assert.ok(h.indexOf('ideaProjectRequest({ name, idea, choose, ...senderFacts(event) })') < h.indexOf('createIdeaProject({'));
     assert.ok(h.includes('if (state.pickingFolder) return'));
-    assert.ok(h.includes('base: path.join(documents, IDEA_PROJECTS_DIR),'));
+    assert.ok(h.includes('base: ideaProjectsBase(documents, HOME_DIR),'));
     assert.ok(h.includes('check: (folder) => checkProjectFolder(folder, projectFolderRules()),'));
     assert.ok(h.includes('precheck: (folder) => plannedFolderRefusal(folder, projectFolderRules()),'));
     assert.ok(h.includes("add: (folder) => serverCalls.call(state.server, 'project-add', { path: folder, fresh: true }),"), 'a new project only');

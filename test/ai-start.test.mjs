@@ -56,6 +56,7 @@ import {
   TOOL_INFO,
   _resetToolsForTest,
 } from '../public/js/views/tools.js';
+import { WIN_ONLY } from './lib/winonly.mjs';
 
 // ---------------- the test world ----------------
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-ai-'));
@@ -128,7 +129,7 @@ function launchSpawn(calls, fail = () => null) {
 
 // ======================================================================= detection (server/tools.mjs)
 describe('detection: finding the tools', () => {
-  test('search folders: PATH in order, each once (letter case, trailing backslash, quotes), no network or relative folder; the installers\' folders after', () => {
+  test('search folders: PATH in order, each once (letter case, trailing backslash, quotes), no network or relative folder; the installers\' folders after', { skip: WIN_ONLY }, () => {
     const env = {
       Path: 'C:\\A;c:\\a\\;"C:\\B";\\\\server\\share;relative\\bin;;C:\\Users\\u\\AppData\\Roaming\\npm',
       USERPROFILE: 'C:\\Users\\u',
@@ -150,7 +151,7 @@ describe('detection: finding the tools', () => {
     assert.deepEqual(searchDirs({}), [], 'no PATH, no home: nothing');
   });
 
-  test('installs: one per folder in folder order; .exe before .bat and .cmd; .ps1 and extensionless files are never taken; Cursor\'s own name first', () => {
+  test('installs: one per folder in folder order; .exe before .bat and .cmd; .ps1 and extensionless files are never taken; Cursor\'s own name first', { skip: WIN_ONLY }, () => {
     const files = new Set(['C:\\A\\claude', 'C:\\A\\claude.ps1', 'C:\\B\\claude.cmd', 'C:\\B\\claude.exe', 'C:\\C\\claude.cmd', 'C:\\D\\agent.exe', 'C:\\D\\cursor-agent.exe']);
     const dirs = ['C:\\A', 'C:\\B', 'C:\\C', 'C:\\D'].map((dir) => ({ dir, extra: dir === 'C:\\C' }));
     const isFile = (f) => files.has(f);
@@ -162,7 +163,7 @@ describe('detection: finding the tools', () => {
     assert.deepEqual(findInstalls(['codex'], dirs, isFile), []);
   });
 
-  test('install kind from the path alone: native, npm, winget, scoop, store, other', () => {
+  test('install kind from the path alone: native, npm, winget, scoop, store, other', { skip: WIN_ONLY }, () => {
     assert.equal(installKind('C:\\Users\\u\\.local\\bin\\claude.exe'), 'native');
     assert.equal(installKind('C:\\Users\\u\\AppData\\Roaming\\npm\\claude.cmd'), 'npm');
     assert.equal(installKind('C:\\nvm\\v20\\gemini.cmd', (d) => d === 'C:\\nvm\\v20'), 'npm', 'a shim next to node_modules');
@@ -202,7 +203,7 @@ describe('detection: finding the tools', () => {
     return { env, spawn, calls, isFile: (f) => files.has(f), isDir: () => false, readDir, cmdExe: 'C:\\Windows\\System32\\cmd.exe' };
   }
 
-  test('detector: several installs are counted and each gets a version; the first on PATH is used; hidden windows, no shell, no input, the tool\'s own folder as working directory', async () => {
+  test('detector: several installs are counted and each gets a version; the first on PATH is used; hidden windows, no shell, no input, the tool\'s own folder as working directory', { skip: WIN_ONLY }, async () => {
     const c = fakeComputer();
     let clock = 1000;
     const d = createToolDetector({ ...c, now: () => clock });
@@ -232,7 +233,7 @@ describe('detection: finding the tools', () => {
     assert.ok(!c.calls.some((x) => /codex|copilot|qwen|opencode|agent/.test([x.cmd, ...x.args].join(' '))));
   });
 
-  test('sign-in: exit code only (its output, which holds the e-mail, is not even read); 1 -> no, a hang -> unknown after the time limit', async () => {
+  test('sign-in: exit code only (its output, which holds the e-mail, is not even read); 1 -> no, a hang -> unknown after the time limit', { skip: WIN_ONLY }, async () => {
     const yes = fakeComputer();
     await createToolDetector(yes).detect();
     const auth = yes.calls.filter((x) => x.args.join(' ').includes('auth status'));
@@ -247,7 +248,7 @@ describe('detection: finding the tools', () => {
     assert.ok(Date.now() - t0 < 2000, 'the time limit ends the wait');
   });
 
-  test('Cursor CLI under the generic name `agent`: kept only when its folder or its version output says Cursor; cursor-agent always', async () => {
+  test('Cursor CLI under the generic name `agent`: kept only when its folder or its version output says Cursor; cursor-agent always', { skip: WIN_ONLY }, async () => {
     const detectWith = async (files, outs) => {
       const env = { PATH: 'C:\\Tools;C:\\Users\\u\\AppData\\Local\\cursor-agent;C:\\Other', USERPROFILE: 'C:\\Users\\u', LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' };
       const spawn = fakeToolSpawn([], (cmd, args) => {
@@ -273,7 +274,7 @@ describe('detection: finding the tools', () => {
     assert.deepEqual([c.installed, c.installs[0].said], [true, undefined], 'nothing it printed is kept');
   });
 
-  test('time limit: a version check that never ends gives no version, the detection still answers', async () => {
+  test('time limit: a version check that never ends gives no version, the detection still answers', { skip: WIN_ONLY }, async () => {
     const c = fakeComputer({ hang: 'gemini.cmd' });
     const r = await createToolDetector({ ...c, versionTimeoutMs: 50 }).detect();
     const g = r.tools.find((x) => x.id === 'gemini');
@@ -301,13 +302,13 @@ describe('detection: finding the tools', () => {
     assert.equal(d.stats.detections, 3, 'stale after five minutes');
   });
 
-  test('what the page gets: known words only, never a path, a user name or any tool output', async () => {
+  test('what the page gets: known words only, never a path, a user name or any tool output', { skip: WIN_ONLY }, async () => {
     const c = fakeComputer();
     const r = await createToolDetector(c).detect();
     const pub = publicTools(r);
     const text = JSON.stringify(pub);
     assert.doesNotMatch(text, /\\|:\/|Users|\.exe|\.cmd|@|email/i);
-    assert.deepEqual(Object.keys(pub.tools[0]).sort(), ['app', 'cmd', 'id', 'installed', 'installs', 'name', 'onPath', 'others', 'pathDir', 'ready', 'version', 'via']);
+    assert.deepEqual(Object.keys(pub.tools[0]).sort(), ['app', 'caps', 'cmd', 'id', 'installed', 'installs', 'name', 'onPath', 'others', 'pathDir', 'ready', 'version', 'via']);
     assert.equal(pub.tools[0].cmd, 'claude', 'the command name only');
     assert.deepEqual(pub.tools.map((x) => x.id), TOOL_IDS);
     const claude = pub.tools[0];
@@ -374,7 +375,7 @@ describe('launcher and first message', () => {
     assert.equal(launcherText({ toolName: 'x', file: 'C:\\t\\claude.exe', ext: '.exe', args: ['a" & calc'], env }).ok, false, 'an argument that is not the fixed prompt');
   });
 
-  test('launcher folder: a path wt can take as it is -> absolute; a space or a non-ASCII letter -> relative (wt -d that folder); ; " -> never', () => {
+  test('launcher folder: a path wt can take as it is -> absolute; a space or a non-ASCII letter -> relative (wt -d that folder); ; " -> never', { skip: WIN_ONLY }, () => {
     const unsafe = (d) => /[;"]/.test(d);
     assert.deepEqual(pickLaunchDir(['C:\\Users\\u\\SiberSentez\\launch', 'C:\\Users\\u\\AppData\\Local\\SiberSentez\\launch'], unsafe), { ok: true, mode: 'absolute', dir: 'C:\\Users\\u\\SiberSentez\\launch' });
     assert.deepEqual(pickLaunchDir(['C:\\Users\\A B\\SiberSentez\\launch', 'D:\\ork\\launch'], unsafe), { ok: true, mode: 'absolute', dir: 'D:\\ork\\launch' }, 'the second candidate is safe');
@@ -597,7 +598,7 @@ describe('GET /api/tools', () => {
 });
 
 describe('start-ai action', () => {
-  test('resume: a closed Claude Code session continues through the same launcher (claude --resume <id>), no first message; only Claude, only a session, never an open one or with an idea', async () => {
+  test('resume: a closed Claude Code session continues through the same launcher (claude --resume <id>), no first message; only Claude, only a session, never an open one or with an idea', { skip: WIN_ONLY }, async () => {
     const env = await startServer({ mode: 'dry' });
     try {
       const r = await env.post({ action: 'start-ai', sessionId: S_A, tool: 'claude', resume: true });
@@ -632,7 +633,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('preview: the plan only (argv, fallback, launcher text, the file it would write); nothing written, nothing started', async () => {
+  test('preview: the plan only (argv, fallback, launcher text, the file it would write); nothing written, nothing started', { skip: WIN_ONLY }, async () => {
     const env = await startServer({ mode: 'dry' });
     const before = [listTree(DIR_IDEA), listTree(HUB)];
     try {
@@ -656,7 +657,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('in the dock: the launcher is written, nothing starts; a one-time id the shell redeems once, within two minutes', async () => {
+  test('in the dock: the launcher is written, nothing starts; a one-time id the shell redeems once, within two minutes', { skip: WIN_ONLY }, async () => {
     const env = await startServer({ mode: 'live' });
     try {
       const r = await env.post({ action: 'start-ai', projectId: 'idea', tool: 'claude', withIdea: true, inDock: true });
@@ -690,7 +691,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('a preview asked before the mode turned On stays a preview (the mode is taken when the request is accepted)', async () => {
+  test('a preview asked before the mode turned On stays a preview (the mode is taken when the request is accepted)', { skip: WIN_ONLY }, async () => {
     // The detection is awaited; the mode changes while it runs (docs/actions-toggle.md §3.5)
     let release;
     const gate = new Promise((r) => (release = r));
@@ -721,7 +722,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('no user text on any command line or in the launcher: the idea (with ; " % & | < > ! and Turkish letters) never leaves the first-message file', async () => {
+  test('no user text on any command line or in the launcher: the idea (with ; " % & | < > ! and Turkish letters) never leaves the first-message file', { skip: WIN_ONLY }, async () => {
     const env = await startServer({ mode: 'live' });
     try {
       const r = await env.post({ action: 'start-ai', projectId: 'idea', tool: 'gemini', withIdea: true });
@@ -744,7 +745,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('live: writes .sibersentez/ilk-mesaj.md and .sibersentez/.gitignore (the only files in the project), the launcher in the hub, then starts Windows Terminal from the app folder', async () => {
+  test('live: writes .sibersentez/ilk-mesaj.md and .sibersentez/.gitignore (the only files in the project), the launcher in the hub, then starts Windows Terminal from the app folder', { skip: WIN_ONLY }, async () => {
     const hub = mkdir('hub-live');
     const env = await startServer({ mode: 'live', hubDir: hub });
     try {
@@ -784,7 +785,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('without the idea (withIdea false or absent, or a project without one): no prompt, nothing written in the project', async () => {
+  test('without the idea (withIdea false or absent, or a project without one): no prompt, nothing written in the project', { skip: WIN_ONLY }, async () => {
     const env = await startServer({ mode: 'live' });
     try {
       for (const [body, label] of [
@@ -806,7 +807,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('refusals: a tool that is not installed or unknown, other fields, a bad withIdea, a broad or unsafe folder, the same start twice in 3 s; nothing starts, nothing is written', async () => {
+  test('refusals: a tool that is not installed or unknown, other fields, a bad withIdea, a broad or unsafe folder, the same start twice in 3 s; nothing starts, nothing is written', { skip: WIN_ONLY }, async () => {
     const hub = mkdir('hub-refusals');
     const env = await startServer({ mode: 'live', hubDir: hub, detector: fakeDetector({ claude: false }) });
     try {
@@ -843,7 +844,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('a session starts in its own folder with its project\'s idea', async () => {
+  test('a session starts in its own folder with its project\'s idea', { skip: WIN_ONLY }, async () => {
     const env = await startServer({ mode: 'dry' });
     try {
       const r = await env.post({ action: 'start-ai', sessionId: S_A, tool: 'claude', withIdea: true });
@@ -855,7 +856,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('SiberSentez\'s folder with a space: relative mode (wt -d the launcher folder, the launcher changes to the project folder); ; in every candidate -> 409 launch-path-unsafe', async () => {
+  test('SiberSentez\'s folder with a space: relative mode (wt -d the launcher folder, the launcher changes to the project folder); ; in every candidate -> 409 launch-path-unsafe', { skip: WIN_ONLY }, async () => {
     const spaced = mkdir('hub with space');
     const env = await startServer({ mode: 'live', hubDir: spaced, env: { USERPROFILE: ROOT } });
     try {
@@ -890,7 +891,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('in SiberSentez\'s terminal a project folder with Turkish letters starts even in relative mode: the console opens in the project, cmd gets the launcher by its full path, no cd line; a launcher path cmd would expand stays on the old way', async () => {
+  test('in SiberSentez\'s terminal a project folder with Turkish letters starts even in relative mode: the console opens in the project, cmd gets the launcher by its full path, no cd line; a launcher path cmd would expand stays on the old way', { skip: WIN_ONLY }, async () => {
     const spaced = mkdir('hub with space');
     const env = await startServer({ mode: 'live', hubDir: spaced, env: { USERPROFILE: ROOT } });
     try {
@@ -921,7 +922,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('no Windows Terminal: a Command Prompt window through start, in the project folder; nothing works -> 501 and the launcher is removed', async () => {
+  test('no Windows Terminal: a Command Prompt window through start, in the project folder; nothing works -> 501 and the launcher is removed', { skip: WIN_ONLY }, async () => {
     const env = await startServer({ mode: 'live', fail: (cmd) => (cmd === 'wt.exe' ? 'ENOENT' : null) });
     try {
       const r = await env.post({ action: 'start-ai', projectId: 'plain', tool: 'claude' });
@@ -945,7 +946,7 @@ describe('start-ai action', () => {
     }
   });
 
-  test('off: the action does not exist (404); the log names the project id only', async () => {
+  test('off: the action does not exist (404); the log names the project id only', { skip: WIN_ONLY }, async () => {
     const off = await startServer({ mode: 'off' });
     try {
       const r = await off.post({ action: 'start-ai', projectId: 'idea', tool: 'claude' });
@@ -1163,8 +1164,10 @@ describe('page: context menu', () => {
   });
 
   test('every error code the server can answer has a text in both languages', () => {
+    // The checks live in actionInput.mjs since plan D8; the start itself in actions.mjs
+    const checks = fs.readFileSync(new URL('../server/actionInput.mjs', import.meta.url), 'utf8');
     const src = fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8');
-    const block = src.slice(src.indexOf('function validateAiStart'), src.indexOf('async function execute('));
+    const block = checks.slice(checks.indexOf('function validateAiStart')) + src.slice(src.indexOf('async function startAi('), src.indexOf('async function execute('));
     const launch = fs.readFileSync(new URL('../server/launch.mjs', import.meta.url), 'utf8');
     // Codes: fail(<status>, '<code>' ...), reject(<status>, '<code>') and error: '<code>' in the helpers
     const text = `${block}\n${launch}`;
@@ -1324,10 +1327,12 @@ test('a job starts a tool in its own plan mode (Claude Code, Gemini CLI, Qwen Co
   assert.ok(lt.ok, 'the launcher takes the flag');
   assert.match(lt.text, /claude\.exe" --permission-mode "plan" "Read the job file"/);
   const actions = fs.readFileSync(new URL('../server/actions.mjs', import.meta.url), 'utf8');
-  assert.ok(actions.includes("args: ctx.resume ? resumeArgs(tool, ctx.sessionId) : [...(ctx.job ? jobArgs(tool, rec.version) : []), ...toolArgs(tool, file ? launchPrompt(file) : null)]"), 'only a job, never a resume');
+  // One rule for both launchers (cmd and, plan G1, sh)
+  assert.ok(actions.includes("const toolArgsFor = (file) => (ctx.resume ? resumeArgs(tool, ctx.sessionId) : [...(ctx.job ? jobArgs(tool, rec.version) : []), ...toolArgs(tool, file ? launchPrompt(file) : null)]);"), 'only a job, never a resume');
+  assert.equal(actions.split('args: toolArgsFor(file)').length - 1, 2, 'the cmd and the sh launcher');
 });
 
-test('a job start records what its copy kept, in the hub, for that job; an idea start records nothing', async () => {
+test('a job start records what its copy kept, in the hub, for that job; an idea start records nothing', { skip: WIN_ONLY }, async () => {
   const hub = mkdir('hub-job-points');
   const env = await startServer({ mode: 'live', hubDir: hub });
   try {
@@ -1352,7 +1357,7 @@ test('a job start records what its copy kept, in the hub, for that job; an idea 
   }
 });
 
-test('live jobs get unique persistent ids; more than nine jobs work; preview and resume preserve identity', async () => {
+test('live jobs get unique persistent ids; more than nine jobs work; preview and resume preserve identity', { skip: WIN_ONLY }, async () => {
   const live = await startServer({ mode: 'live' });
   const dry = await startServer({ mode: 'dry' });
   const folder = path.join(DIR_IDEA, '.sibersentez');

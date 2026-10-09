@@ -19,6 +19,8 @@ Windows 10 or 11, Node.js 22.12 or later (tested with Node 24).
 ```
 npm install
 npm test        # every test file in test/, no window is opened
+npm run typecheck  # the files that start with // @ts-check (TypeScript, the check only)
+npm run lint    # unused imports, a left-in debugger, a narrowed test, a source file without // @ts-check
 npm start       # the desktop app (Electron)
 npm run dist    # the installer, dist\SiberSentez-Setup-<version>.exe (unsigned)
 ```
@@ -38,7 +40,8 @@ Windows x64 and arm64; no compiler is needed.
   click and the actions mode; the page never sends a path or a command (only ids and fixed choices); SiberSentez never
   answers a question of an AI tool and never presses Enter for the person; no network request except the GitHub
   import the person starts.
-- **Tests first.** A change comes with a test in `test/` (`node --test`), and `npm test` passes. A test never opens a
+- **Tests first.** A change comes with a test in `test/` (`node --test`), and `npm test`, `npm run typecheck` and `npm run lint` pass. A new source file starts with `// @ts-check`; one that
+  needs more than a few JSDoc notes goes on `UNCHECKED` in `tools/lint.mjs` for now. A test never opens a
   window on the screen and never touches the real hub or the real projects (use a temporary folder).
 - **Commits:** a type prefix (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`) and a body that says why.
 

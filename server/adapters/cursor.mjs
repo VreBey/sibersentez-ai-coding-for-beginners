@@ -1,3 +1,4 @@
+// @ts-check
 // Cursor source adapter (see adapters/index.mjs; contract docs/adapters-wave1.md).
 //   projects: every single-folder workspace in <APPDATA>/Cursor/User/workspaceStorage (workspace.json "folder")
 //   project items: skills <p>/.cursor/skills (up to 3 levels deep), <p>/.agents/skills, <p>/.claude/skills,

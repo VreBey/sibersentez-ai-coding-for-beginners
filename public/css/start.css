@@ -27,7 +27,7 @@
 }
 .idea-in::placeholder { color: var(--muted); }
 .idea-in:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.act-btn.idea-go { border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.14); color: #fff; }
+.act-btn.idea-go { border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.14); color: var(--text-strong); }
 .act-btn.idea-go:hover { background: rgba(var(--accent-rgb), 0.26); }
 .idea-hint { margin: 0; }
 .idea-local { margin: 0; }
@@ -51,14 +51,14 @@
 .idea-state:empty { display: none; }
 .idea-state p { margin: 0; }
 .idea-state .fit-tags { margin: 0; }
-.fit-tag.idea { color: #fff1c9; border-color: rgba(var(--gold-rgb), 0.5); background: rgba(var(--gold-rgb), 0.12); }
+.fit-tag.idea { color: var(--idle-ink); border-color: rgba(var(--gold-rgb), 0.5); background: rgba(var(--gold-rgb), 0.12); }
 .fit-tag.idea.stack { font-weight: 600; }
 .idea-tip { color: var(--text-2); margin-top: 6px !important; }
 .idea-warn { color: var(--idle); }
 /* The questions for a vague idea: what kind of thing, then which tool (the recommended one stands out) */
 .idea-ask { color: var(--text); font-weight: 600; margin-top: 6px !important; }
 .idea-kinds, .idea-stacks { margin-top: 6px !important; }
-.idea-chip.rec { color: #fff; border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.2); font-weight: 600; }
+.idea-chip.rec { color: var(--text-strong); border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.2); font-weight: 600; }
 .idea-chip.idea-unsure { border-style: dashed; }
 .idea-why { margin-top: 4px !important; }
 
@@ -67,12 +67,12 @@
 
 /* New project (docs/start-flow.md, step 2): the header button, left of the Actions indicator. It is the one primary
    button of the page, filled with the accent, so a new user sees where to begin */
-.new-proj { color: #0b0e18; font-weight: 650; border-color: var(--accent); background: var(--accent); box-shadow: 0 4px 18px rgba(var(--accent-rgb), 0.28); }
-.new-proj:hover { color: #0b0e18; background: #9bb4ff; border-color: #9bb4ff; }
+.new-proj { color: var(--on-accent); font-weight: 650; border-color: var(--accent); background: var(--accent); box-shadow: 0 4px 18px rgba(var(--accent-rgb), 0.28); }
+.new-proj:hover { color: var(--on-accent); background: color-mix(in srgb, var(--accent) 85%, var(--text-strong)); border-color: color-mix(in srgb, var(--accent) 85%, var(--text-strong)); }
 .new-proj .ic { width: 15px; height: 15px; }
 /* While the start card holds the one primary New project (firstScreen.js): a quiet shortcut */
 .new-proj.quiet { color: var(--text); font-weight: 600; background: transparent; border-color: var(--line-2); box-shadow: none; }
-.new-proj.quiet:hover { color: var(--text); background: var(--hover, rgba(255, 255, 255, 0.06)); border-color: var(--accent); }
+.new-proj.quiet:hover { color: var(--text); background: rgba(var(--tint-rgb), 0.06); border-color: var(--accent); }
 .new-proj:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* "Getting started" card at the top of the Projects tab */
@@ -101,7 +101,7 @@
   place-items: center;
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-strong);
   background: rgba(var(--accent-rgb), 0.35);
 }
 .sc-note { margin: 10px 0 0; }
@@ -113,13 +113,13 @@
 .sc-hide:focus-visible, .start-card .act-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* The idea on a project card */
-.pdesc.pidea b { color: #fff1c9; font-weight: 600; margin-right: 2px; }
+.pdesc.pidea b { color: var(--idle-ink); font-weight: 600; margin-right: 2px; }
 
 /* "Then: open a terminal" in the project drawer */
 .start-next { margin-bottom: 16px; }
 .start-next .act-btn { display: inline-flex; align-items: center; gap: 7px; }
 .start-next .act-btn .ic { width: 15px; height: 15px; }
-.start-done { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; color: #d9ffe9; background: rgba(var(--busy-rgb), 0.12); border: 1px solid rgba(var(--busy-rgb), 0.35); font-size: 13px; }
+.start-done { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; color: var(--busy-ink); background: rgba(var(--busy-rgb), 0.12); border: 1px solid rgba(var(--busy-rgb), 0.35); font-size: 13px; }
 
 @media (max-width: 560px) {
   .idea-row .act-btn { flex: 1 1 auto; justify-content: center; }
@@ -139,12 +139,12 @@
 }
 
 /* The "New project" window (review U05): a name, where its folder goes, the idea; over the drawer and the page */
-.np-wrap { position: fixed; inset: 0; z-index: 52; background: rgba(3, 4, 8, 0.55); backdrop-filter: blur(3px); display: flex; justify-content: center; align-items: flex-start; padding: 10vh 16px 16px; overflow: auto; }
+.np-wrap { position: fixed; inset: 0; z-index: 52; background: var(--scrim); backdrop-filter: blur(3px); display: flex; justify-content: center; align-items: flex-start; padding: 10vh 16px 16px; overflow: auto; }
 .np-idea { width: min(520px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 22px 22px 16px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--panel-solid); color: var(--text); box-shadow: 0 20px 60px rgba(var(--shade-rgb), 0.6); }
 .np-idea h2 { margin: 0; font-size: 18px; font-weight: 600; }
 .np-idea p { margin: 0; }
 .np-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-2); }
-.np-field input, .np-field textarea { font: inherit; font-weight: 400; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 11px; }
+.np-field input, .np-field textarea { font: inherit; font-weight: 400; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--field-border); border-radius: 8px; padding: 9px 11px; }
 .np-field textarea { resize: vertical; min-height: 84px; }
 .np-field input::placeholder, .np-field textarea::placeholder { color: var(--muted); }
 .np-field input:focus-visible, .np-field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -158,3 +158,23 @@
 .np-link { background: none; border: 0; padding: 2px 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .np-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 @media (max-width: 480px) { .np-acts .np-cancel { margin-left: 0; } .np-acts .act-btn { flex: 1 1 100%; justify-content: center; } }
+
+/* "Learn by doing" (plan C5): the first-ten-minutes card's shape, its steps in a column */
+.today-learn { margin: 0 0 16px; }
+.lp { border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 16px; display: grid; gap: 6px; }
+.lp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.lp-head h2 { margin: 0; font-size: 16px; }
+.lp .linkish { padding: 2px 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.lp .linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.lp-head > .linkish { margin-left: auto; }
+.lp-next { min-width: 0; flex: 1 1 260px; }
+.lp-all summary { cursor: pointer; color: var(--muted); }
+.lp-all[open] { display: grid; gap: 8px; }
+.lp-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lp-step { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px; }
+.lp-step > div:first-child { min-width: 0; flex: 1 1 320px; }
+.lp-step p { margin: 2px 0 0; }
+.lp-step.now { border-color: var(--accent); }
+.lp-step.done { opacity: 0.7; }
+.lp-step.done b { text-decoration: line-through; }
+.lp-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

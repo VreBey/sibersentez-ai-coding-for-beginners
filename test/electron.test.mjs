@@ -102,8 +102,12 @@ describe('free port lookup', () => {
     const port = await listen(busy);
     try {
       assert.equal(await isPortFree(port), false, 'a listening port must not count as free');
-      const found = await findFreePort({ start: port, end: port + 19 });
-      assert.ok(found > port && found <= port + 19);
+      // The system's random port can sit near the top (Windows hands out 49152-65535): the range stops at 65535, and
+      // below the busy port when there is no room above it (a red run under load, 2026-10-09)
+      const above = port <= 65535 - 19;
+      const range = above ? { start: port, end: port + 19 } : { start: port - 19, end: port };
+      const found = await findFreePort(range);
+      assert.ok(found !== port && found >= range.start && found <= range.end);
     } finally {
       await close(busy);
     }
@@ -742,7 +746,7 @@ describe('main.mjs wiring', () => {
     assert.equal((src.match(/preload\s*:/g) || []).length, 1, 'one preload, on the main window');
     assert.ok(src.includes('preload: PRELOAD_PATH,'));
     assert.ok(src.includes("const PRELOAD_PATH = path.join(here, 'preload.cjs');"));
-    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'seven bridge handlers and five for the terminal (test/terminal.test.mjs), nothing else');
+    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'ten bridge handlers (the theme’s, two for the page’s errors and the log folder, test/page-errors.test.mjs) and five for the terminal (test/terminal.test.mjs), nothing else');
     assert.ok(src.includes('ipcMain.handle(LIBRARY_PICK_IPC_CHANNEL, onPickLibraryFolderRequest);'));
     const lib = src.slice(src.indexOf('async function onPickLibraryFolderRequest'), src.indexOf('// window.sibersentezShell.saveProjectIdea'));
     assert.ok(lib.indexOf('bridgeSender(senderFacts(event))') < lib.indexOf('showOpenDialog'), 'the library picker checks the sender first');
@@ -800,7 +804,10 @@ describe('main.mjs wiring', () => {
     assert.doesNotMatch(src, /displayBalloon\(\{[^}]*(title|content):\s*['"`]/, 'hard-coded balloon text');
     assert.doesNotMatch(src, /showErrorBox\(\s*['"`]/, 'hard-coded dialog text');
     assert.doesNotMatch(src, /setToolTip\(\s*['"`]/, 'hard-coded tooltip');
-    for (const f of ['main.mjs', 'helpers.mjs', 'logger.mjs', 'preload.cjs']) {
+    // Every file of the shell (helpers.mjs is split into modules since plan D8); strings.mjs holds the Turkish texts
+    const shellFiles = fs.readdirSync(path.join(ROOT, 'electron')).filter((f) => /\.(mjs|cjs)$/.test(f) && f !== 'strings.mjs');
+    assert.ok(shellFiles.length >= 11 && shellFiles.includes('actions-mode.mjs'));
+    for (const f of shellFiles) {
       const text = fs.readFileSync(path.join(ROOT, 'electron', f), 'utf8');
       assert.doesNotMatch(text, /[çğıöşüÇĞİÖŞÜ]/, `Turkish characters in electron/${f}`);
     }
@@ -820,13 +827,32 @@ describe('packaging and installer', () => {
     // archive, never rebuilt (no compiler needed)
     assert.deepEqual(pkg.build.asarUnpack, ['node_modules/node-pty/**']);
     assert.equal(pkg.build.npmRebuild, false);
-    const text = JSON.stringify(pkg.build.files);
+    // What is put in (the "!" patterns only take out)
+    const text = JSON.stringify(pkg.build.files.filter((x) => !x.startsWith('!')));
     for (const bad of ['test', 'docs', 'qa', '.claude', 'build/']) assert.ok(!text.includes(bad), `must not be packaged: ${bad}`);
+    // Each platform keeps only its own node-pty binary (plan G2, G3): Windows x64 its prebuilt one as before, Linux the
+    // one built from source (no prebuilt binary for it), macOS its own
+    // A platform's own list must name what goes in again: with only "!" patterns electron-builder packs the whole
+    // project folder (0.18.0's build, 2026-10-09: qa, site, test, docs and .claude went in, a 243 MB installer)
+    const root = pkg.build.files;
+    assert.deepEqual(pkg.build.win.files, [...root, '!node_modules/node-pty/prebuilds/{darwin-*,linux-*,win32-arm64}/**']);
+    assert.deepEqual(pkg.build.linux.files, [...root, '!node_modules/node-pty/prebuilds/**']);
+    assert.deepEqual(pkg.build.mac.files, [...root, '!node_modules/node-pty/prebuilds/{win32-*,linux-*}/**']);
+    for (const k of ['win', 'linux', 'mac']) {
+      const text = JSON.stringify(pkg.build[k].files.filter((x) => !x.startsWith('!')));
+      for (const bad of ['test', 'docs', 'qa', 'site', '.claude', 'build/', 'tools', '**/*']) assert.ok(!text.includes(bad), `${k} must not pack: ${bad}`);
+    }
+    assert.deepEqual(pkg.build.linux.target, [{ target: 'AppImage', arch: ['x64'] }]);
+    // Linux desktops tie a running window to its .desktop entry by Electron's app_id, which comes from desktopName
+    // (electron-builder warned without it, 2026-10-09): the entry's file name and StartupWMClass follow it
+    assert.equal(pkg.desktopName, 'sibersentez.desktop');
+    assert.equal(pkg.build.linux.syncDesktopName, true);
+    assert.equal(pkg.build.mac.identity, null, 'macOS: experimental and unsigned');
   });
 
-  test('one pinned dependency (node-pty); dev dependencies pinned: electron, electron-builder, xterm (vendored)', () => {
+  test('one pinned dependency (node-pty); dev dependencies pinned: electron, electron-builder, xterm (vendored), happy-dom (the DOM tests only, plan D1), typescript (the type check only, plan D7)', () => {
     assert.deepEqual(pkg.dependencies, { 'node-pty': '1.1.0' });
-    assert.deepEqual(pkg.devDependencies, { '@xterm/addon-fit': '0.11.0', '@xterm/xterm': '6.0.0', electron: '44.5.1', 'electron-builder': '26.15.3' });
+    assert.deepEqual(pkg.devDependencies, { '@xterm/addon-fit': '0.11.0', '@xterm/xterm': '6.0.0', electron: '44.7.0', 'electron-builder': '26.15.3', 'happy-dom': '20.14.5', typescript: '7.0.2' });
   });
 
   test('per-user NSIS installer: fixed install folder, no elevation, English and Turkish, keeps user data', () => {
@@ -2053,7 +2079,9 @@ describe('the hidden QA run', () => {
     assert.deepEqual(QA_LAPTOP_SIZE, { width: 1366, height: 768 });
     assert.ok(Object.isFrozen(QA_LAPTOP_SIZE));
     assert.doesNotMatch(QA_LAPTOP_PROBE_SCRIPT, /fetch|sibersentezShell|localStorage|location/);
-    assert.match(QA_KIT_PROBE_SCRIPT, /^fetch\('\/api\/snapshot'\)/, 'the kit probe reads only its own server');
+    assert.equal(QA_KIT_PROBE_SCRIPT.match(/fetch\(/g).length, 1);
+    assert.ok(QA_KIT_PROBE_SCRIPT.includes("fetch('/api/snapshot')"), 'the kit probe reads only its own server');
+    assert.ok(QA_KIT_PROBE_SCRIPT.includes('i < 30'), 'it waits for the roster, at most 30 s');
     assert.match(QA_ABOUT_PROBE_SCRIPT, /^fetch\('\/api\/about'\)/, 'the about probe reads only its own server');
     assert.match(QA_SERVED_MODE_SCRIPT, /^fetch\('\/api\/actions'/, 'the mode probe reads only its own server');
     assert.doesNotMatch(QA_SERVED_MODE_SCRIPT, /token/, 'never the token');

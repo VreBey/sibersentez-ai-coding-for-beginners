@@ -27,7 +27,7 @@ export function rememberStartPoint(projectId, point, jobId = null) {
 // Each change of a project's points (pointsChanged) starts a new generation: an answer asked for before the change
 // (still on its way when a start took a new point) says nothing about now and is dropped
 const gens = new Map(); // projectId -> generation
-export const pointsGen = (projectId) => gens.get(projectId) || 0;
+const pointsGen = (projectId) => gens.get(projectId) || 0;
 // The project's points as listed now (a /restore answer); gen: the generation the answer was asked in
 export function notePoints(projectId, data, at = Date.now(), gen = pointsGen(projectId)) {
   if (typeof projectId !== 'string' || !projectId || !Array.isArray(data?.points) || gen !== pointsGen(projectId)) return;
@@ -141,6 +141,24 @@ export function planHtml(plan) {
 
 // The section (pure). p: the project; data: the /restore answer or null while it is asked; opts: { mode ('off' |
 // 'dry' | 'live'), ui: { step, pointId, plan, result, error } }
+// What the points take on disk (plan D6, server/restore.mjs pointsDisk): files shared between points count once
+export function sizeText(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n < 0) return '';
+  const fmt = (v, digits) => v.toLocaleString(locale(), { maximumFractionDigits: digits });
+  if (n < 1024 * 1024) return `${fmt(Math.max(1, Math.round(n / 1024)), 0)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${fmt(n / (1024 * 1024), n < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  return `${fmt(n / (1024 * 1024 * 1024), 1)} GB`;
+}
+export function diskHtml(disk) {
+  const bytes = Number(disk?.bytes);
+  const apart = Number(disk?.apart);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '';
+  const saved = Number.isFinite(apart) && apart - bytes >= 1024 * 1024 ? apart - bytes : 0;
+  const text = saved ? t('rstDiskShared', { size: sizeText(bytes), saved: sizeText(saved) }) : t('rstDisk', { size: sizeText(bytes) });
+  return `<p class="small muted rst-disk">${esc(text)}</p>`;
+}
+
 export function restoreSectionHtml(p, data, { mode = 'off', ui = {} } = {}) {
   if (!p?.path || p.exists === false || p.broad || p.tmpOnly || p.kind === 'hub') return '';
   const head = `<h3 id="rstH">${icon('replay')} ${esc(t('rstTitle'))}</h3>`;
@@ -154,11 +172,16 @@ export function restoreSectionHtml(p, data, { mode = 'off', ui = {} } = {}) {
   const dis = on ? '' : ' aria-disabled="true"';
   const step = STEPS.has(ui.step) ? ui.step : '';
   const busy = step === 'loading' || step === 'busy';
+  const clock = (at) => (Number.isFinite(at) && at > 0 ? new Date(at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '');
+  // A restore that stopped halfway (review A2): said first, with its two ways out, each previewed like any point
+  const cut = data.interrupted && typeof data.interrupted === 'object' ? data.interrupted : null;
+  const cutBtn = (id, there, label, fk) => (there === true && typeof id === 'string' ? `<button type="button" class="act-btn" data-rst-act="preview" data-rst-id="${esc(id)}" data-fk="rst:cut-${fk}"${dis}${busy ? ' disabled' : ''}>${esc(t(label))}</button>` : '');
+  const cutHtml = cut ? `<div class="rst-cut" role="status"><p class="small warn">${esc(t('rstCut', { when: clock(cut.at) }))}</p><div class="flow-btns">${cutBtn(cut.to, cut.toAvailable, 'rstCutFinish', 'to')}${cutBtn(cut.before, cut.beforeAvailable, 'rstCutUndo', 'before')}</div></div>` : '';
   const rows = points
     .map((x) => {
       const reason = REASONS.has(x.reason) ? x.reason : 'manual';
       // The clock, to the second: two points a moment apart must not read the same ("just now" twice)
-      const when = Number.isFinite(x.at) && x.at > 0 ? new Date(x.at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+      const when = clock(x.at);
       // A lean point (a big project, docs/restore.md §7) says how many big files and logs it left out
       const lean = x.scope === 'lean' && Number(x.leftOut) > 0 ? t('rstLean', { count: Number(x.leftOut) }) : '';
       // A point taken for a job says which one: going back undoes that job and what came after (2026-10-02)
@@ -190,7 +213,7 @@ export function restoreSectionHtml(p, data, { mode = 'off', ui = {} } = {}) {
     panel = `<p class="small ${failed ? 'warn' : 'ok'}" role="status">${esc(t('rstDone', { restored: Number(r.restored) || 0, removed: Number(r.removed) || 0 }))}${failed ? ` ${esc(t('rstDoneFailed', { count: failed }))}` : ''} ${esc(t('rstUndo'))}</p>`;
   }
   const why = on ? '' : `<p class="small muted">${esc(t('rstWhyOff'))}</p>`;
-  return wrap(`${intro}<ul class="rst-list">${rows}</ul>${why}${panel}`);
+  return wrap(`${intro}${cutHtml}<ul class="rst-list">${rows}</ul>${diskHtml(data.disk)}${why}${panel}`);
 }
 
 // Answers and steps per project. onData(projectId): an answer arrived (the drawer redraws when that project is open)

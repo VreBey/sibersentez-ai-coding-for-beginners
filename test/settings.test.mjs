@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolveConfig, DEFAULT_PORT, DEFAULT_DAYS } from '../server/config.mjs';
 import { initHub, HUB_SKELETON, registryFile, libraryFile, normalizeRegistry, normalizeLibrary, readRegistry, readLibrary } from '../server/hub.mjs';
-import { STRINGS } from '../public/js/i18n.js';
+import { STRINGS, tOs } from '../public/js/i18n.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-config-'));
@@ -116,7 +116,8 @@ test('precedence: environment > sibersentez.json > default (port, days, hub, act
 test('sibersentez.json: a relative hub path resolves against the app folder; actions only off|dry|live', () => {
   const w = world();
   const hub = w.mk('app', 'data', 'hub');
-  w.writeConfig({ hub: 'data\\hub', actions: 'live' });
+  // A forward slash: a relative path both Windows and Linux read as two folders
+  w.writeConfig({ hub: 'data/hub', actions: 'live' });
   const c = w.resolve();
   assert.equal(c.hub, hub);
   assert.equal(c.actions, 'live');
@@ -428,8 +429,31 @@ test('the licence paths in Settings keep their separator (review 2026-10-07 B5: 
     assert.ok(text.includes(String.raw`resources\LICENSE.txt`), lang);
     assert.ok(text.includes(String.raw`resources\THIRD_PARTY_NOTICES.md`), lang);
     assert.doesNotMatch(text, /resourcesLICENSE|resourcesTHIRD/, lang);
+    // Linux and macOS: their own separator (tried on WSL, 2026-10-09), the rest of the text the same
+    const unix = STRINGS[lang].setLicenseText_unix;
+    assert.equal(unix, text.replaceAll('resources\\', 'resources/'), lang);
   }
+  assert.ok(tOs('setLicenseText', { url: 'u' }, 'linux').includes('resources/LICENSE.txt'));
+  assert.ok(tOs('setLicenseText', { url: 'u' }, 'win32').includes(String.raw`resources\LICENSE.txt`));
   // No string of the app loses a backslash that way: a lone backslash before a letter that is no escape
   const src = fs.readFileSync(new URL('../public/js/strings/nav.js', import.meta.url), 'utf8');
   assert.doesNotMatch(src, /[^\\]\\[A-Zac-mo-qsw-z]/, 'a single backslash before a letter is dropped by JavaScript');
+});
+
+test('Explorer is Windows’ word: Linux and macOS read the file manager (tried on WSL, 2026-10-09)', () => {
+  for (const lang of ['en', 'tr']) {
+    for (const key of ['actionsSwitchConfirmBody', 'shCmExplorer', 'shDone_explorer']) {
+      assert.match(STRINGS[lang][key], /Explorer|Gezgin/, `${lang} ${key}`);
+      assert.ok(STRINGS[lang][`${key}_unix`], `${lang} ${key}_unix`);
+      assert.doesNotMatch(STRINGS[lang][`${key}_unix`], /Explorer|Gezgin/, `${lang} ${key}_unix`);
+    }
+  }
+  assert.doesNotMatch(tOs('shCmExplorer', {}, 'linux'), /Explorer|Gezgin/);
+  assert.match(tOs('shCmExplorer', {}, 'win32'), /Explorer|Gezgin/);
+  // The page reads them through tOs, never the Windows text directly
+  for (const [f, key] of [['public/js/contextmenu.js', 'shCmExplorer'], ['public/js/actionsSwitch.js', 'actionsSwitchConfirmBody'], ['public/js/views/drawer.js', 'actionsSwitchConfirmBody']]) {
+    const js = fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+    assert.ok(js.includes(`tOs('${key}')`), `${f}: tOs`);
+    assert.ok(!js.includes(`t('${key}')`), `${f}: no t('${key}')`);
+  }
 });

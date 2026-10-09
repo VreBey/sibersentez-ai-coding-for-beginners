@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of the Roster tab: the library count, the SiberSentez kit line, the folder filter and the list around it
 // (views/roster.js).
 // Same keys in en and tr; placeholders use {name}. Merged into STRINGS by ../i18n.js.

@@ -4,20 +4,21 @@
 // own server from /vendor/xterm (the page's CSP allows scripts from 'self' only), loaded on the first terminal.
 import { esc, projectColor } from './format.js';
 import { icon } from './icons.js';
-import { t } from './i18n.js';
+import { t, tOs } from './i18n.js';
 import { stripAnsi, detectPrompt, detectError, detectCodeError, codeFixText, promptHelpHtml, previewUrlIn } from './promptHelp.js';
 import { canContinueTool } from './jobId.js';
+import { terminalKeyHandler } from './terminalKeys.js';
+import { terminalReaderOn, onPrefs } from './usage.js';
 import { isRunningAi, pickRunningTab, toolEndedEvent, takeEarlyToolEnd, aiDraftOk, aiDraftCheck } from './dockState.js';
 
 // How long the second click that stops a running AI is waited for (askClose)
-export const CLOSE_CONFIRM_MS = 4000;
+const CLOSE_CONFIRM_MS = 4000;
 
 const HEIGHT_KEY = 'sibersentez.dockHeight';
 const MIN_H = 160;
 const CHEVRON = '<svg class="ic td-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 const THEME = { background: '#0b0d14', foreground: '#dfe3ec', cursor: '#8ab4ff', selectionBackground: 'rgba(138,180,255,0.3)' };
 
-export const dockAvailable = () => typeof globalThis.sibersentezTerminal?.open === 'function';
 
 // QA only (main.js ?qa=1&dock=demo): the bridge's shape with a fake terminal that prints a prompt and echoes.
 // ask: text printed after the welcome (?qa=1&dock=ask: a Claude Code command question, for the prompt helper);
@@ -69,9 +70,10 @@ export function tabTitle(title, taken, at = Date.now()) {
 }
 
 // Why a terminal did not open, in words (the shell's and the server's reasons)
-export function openFailText(reason) {
+function openFailText(reason) {
   const k = { preview: 'dockPreview', off: 'dockOff', refused: 'dockRefused', 'too-many': 'dockTooMany', 'no-pty': 'dockNoPty', invalid: 'dockRefused' }[reason] || 'dockFailed';
-  return t(k);
+  // Linux and macOS have no Windows Terminal to send the person to
+  return tOs(k);
 }
 
 let xtermLib = null;
@@ -107,7 +109,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
   let collapsed = false;
 
   const dock = document.createElement('section');
-  dock.className = 'term-dock';
+  dock.className = 'term-dock dusk';
   dock.hidden = true;
   dock.setAttribute('aria-label', t('dockLabel'));
   dock.innerHTML = `<div class="td-grip" role="separator" aria-orientation="horizontal" aria-label="${esc(t('dockResize'))}" tabindex="0"></div>
@@ -150,7 +152,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     const x = tabs.get(id);
     // A plain shell says so: a sentence typed into it runs as a command (the AI has a tab of its own)
     kindEl.hidden = !x || x.ai;
-    kindEl.textContent = x && !x.ai ? t('dockPlain') : '';
+    kindEl.textContent = x && !x.ai ? tOs('dockPlain') : '';
     if (x && !collapsed) requestAnimationFrame(() => {
       fitOne(id);
       x.term.focus();
@@ -171,7 +173,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
   async function addTab(info, buffer = '') {
     const { Terminal, FitAddon } = await loadXterm();
     info = { ...info, title: tabTitle(info.title, [...tabs.values()].map((y) => y.title), info.startedAt) };
-    const term = new Terminal({ fontFamily: '"Cascadia Mono", Consolas, "Courier New", monospace', fontSize: 13, cursorBlink: true, theme: THEME, scrollback: 5000, allowProposedApi: false });
+    const term = new Terminal({ fontFamily: '"Cascadia Mono", Consolas, "Ubuntu Sans Mono", "Ubuntu Mono", Menlo, monospace', fontSize: 13, cursorBlink: true, theme: THEME, scrollback: 5000, allowProposedApi: false, screenReaderMode: terminalReaderOn() });
     const fit = new FitAddon();
     term.loadAddon(fit);
     const el = document.createElement('div');
@@ -180,6 +182,8 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     el.hidden = true;
     body.append(el);
     term.open(el);
+    // Ctrl+C / Ctrl+V copy and paste as in Windows Terminal (terminalKeys.js); Ctrl+C with nothing selected interrupts
+    term.attachCustomKeyEventHandler(terminalKeyHandler(term));
     if (buffer) term.write(buffer);
     term.onData((d) => {
       if (x.ended) return;
@@ -606,6 +610,11 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     tabs.get(id).term.focus();
     return true;
   }
+
+  // Settings › "Terminal for screen readers" (plan C2): every open tab follows the switch at once
+  onPrefs(() => {
+    for (const x of tabs.values()) if (x.term.options.screenReaderMode !== terminalReaderOn()) x.term.options.screenReaderMode = terminalReaderOn();
+  });
 
   // "How to run it" when the way is not known (review U09): the question goes into the newest running AI tab of the
   // project, which comes forward with the keyboard; never with Enter, the person reads it and sends it. { ok: false,

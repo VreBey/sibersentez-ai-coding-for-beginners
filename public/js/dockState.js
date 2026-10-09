@@ -1,3 +1,4 @@
+// @ts-check
 // The embedded terminal's decisions, apart from its screen (terminalDock.js keeps the tabs and draws them): which tab
 // still runs an AI, which one a "show the terminal" brings forward, what a tool-ended event does to a tab that is not
 // there yet, and which Claude session a tab whose tool ended may go on with. Pure, so the tests run it without a
@@ -61,6 +62,7 @@ export function takeEarlyToolEnd({ tabs, early }, id) {
 // resumed session) takes the newest, but never one of a job whose AI still runs in another tab (busyJobs: resuming
 // it would open a running session twice). null when none.
 export const RECENT_MS = 2 * 60000;
+/** @param {any[]} sessions @param {{ projectId?: string | null, jobId?: string | null, busyJobs?: Set<string>, tool?: string }} [options] @param {number} [now] */
 export function tabResumeSession(sessions, { projectId, jobId = null, busyJobs = new Set(), tool = 'claude' } = {}, now = Date.now()) {
   let named = null;
   let loose = null;

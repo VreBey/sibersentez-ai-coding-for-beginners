@@ -1,3 +1,4 @@
+// @ts-check
 // Every user-visible text of the desktop shell (tray, balloon, menus, dialogs) in each supported language.
 // The panel's own UI is translated separately under public/. Keys must match across languages
 // (test/electron.test.mjs checks it). Placeholders use {name}.
@@ -36,6 +37,7 @@ export const STRINGS = Object.freeze({
     trayActionsLive: 'On',
     actionsConfirmTitle: 'Turn actions on?',
     actionsConfirmBody: "With actions on, the panel's right-click menu really acts on this computer: it opens a terminal in the project folder (you start the AI tool you want there), resumes Claude Code sessions, opens folders in Explorer and in VS Code, and installs skills and agents into project folders. Choose Preview instead to only see the commands.",
+    actionsConfirmBody_unix: "With actions on, the panel's right-click menu really acts on this computer: it opens a terminal in the project folder (you start the AI tool you want there), resumes Claude Code sessions, opens folders in the file manager and in VS Code, and installs skills and agents into project folders. Choose Preview instead to only see the commands.",
     actionsConfirmOk: 'Turn on',
     actionsConfirmCancel: 'Cancel',
     actionsErrorTitle: 'Actions setting not changed',
@@ -90,6 +92,7 @@ export const STRINGS = Object.freeze({
     trayActionsLive: 'Açık',
     actionsConfirmTitle: 'Eylemler açılsın mı?',
     actionsConfirmBody: 'Eylemler açıkken SiberSentez’in sağ tık menüsü bu bilgisayarda gerçekten iş yapar: proje klasöründe terminal açar (istediğin yapay zekâ aracını orada başlatırsın), Claude Code oturumuna devam eder, klasörleri Gezgin’de ve VS Code’da açar, skill ve ajanları proje klasörlerine kurar. Yalnız komutları görmek için bunun yerine Önizleme’yi seç.',
+    actionsConfirmBody_unix: 'Eylemler açıkken SiberSentez’in sağ tık menüsü bu bilgisayarda gerçekten iş yapar: proje klasöründe terminal açar (istediğin yapay zekâ aracını orada başlatırsın), Claude Code oturumuna devam eder, klasörleri dosya yöneticisinde ve VS Code’da açar, skill ve ajanları proje klasörlerine kurar. Yalnız komutları görmek için bunun yerine Önizleme’yi seç.',
     actionsConfirmOk: 'Aç',
     actionsConfirmCancel: 'Vazgeç',
     actionsErrorTitle: 'Eylem ayarı değiştirilmedi',

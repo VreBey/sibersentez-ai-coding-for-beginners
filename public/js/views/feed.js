@@ -1,3 +1,4 @@
+// @ts-check
 // Feed: what happened, in which project, who did it. Both the short feed in the right rail and the full tab.
 import { store } from '../store.js';
 import { esc, dayTime, projectColor, KIND, fillAgo, locale, eventText, replaceHtml } from '../format.js';

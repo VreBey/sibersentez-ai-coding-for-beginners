@@ -1,3 +1,4 @@
+// @ts-check
 // UI strings of "Restore points" in the project drawer (public/js/restore.js, docs/restore.md). Same keys in en and
 // tr; placeholders use {name}. Merged into the string table by public/js/i18n.js.
 export default {
@@ -11,6 +12,8 @@ export default {
     'rstReason_before-restore': 'Before going back',
     rstReason_manual: 'Kept by hand',
     rstFiles: '{count} files',
+    rstDisk: 'The copies take {size} on this computer.',
+    rstDiskShared: 'The copies take {size} on this computer; unchanged files are kept once ({saved} saved).',
     rstBeforeJob: 'Before “{job}”',
     rstLean: '{count} big files and logs not included (going back leaves them as they are)',
     // What the restore point of this job's start holds (the job box, restore.js startPointText)
@@ -38,6 +41,9 @@ export default {
     rstDone: 'Done: {restored} files put back, {removed} removed.',
     rstDoneFailed: '{count} files could not be changed.',
     rstUndo: 'To undo it, go back to “Before going back”.',
+    rstCut: 'Going back was cut off ({when}): some files may be back and others not. Finish it, or return the project to how it was just before.',
+    rstCutFinish: 'Review finishing it',
+    rstCutUndo: 'Review returning to before it',
     rstFailed: 'Could not go back.',
     rstWhyOff: 'Actions are off: turn them on to go back to a point.',
   },
@@ -51,6 +57,8 @@ export default {
     'rstReason_before-restore': 'Geri dönmeden önce',
     rstReason_manual: 'Elle saklanan',
     rstFiles: '{count} dosya',
+    rstDisk: 'Kopyalar bu bilgisayarda {size} yer kaplıyor.',
+    rstDiskShared: 'Kopyalar bu bilgisayarda {size} yer kaplıyor; değişmeyen dosyalar bir kez saklanıyor ({saved} kazanç).',
     rstBeforeJob: '“{job}” işinden önce',
     rstLean: '{count} büyük dosya ve günlük dahil değil (geri dönüş onlara dokunmaz)',
     rstStartFull: 'Bu işten önce projenin bir kopyası alındı: ona geri dönebilirsin.',
@@ -77,6 +85,9 @@ export default {
     rstDone: 'Tamam: {restored} dosya yerine kondu, {removed} dosya kaldırıldı.',
     rstDoneFailed: '{count} dosya değiştirilemedi.',
     rstUndo: 'Geri almak için “Geri dönmeden önce” noktasına dön.',
+    rstCut: 'Geri dönüş yarıda kesildi ({when}): bazı dosyalar geri gelmiş, bazıları gelmemiş olabilir. Tamamla ya da projeyi hemen önceki hâline getir.',
+    rstCutFinish: 'Tamamlamayı gözden geçir',
+    rstCutUndo: 'Önceki hâle dönmeyi gözden geçir',
     rstFailed: 'Geri dönülemedi.',
     rstWhyOff: 'Eylemler kapalı: bir noktaya dönmek için eylemleri aç.',
   },

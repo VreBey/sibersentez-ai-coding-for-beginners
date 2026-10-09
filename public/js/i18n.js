@@ -1,3 +1,4 @@
+// @ts-check
 // Localized UI strings (docs/actions-toggle.md §3.6). Keys are English ids and every language has the same keys;
 // placeholders use {name}. Only the strings of new features live here so far: the panel's existing texts are still
 // written in place and move to this table in Phase 0.5.
@@ -62,8 +63,6 @@ const BASE = {
     skKind_agent: 'agent',
     skKind_tool: 'tool',
     skKind_unknown: 'item',
-    skSuggestReason: '{from}: {signal}',
-    skFromRegistry: 'suggested in the registry',
     skTargets: 'Install for',
     skTarget_claude: 'Claude Code (.claude)',
     skTarget_agents: 'Other tools (.agents)',
@@ -374,8 +373,6 @@ const BASE = {
     skKind_agent: 'ajan',
     skKind_tool: 'araç',
     skKind_unknown: 'öğe',
-    skSuggestReason: '{from}: {signal}',
-    skFromRegistry: 'kayıtta önerilen',
     skTargets: 'Nereye',
     skTarget_claude: 'Claude Code (.claude)',
     skTarget_agents: 'Diğer araçlar (.agents)',
@@ -672,7 +669,7 @@ export const STRINGS = Object.freeze(
 );
 
 // Mode -> string id of its name
-export const MODE_KEYS = Object.freeze({ off: 'actionsModeOff', dry: 'actionsModeDry', live: 'actionsModeLive' });
+const MODE_KEYS = Object.freeze({ off: 'actionsModeOff', dry: 'actionsModeDry', live: 'actionsModeLive' });
 
 let current = 'en';
 
@@ -680,6 +677,7 @@ const primary = (v) => (typeof v === 'string' ? v.trim().toLowerCase().split(/[-
 
 // setting: the hub's language (?lang=); browser: navigator.language. A supported setting wins, then a Turkish
 // browser, else English.
+/** @param {{ setting?: string | null, browser?: string | null }} [options] */
 export function pickLanguage({ setting, browser } = {}) {
   const s = primary(setting);
   if (LANGUAGES.includes(s)) return s;
@@ -699,6 +697,22 @@ export function language() {
 export function t(key, values = {}) {
   const text = STRINGS[current][key] ?? STRINGS.en[key] ?? key;
   return String(text).replace(/\{(\w+)\}/g, (m, k) => (Object.hasOwn(values, k) ? String(values[k]) : m));
+}
+
+// The platform the page's commands are for (plan G4): the server names it (GET /api/tools, views/tools.js); until then
+// the browser's own word. On Linux and macOS a text with a _unix twin (no PowerShell, no Start menu) uses the twin.
+const browserPlatform = () => {
+  const ua = typeof navigator !== 'undefined' ? String(navigator.userAgent || '') : '';
+  return /Windows/.test(ua) || !ua ? 'win32' : /Mac OS X|Macintosh/.test(ua) ? 'darwin' : /Linux/.test(ua) ? 'linux' : 'win32';
+};
+let pagePlatform = browserPlatform();
+export function setPagePlatform(p) {
+  if (p === 'win32' || p === 'linux' || p === 'darwin') pagePlatform = p;
+}
+export const pagePlatformNow = () => pagePlatform;
+export function tOs(key, values = {}, platform = pagePlatform) {
+  const twin = `${key}_unix`;
+  return platform !== 'win32' && (STRINGS[current][twin] ?? STRINGS.en[twin]) !== undefined ? t(twin, values) : t(key, values);
 }
 
 // Name of an action mode ('off' | 'dry' | 'live'); anything else reads as off

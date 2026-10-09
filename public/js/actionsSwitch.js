@@ -9,7 +9,7 @@
 // nor the network.
 
 import { esc } from './format.js';
-import { t, modeName, stateName, indicatorMode } from './i18n.js';
+import { t, tOs, modeName, stateName, indicatorMode } from './i18n.js';
 
 export const SWITCH_MODES = Object.freeze(['off', 'dry', 'live']);
 const modeOf = (m) => (SWITCH_MODES.includes(m) ? m : 'off');
@@ -193,7 +193,7 @@ export function switchHtml(state) {
   const confirm = asking
     ? `<div class="asw-confirm" role="group" aria-labelledby="aswConfirmTitle" aria-describedby="aswConfirmBody">` +
       `<p class="asw-confirm-title" id="aswConfirmTitle">${esc(t('actionsSwitchConfirmTitle'))}</p>` +
-      `<p class="asw-confirm-body" id="aswConfirmBody">${esc(t('actionsSwitchConfirmBody'))}</p>` +
+      `<p class="asw-confirm-body" id="aswConfirmBody">${esc(tOs('actionsSwitchConfirmBody'))}</p>` +
       `<div class="asw-confirm-btns">` +
       `<button type="button" class="act-btn" data-asw-act="cancel" data-asw-key="cancel"${busyAttr(locked)}>${esc(t('actionsSwitchConfirmCancel'))}</button>` +
       `<button type="button" class="act-btn danger" data-asw-act="confirm" data-asw-key="confirm"${busyAttr(locked)}>${esc(t('actionsSwitchConfirmOk'))}</button>` +

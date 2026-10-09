@@ -4,12 +4,13 @@ Open items that are known but not scheduled yet. Newest first. Each item names w
 
 ## The workshop building (docs/hq.md)
 
-The look is designed by the user with ChatGPT/Codex; structure and integration are done here when the user asks.
+Until 2026-10-09 the look was designed by the user with ChatGPT/Codex; since then it is designed here (docs/theme.md).
 
 - **Working in the same folder** (hq, 2026-09-30). ChatGPT/Codex changed the repository folder itself while this side
-  was committing, and its files went into an unrelated commit. Since then the designs come as a package
+  was committing, and its files went into an unrelated commit. From then until 2026-10-09 the designs came as a package
   (qa/chatgpt-tasarim/<step>/), merged here and brought to the project's rules (theme tokens, string table, readable
-  code, tests); the workshop of 2026-10-01 came that way.
+  code, tests); the workshop of 2026-10-01 came that way. Another tool may still work in the same folder: check
+  `git status` before a commit.
 - **The seats follow the drawing** (hq, 2026-10-01). FLOORS, ROOMS, LIFT_BOX and DOOR_XS in hq-scene.js hold pixel
   positions in hq-tower.png; a new drawing needs new numbers.
 - **No quota source** (hq, 2026-10-01). The design has a 5-hour and weekly quota panel; Claude Code's logs do not carry
@@ -131,6 +132,10 @@ spreads a patch into a call. Still open:
 - **The same name in two library categories** (kit and roster folders, 2026-09-29). The roster keys items by
   `kind:name`, so a skill with the same name in two library categories is one row with one category, and installs go
   by name. Decide: refuse the second on import, or show both with their folder.
+- **The kit waits for the log scan** (packaged QA, 2026-10-09). The roster (kit included) is read only after the first
+  log scan (`server/index.mjs`, since 2026-10-02 for a faster first answer). On a computer with many logs that took
+  12 s, and the Helpers screen showed no kit until then; the QA probe now waits for it. The kit is static: it could be
+  in the first snapshot.
 
 ## Localization and text
 
@@ -163,10 +168,9 @@ spreads a patch into a call. Still open:
 
 ## Installer
 
-- **Installer not executed end to end for a current version** (round 2, B1). Install, shortcuts, first launch, open
-  at login, upgrade, uninstall with the hub kept. The only recorded run is 0.9.0: a silent install over 0.8.1 and a
-  smoke test (docs/direction.md, 2026-09-30); every version since has build-level and packaged-QA evidence only.
-  Needs a manual run on a throwaway Windows (Windows Sandbox or a VM), not on the owner's working install.
+- ~~**Installer not executed end to end for a current version**~~ (round 2, B1). **Done 2026-10-08:** in Windows
+  Sandbox, 0.16.0 installed and opened, 0.17.0 installed over it and opened, then uninstalled with the hub kept
+  (docs/evidence-2026-10-08.md, "A clean Windows"). It is now step 5 of every release (docs/release.md).
 - **Update from 0.2.0 to the next version, by hand** (usage, GitHub and Start with AI round, 2026-09-29). The next
   installer run over an installed 0.2.0: the old version moved aside and removed, the hub kept (with the new
   `usage\`, `incoming\`, `launch\` and `registry\sources.json` appearing next to the old files), the actions mode and
@@ -201,7 +205,7 @@ spreads a patch into a call. Still open:
 - **Hidden QA run needs a screenshot trick** (shell QA, 2026-09-29). A window that is never shown paints its first
   page by itself (`paintWhenInitiallyHidden`), but after later navigations `capturePage` returned an old frame; the
   QA capture now takes a first capture (which makes the page visible to its renderer), waits and takes a second one.
-  If a future Electron changes the capturer count, the panel screenshot of `qa\electron-qa.ps1` may go stale again
+  If a future Electron changes the capturer count, the panel screenshot of `tools\electron-qa.ps1` may go stale again
   (the probes themselves read the DOM and are not affected).
 
 ## Localization (Phase 0.5)

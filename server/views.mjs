@@ -1,10 +1,11 @@
+// @ts-check
 // Turns the in-memory model into plain objects for the browser (snapshot and patch).
 import { WINDOW_DAYS, SNAPSHOT_TICKS } from './config.mjs';
 import { randomUUID } from 'node:crypto';
 import { BUILTIN_AGENTS } from './catalog.mjs';
 
 // New on every server start: when the client sees it, it resets its sequence numbers (a restart)
-export const BOOT_ID = randomUUID();
+const BOOT_ID = randomUUID();
 
 const HOUR = 3600000;
 
@@ -193,7 +194,7 @@ export function projectView(ing, p, catalog = null) {
   };
 }
 
-export function kpiView(ing) {
+function kpiView(ing) {
   const h24 = Math.floor(Date.now() / HOUR) - 23;
   const g = (k) => sumHours(ing.hourly.get(k), h24);
   let runningAgents = 0;

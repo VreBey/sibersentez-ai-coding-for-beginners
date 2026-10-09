@@ -1,3 +1,4 @@
+// @ts-check
 // "A new version is out" (roadmap F3a, 2026-10-08). Off unless the person turned it on in Settings (the owner's choice:
 // by default SiberSentez reaches nothing outside this computer). On, the page asks GET /api/update at most once a day;
 // the server then asks GitHub's API for the latest release of SiberSentez's own repository and answers whether it is
@@ -5,6 +6,7 @@
 // downloaded or installed: the page shows the release page's link.
 import fs from 'node:fs';
 import https from 'node:https';
+import { writeFileAtomic } from './atomic.mjs';
 
 export const REPO = Object.freeze({ owner: 'VreBey', name: 'sibersentez-ai-coding-for-beginners' });
 export const LATEST_URL = `https://api.github.com/repos/${REPO.owner}/${REPO.name}/releases/latest`;
@@ -14,8 +16,8 @@ const VERSION_RE = /^v?(\d{1,4})\.(\d{1,4})\.(\d{1,6})([\w.-]{0,20})$/;
 export const UPDATE_CHECK_FILE = 'update-check.json';
 export const CHECK_TTL_MS = 24 * 3600 * 1000;
 export const FAIL_TTL_MS = 3600 * 1000;
-export const TIMEOUT_MS = 10 * 1000;
-export const MAX_BYTES = 256 * 1024;
+const TIMEOUT_MS = 10 * 1000;
+const MAX_BYTES = 256 * 1024;
 
 // "1.2.3" or "v1.2.3" -> [1, 2, 3, pre]; null for anything else
 export function parseVersion(v) {
@@ -44,7 +46,7 @@ export function parseLatest(json) {
 }
 
 // One HTTPS GET to GitHub's API, its JSON or a reason; never follows a redirect, never reads more than MAX_BYTES
-export function defaultGet(url, { timeoutMs = TIMEOUT_MS, version = '0' } = {}) {
+function defaultGet(url, { timeoutMs = TIMEOUT_MS, version = '0' } = {}) {
   return new Promise((resolve) => {
     let done = false;
     const finish = (r) => {
@@ -114,19 +116,18 @@ export function readLast(file, current, now = Date.now) {
 }
 function saveLast(file, a) {
   if (!file) return;
-  const tmp = `${file}.${process.pid}.tmp`;
   try {
-    // wx: a new file only, never through a link or over a file left there
-    fs.writeFileSync(tmp, JSON.stringify(a), { flag: 'wx' });
-    fs.renameSync(tmp, file);
+    // A new temporary file only (never through a link or over a file left there), then one rename
+    writeFileAtomic(file, JSON.stringify(a));
   } catch {
-    fs.rmSync(tmp, { force: true });
+    /* not kept: the next start asks again */
   }
 }
 
 // The checker: one request at a time, an answer kept CHECK_TTL_MS (a failure FAIL_TTL_MS), also across starts when file
 // is given, so a page that asks on every start never asks GitHub more than once a day. check() -> { ok, current,
 // latest, newer, url, checkedAt } or { ok: false, reason, current }.
+/** @param {{ current?: string, get?: (url: string, o?: { timeoutMs?: number, version?: string }) => Promise<any>, now?: () => number, file?: string | null }} [options] */
 export function createUpdateChecker({ current, get = defaultGet, now = Date.now, file = null } = {}) {
   let last = readLast(file, current, now);
   let running = null;
