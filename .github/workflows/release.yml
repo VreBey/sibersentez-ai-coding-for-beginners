@@ -39,7 +39,7 @@ jobs:
         shell: pwsh
         run: Get-FileHash dist\SiberSentez-Setup-*.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $(Split-Path -Leaf $_.Path)" }
       - id: unsigned
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: SiberSentez-Setup-unsigned
           path: dist/SiberSentez-Setup-*.exe
@@ -61,7 +61,7 @@ jobs:
           wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: signed
       - if: ${{ steps.sign.outcome == 'success' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: SiberSentez-Setup-signed
           path: signed/*.exe
