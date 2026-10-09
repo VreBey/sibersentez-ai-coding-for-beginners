@@ -23,7 +23,9 @@ import { STRINGS as PAGE_STRINGS, setLanguage } from '../public/js/i18n.js';
 import { WIN_ONLY } from './lib/winonly.mjs';
 
 // ---------------- fake world ----------------
-const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-install-'));
+// By its real path: macOS keeps the temp folder behind a link (/var -> /private/var), and the sweep leaves anything
+// reached through a link alone, as it should (the macOS CI, 2026-10-09)
+const ROOT = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'ork-install-')));
 after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const HOME = path.join(ROOT, 'home');
 const CLAUDE = path.join(HOME, '.claude');

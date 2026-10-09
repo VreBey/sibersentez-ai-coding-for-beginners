@@ -21,6 +21,7 @@
   "main": "electron/main.mjs",
   "scripts": {
     "start": "electron .",
+    "postinstall": "node tools/node-pty-mode.mjs",
     "dist": "electron-builder --win nsis",
     "test": "node --test \"test/*.test.mjs\"",
     "typecheck": "tsc -p tsconfig.json",

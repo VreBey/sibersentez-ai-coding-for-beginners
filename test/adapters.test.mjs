@@ -27,6 +27,9 @@ import { WIN_ONLY } from './lib/winonly.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-adapters-'));
+// Gemini CLI lower-cases the paths it stores on Windows; the walk back to the on-disk spelling is tried where a lower-cased
+// path does not open by itself. macOS folds case (and İ) and keeps the temp folder behind /private: nothing to walk there
+const CASE_FOLDING_FS = process.platform === 'darwin' && 'macOS: a lower-cased path opens as it is';
 after(() => fs.rmSync(ROOT, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
 const DAY = 86400000;
 
@@ -212,7 +215,7 @@ test('codex cache: a rollout is read once (cached by path); an incomplete first 
 });
 
 // ---------------- Gemini CLI projects ----------------
-test('gemini projects: projects.json keys and .project_root markers (tmp and history); lower-cased paths take the on-disk casing, Turkish İ included; lastSeenAt from chats entries, else the tmp folder, else 0', () => {
+test('gemini projects: projects.json keys and .project_root markers (tmp and history); lower-cased paths take the on-disk casing, Turkish İ included; lastSeenAt from chats entries, else the tmp folder, else 0', { skip: CASE_FOLDING_FS }, () => {
   const w = world('gemini-projects');
   const g = path.join(w.home, '.gemini');
   const alpha = mkdir(w.work, 'Alpha Proje');
@@ -244,7 +247,7 @@ test('gemini projects: projects.json keys and .project_root markers (tmp and his
   assert.equal(by.get(normPath(gone)).path, gone, 'a missing folder keeps the stored path (the catalog drops it)');
 });
 
-test('gemini projects: a lower-cased stored path with a junction on the way takes the on-disk spelling of every name (the junction is walked by name, never followed); a broken projects.json and bad ids never throw', () => {
+test('gemini projects: a lower-cased stored path with a junction on the way takes the on-disk spelling of every name (the junction is walked by name, never followed); a broken projects.json and bad ids never throw', { skip: CASE_FOLDING_FS }, () => {
   const w = world('gemini-junction');
   const g = path.join(w.home, '.gemini');
   const target = mkdir(w.work, 'Target Dir');

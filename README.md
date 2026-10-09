@@ -1,13 +1,79 @@
-# SiberSentez — AI coding for beginners
+<p align="center">
+  <img src="build/icon.png" width="96" height="96" alt="SiberSentez logo">
+</p>
 
-**Build something with AI coding tools, even if you have never written code.** A free Windows desktop app that sets up,
-starts and shows Claude Code, Codex CLI, Gemini CLI and other AI coding agents for people new to coding.
+<h1 align="center">SiberSentez</h1>
+
+<p align="center">
+  <b>Build something with AI, even if you have never written code.</b><br>
+  A free, open-source desktop app that sets up, starts and shows the AI coding tool you already have:<br>
+  Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor CLI, Qwen Code and OpenCode.
+</p>
+
+<p align="center">
+  <a href="https://github.com/VreBey/sibersentez-ai-coding-for-beginners/releases/latest"><img src="https://img.shields.io/github/v/release/VreBey/sibersentez-ai-coding-for-beginners?label=release&color=1596ab" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-1596ab" alt="Windows and Linux">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-de7d2c" alt="GPL-3.0 license"></a>
+  <a href="https://github.com/VreBey/sibersentez-ai-coding-for-beginners/actions/workflows/test.yml"><img src="https://github.com/VreBey/sibersentez-ai-coding-for-beginners/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
+  <img src="https://img.shields.io/badge/language-English%20%7C%20T%C3%BCrk%C3%A7e-555" alt="English and Turkish">
+</p>
+
+<p align="center">
+  <a href="https://github.com/VreBey/sibersentez-ai-coding-for-beginners/releases/latest"><b>Download</b></a> ·
+  <a href="https://sibersentez.com/en/">Website</a> ·
+  <a href="https://sibersentez.com/en/release-notes/">What's new</a> ·
+  <a href="README.tr.md">Türkçe</a> ·
+  <a href="../../issues/new/choose">Report a problem</a>
+</p>
 
 ![SiberSentez: write the job in your own words, press Start, and watch your AI team plan, build and check it in the Building](docs/screenshots/hero.webp)
 
-SiberSentez is a Windows program for beginners who want to use AI coding tools (Claude Code, Codex CLI, Gemini CLI and
-others) with the subscription they already have. It does not bring its own AI and sends your work nowhere: it sets
-things up so the tool you chose can help you well, and keeps you safe while it works.
+## Download
+
+| Your computer | File | How |
+|---|---|---|
+| **Windows 10 / 11** (64-bit) | [`SiberSentez-Setup-<version>.exe`](../../releases/latest) | Run it. Installs for you only, asks for no administrator rights. |
+| **Linux** (64-bit, x86_64) | [`SiberSentez-<version>-x86_64.AppImage`](../../releases/latest) | Make it executable (`chmod +x`) and open it. Nothing to install. |
+
+Free, no account, no ads. You need one AI coding tool with its own account (for example a Claude subscription for
+Claude Code); SiberSentez helps you set it up. The installer is not code-signed yet, so Windows may warn the first
+time: [what to do](#installation).
+
+## Why SiberSentez?
+
+AI coding tools are powerful, but they live in a terminal and assume you know what to ask, what to approve and how
+to undo a mistake. SiberSentez is the friendly room around them.
+
+| | An AI coding tool on its own | With SiberSentez |
+|---|---|---|
+| Getting started | Install Git, Node.js and the tool by hand | A step-by-step wizard; you press Enter on each command |
+| Giving a job | Write a good prompt in a terminal | Say it in your own words; the team, the plan and the check are set up for you |
+| Before files change | Depends on the tool's settings | The AI writes a plan first and waits for your approval |
+| Checking the work | You read the code | A separate reviewer checks it; you open the result in one click |
+| A mistake | `git` if you know it | Every job keeps a copy first: go back in one click, and undo that too |
+| Seeing what happens | Scrolling terminal output | A building where you watch who works, who waits for you and what changed |
+
+It runs only on your computer, brings no AI of its own and sends your work nowhere.
+
+## How it works
+
+1. **Create a project.** Give it a name and say what you want to make: "a recipe site with a search box".
+2. **Press Start.** Your AI tool opens in its own terminal inside the window, with your job as its first message.
+3. **Approve the plan.** Nothing is touched before you say yes; ask for changes if you like.
+4. **Open the result.** A separate reviewer has checked it. Keep it, ask for a change, or go back to before the job.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/plan.webp" alt="The lead's plan waits for your approval before any file is touched"><br><b>A plan first.</b> The lead writes a plan and raises a hand; nothing is touched before you approve it.</td>
+    <td width="50%"><img src="docs/screenshots/result.webp" alt="The result is ready: open or run it, see what changed, or undo"><br><b>The result, checked.</b> A separate reviewer checks the work; then open or run it, see what changed, or undo it.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/light.webp" alt="The light theme: the Building with the team at work"><br><b>Dark or light.</b> Pick a theme or follow the system; the building stays an evening window.</td>
+    <td width="50%"><img src="docs/screenshots/skills.webp" alt="Skills and agents: the SiberSentez kit and your own library"><br><b>Skills and agents.</b> A kit of 59 skills and 16 agents written for beginners, installed into a project only when you choose.</td>
+  </tr>
+</table>
+
+## Features
 
 - **Start from an idea.** Create a project, write in your own words what you want to make ("a to-do list", "a site for
   my restaurant"). SiberSentez picks a fitting starting point and the few skills that help, and explains why.
@@ -30,19 +96,7 @@ things up so the tool you chose can help you well, and keeps you safe while it w
 - **Set-up check.** It finds the AI tools on this computer and says in plain words what is missing or broken.
 - **Turkish and English**, dark and light themes, keyboard friendly.
 
-How it works: install → **New project** → write your idea → in the **Building**, write the job in the box and press
-**Start** → approve the plan in the terminal → open or run the result → accept it or go back.
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/plan.webp" alt="The lead's plan waits for your approval before any file is touched"><br><b>A plan first.</b> The lead writes a plan and raises a hand; nothing is touched before you approve it in the AI's terminal.</td>
-    <td width="50%"><img src="docs/screenshots/result.webp" alt="The result is ready: open or run it, see what changed, or undo"><br><b>The result, checked.</b> A separate reviewer checks the work; then open or run it, see what changed, or undo it.</td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/tour.webp" alt="The full tour explains every step on the real screen, as a simulation"><br><b>A full tour.</b> Twelve steps on the real screen, from the AI tool to the result; a simulation, nothing runs.</td>
-    <td width="50%"><img src="docs/screenshots/skills.webp" alt="Skills and agents: the SiberSentez kit and your own library"><br><b>Skills and agents.</b> A kit of 59 skills and 16 agents written for beginners, installed into a project only when you choose.</td>
-  </tr>
-</table>
+## Good to know
 
 - It runs only on this computer (`127.0.0.1`). It goes to the internet in **two cases only**, both your choice: when you bring skills from GitHub (only with actions **On** and only when you press **Fetch** or **Check for update**: `github.com`, `codeload.github.com` and `api.github.com`), and, if you turn on **Tell me when a new version is out** in Settings (off by default), once a day to read the list of SiberSentez's releases on `api.github.com`. Nothing is sent and nothing is downloaded by that look. Otherwise it sends nothing anywhere (see [Privacy and security](#privacy-and-security)).
 - It is **read-only by default**: while actions are Off (the default) it reads logs, projects and settings and changes none of them. The only files it writes then are its own settings and logs and, in the hub folder, the skeleton on first start, its project memory (`registry\discovered.json`), its usage ledger (`usage\ledger.json`), the last new-version answer (`update-check.json`, only when that look is turned on) and, when you change it (header indicator, window menu or tray menu), the actions mode in `settings.json`; it also deletes its own GitHub downloads in `incoming\` once they are seven days old. With actions **On**, the skill flow also copies into the hub library, keeps `registry\installs.json` and a `trials\` folder, and installs into or removes from the project folders you choose (see [Skills](#skills)); a GitHub import downloads into `incoming\` and records where each item came from in `registry\sources.json`; **Start with AI** writes a small start file into `launch\`, a restore point of the project into `restore\` in the hub and, when you start with your idea or a job, `.sibersentez\` into the project. In **Preview** it only shows what it would do.
@@ -484,9 +538,9 @@ start.cmd            developer launcher (browser)
 ## Contributing and review
 
 Issues, reviews and pull requests are welcome; how the code is written and checked is in
-[CONTRIBUTING.md](CONTRIBUTING.md). Before a change: `npm ci`, then `npm test` (about 1,000 tests, under a minute, no
-network, no window, nothing outside a temporary folder is touched); every push runs them on Windows
-(`.github/workflows/test.yml`). The design notes of every feature are in `docs/`; the code and the documents are in
+[CONTRIBUTING.md](CONTRIBUTING.md). Before a change: `npm ci`, then `npm test` (over 1,300 tests, under a minute, no
+network, no window, nothing outside a temporary folder is touched); every push runs them on Windows and Linux, and on
+macOS as an experiment (`.github/workflows/test.yml`). The design notes of every feature are in `docs/`; the code and the documents are in
 English, the interface has Turkish and English string tables (`public/js/strings/`, `public/js/i18n.js`). A security
 finding goes to the private report described in [SECURITY.md](SECURITY.md), not to an issue.
 
@@ -497,6 +551,8 @@ Website: [sibersentez.com](https://sibersentez.com). Questions: **destek@siberse
 [SECURITY.md](SECURITY.md). Bugs and ideas: [Issues](../../issues).
 
 ## Support
+
+**A star on GitHub helps other beginners find SiberSentez.** Telling a friend who is new to coding helps even more.
 
 SiberSentez is free and stays free. If it helps you, you can support its development on
 [GitHub Sponsors](https://github.com/sponsors/VreBey) with a monthly or one-time donation. A donation buys no licence and

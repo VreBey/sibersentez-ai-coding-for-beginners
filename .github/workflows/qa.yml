@@ -26,7 +26,7 @@ jobs:
       - run: npx electron-builder --win dir
       - run: pwsh -NoProfile -File tools/electron-qa.ps1
       - if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: packaged-qa
           path: |
@@ -50,7 +50,7 @@ jobs:
       - run: npx electron-builder --linux AppImage
       - run: xvfb-run -a bash tools/linux-qa.sh
       - if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: packaged-qa-linux
           path: |
