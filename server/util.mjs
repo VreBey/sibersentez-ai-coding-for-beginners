@@ -2,6 +2,7 @@
 // Shared helpers: JSON reading, path normalisation, secret masking, incremental line reading.
 import fs from 'node:fs';
 import { open } from 'node:fs/promises';
+import { PLATFORM } from './platform.mjs';
 
 // A project's id in the registry: a letter or digit, then letters, digits, dots, underscores and dashes, at most 100
 // characters. One rule for the server, its routes and the desktop shell (plan D9; it was written out thirteen times)
@@ -18,10 +19,18 @@ export function readJson(file) {
   }
 }
 
-// For comparison: lower case, forward slashes instead of backslashes, no trailing slash
-export function normPath(p) {
+// A path's key for comparison: forward slashes instead of backslashes, no trailing slash, and lower case where the
+// platform's file system ignores letter case (Windows, macOS by default: platform.mjs caseless). On Linux work/App and
+// work/app are two folders, so two keys (review 2026-10 F01; it was lower case everywhere).
+/** @param {unknown} p @param {import('./platform.mjs').Platform} [plat] */
+export function pathKeyOn(p, plat = PLATFORM) {
   if (!p) return '';
-  return String(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const s = String(p).replace(/\\/g, '/').replace(/\/+$/, '');
+  return plat.caseless ? s.toLowerCase() : s;
+}
+// The key on this computer's platform. One argument only: list.map(normPath) passes an index as the second
+export function normPath(p) {
+  return pathKeyOn(p, PLATFORM);
 }
 
 // Claude Code's naming of folders under ~/.claude/projects: every non-letter/digit character becomes '-'

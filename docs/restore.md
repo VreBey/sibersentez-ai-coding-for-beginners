@@ -9,6 +9,16 @@ word first.
 - A plain copy of the project's files in the hub: `<hub>/restore/<project key>/<point id>/files/...` and
   `manifest.json` (`version`, `id`, `projectId`, `at`, `reason`, and per file `rel`, `size`, `mtimeMs`, `sha256`; points taken before 2026-10-06 carry `sha1` instead and are still read). The
   project key is a digest of the project id (an id may end in dots, which Windows strips from a folder name).
+- Permissions (review 2026-10-09 F02): manifest `version: 2` also keeps each file's Unix permissions (`mode`, the
+  `0o777` bits only, never set-user-id) on Linux and macOS. Going back puts them back (a `run.sh` stays runnable, a
+  `.env` stays `0600`), and a change of permissions alone is a change in the plan. A `version: 1` point is still read
+  and put back; a file it rewrites keeps the permissions it has. In the hub, on Unix, the project's points folder and
+  every point folder are `0700` and every copy and manifest `0600`; a copy shared with an older point (a hard link)
+  is never chmodded.
+- Letter case (review 2026-10-09 F03): the plan's maps key a file by its path as written where the project's file
+  system tells `README.md` and `readme.md` apart (asked of the folder itself, `fsutil.mjs` `caselessAt`; Linux as a
+  rule), lower case where it does not (Windows, macOS by default). A point naming one file twice as the file system
+  sees names is refused (`point-ambiguous`), never half applied.
 - Point id: `R` + UTC `YYYYMMDDHHmmss` + four hex digits (`POINT_ID_RE`); ids sort by time.
 - Reasons: `ai-start` (taken by start-ai), `before-restore` (the present, taken before going back), `manual`.
 - Left out: at any depth, package caches, version control and virtual environments (`RESTORE_SKIP`: `.git`,
@@ -76,8 +86,9 @@ line says how to undo it.
 
 ## 6. Known limits
 
-- A file whose name only changed case (`A.js` → `a.js`) is not put back under its old name: the present name is kept
-  and reported `not-backed-up` (nothing is lost).
+- On a caseless file system (Windows, macOS by default), a file whose name only changed case (`A.js` → `a.js`) is not
+  put back under its old name: the present name is kept and reported `not-backed-up` (nothing is lost). On a
+  case-sensitive one the two names are two files.
 - Audit: two rounds by an independent reviewer (2026-09-30); round 1 found two blockers (a removal could happen
   without a backup; a damaged point was applied half-way), both fixed, round 2 approved.
 

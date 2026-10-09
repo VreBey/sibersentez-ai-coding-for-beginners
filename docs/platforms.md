@@ -95,8 +95,15 @@ signed in on Linux.
 
 ## Known limits
 
-- Project paths are compared without letter case everywhere (`normPath`): on Linux two folders that differ only in
-  case count as one project.
+- Project paths are compared without letter case on Windows and macOS only (`normPath`, `pathKeyOn`; review
+  2026-10-09 F01): on Linux `work/App` and `work/app` are two projects. Their ids still come from the lower-cased
+  folder name, so every id stored before stays the same; of two such folders the one the project memory saw first
+  keeps the plain id, the other gets a short digest after it. A record that merged two such folders before (memory,
+  usage, restore points, installs) stays the first folder's and is not split. Not covered: a case-insensitive drive
+  mounted on Linux (a USB stick, `/mnt/c`) and a case-sensitive volume on a Mac follow the platform rule, not the
+  drive (restore points ask the drive itself, `fsutil.mjs` `caselessAt`); turning a Claude Code log folder's name back
+  into a path (`resolveSlug`) still ignores case, so `App` next to `app` is ambiguous there and left to the session's
+  own working folder.
 - The live-session check compares process start times on Windows only; elsewhere "is the process alive" alone.
 - `.deb` and `.rpm` packages are not built (an AppImage needs no install); a maintainer address would be needed.
 - macOS: never run on a Mac. Unsigned, so Gatekeeper refuses it unless the person allows it.

@@ -417,7 +417,10 @@ describe('server: the project memory keeps the idea', () => {
     const r = m.setIdea(d, '  Unity\u0000ile\t2D\u200b platform\u202e oyunu  ');
     assert.deepEqual(r, { ok: true, idea: 'Unity ile 2D platform oyunu', changed: true, saved: true });
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).projects[0].idea, 'Unity ile 2D platform oyunu', 'written at once, not after the debounce');
-    assert.deepEqual(m.setIdea(d.toUpperCase(), 'Unity ile 2D platform oyunu'), { ok: true, idea: 'Unity ile 2D platform oyunu', changed: false, saved: true }, 'same idea, any spelling of the folder: no write');
+    // Another spelling: letter case where the platform ignores it, a trailing separator on Linux (review F01: there
+    // case makes another folder)
+    const other = process.platform === 'linux' ? d + path.sep : d.toUpperCase();
+    assert.deepEqual(m.setIdea(other, 'Unity ile 2D platform oyunu'), { ok: true, idea: 'Unity ile 2D platform oyunu', changed: false, saved: true }, 'same idea, any spelling of the folder: no write');
     const long = 'ğ'.repeat(IDEA_MAX + 50);
     assert.equal(m.setIdea(d, long).idea, 'ğ'.repeat(IDEA_MAX), `at most ${IDEA_MAX} characters`);
     assert.deepEqual(m.setIdea(d, 'x'.repeat(IDEA_TEXT_MAX + 1)), { ok: false, reason: 'invalid' });

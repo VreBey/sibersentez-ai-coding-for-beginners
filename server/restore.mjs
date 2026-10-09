@@ -13,7 +13,8 @@ import crypto from 'node:crypto';
 import { redact, normPath } from './util.mjs';
 import { validJobId, readCurrentJob } from './job-id.mjs';
 import { FIRST_DIR } from './launch.mjs';
-import { isLocalPath } from './fsutil.mjs';
+import { isLocalPath, relKeyFor } from './fsutil.mjs';
+import { PLATFORM } from './platform.mjs';
 import { hasStreamColon } from './library.mjs';
 import { writeFileAtomic } from './atomic.mjs';
 
@@ -46,6 +47,20 @@ const POINT_REASONS = Object.freeze(['ai-start', 'before-restore', 'manual']);
 export const LABEL_MAX = 80;
 const MANIFEST = 'manifest.json';
 const MANIFEST_MAX = 4 * 1024 * 1024;
+// Manifest versions (review 2026-10 F02): 1 holds no permissions; 2 holds each file's Unix permissions (mode) on
+// Linux and macOS. Both are read: a version 1 point is put back as before, a rewritten file keeping the permissions it
+// has. Windows writes version 2 without modes (its files have no such bits).
+const MANIFEST_VERSION = 2;
+const MANIFEST_VERSIONS = new Set([1, MANIFEST_VERSION]);
+// Read, write and run for owner, group and others only: set-user-id, set-group-id and sticky are never kept or set
+const MODE_BITS = 0o777;
+const validMode = (m) => m === undefined || (Number.isInteger(m) && m >= 0 && m <= MODE_BITS);
+const KEEPS_MODES = !PLATFORM.windows;
+// The hub's copies are the owner's only (a point holds .env files and keys): folders 0700, files 0600. A copy is
+// data, never run from the hub; what it had in the project is in the manifest. A copy shared with an older point (a
+// hard link, plan D6) is never chmodded: that would change the older point's file too.
+const HUB_DIR_MODE = 0o700;
+const HUB_FILE_MODE = 0o600;
 const REL_MAX = 400;
 // Names Windows keeps for devices, with or without an extension (CON, nul.txt, COM1, ...)
 const DEVICE_RE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|conin\$|conout\$)(\..*)?$/i;
@@ -94,7 +109,7 @@ function skippedRel(rel) {
 
 // The project's files that a point holds (pure apart from reading the disk). Links and junctions are never followed
 // (a link is neither copied nor entered), the skipped folders are left out, and names come in byte order. Returns
-// { ok: true, files: [{ rel, size, mtimeMs }], bytes } or { ok: false, problem: 'too-many-files' | 'too-large' |
+// { ok: true, files: [{ rel, size, mtimeMs, mode (Linux and macOS) }], bytes } or { ok: false, problem: 'too-many-files' | 'too-large' |
 // 'file-too-large' | 'too-deep' | 'folder-missing' }. skip: absolute folders never entered (the hub, when it lies
 // inside the project, so a point never copies the points).
 export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'full') {
@@ -136,7 +151,7 @@ export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'fu
         }
         if (st.size > limits.fileBytes) return 'file-too-large';
         bytes += st.size;
-        files.push({ rel: childRel, size: st.size, mtimeMs: Math.floor(st.mtimeMs) });
+        files.push({ rel: childRel, size: st.size, mtimeMs: Math.floor(st.mtimeMs), ...(KEEPS_MODES ? { mode: st.mode & MODE_BITS } : {}) });
         if (files.length > limits.files) return 'too-many-files';
         if (bytes > limits.bytes) return 'too-large';
       }
@@ -153,9 +168,9 @@ function readManifest(pointDir) {
   if (!st || !st.isFile() || st.size > MANIFEST_MAX) return null;
   try {
     const m = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (m?.version !== 1 || !POINT_ID_RE.test(m.id) || !Array.isArray(m.files)) return null;
+    if (!MANIFEST_VERSIONS.has(m?.version) || !POINT_ID_RE.test(m.id) || !Array.isArray(m.files)) return null;
     if (m.scope !== undefined && !RESTORE_SCOPES.includes(m.scope)) return null;
-    if (!m.files.every((f) => f && safeRel(f.rel) && Number.isInteger(f.size) && f.size >= 0 && hasDigest(f))) return null;
+    if (!m.files.every((f) => f && safeRel(f.rel) && Number.isInteger(f.size) && f.size >= 0 && hasDigest(f) && validMode(f.mode))) return null;
     // A file in a folder points leave out is never read back or written: such entries are dropped, not the point.
     // 0.17 leaves out more tools' folders (.gemini, .qwen, .opencode, .codex); a point taken before still names their
     // files and must stay listed and usable (review 2026-10-08: it vanished from the list after the update)
@@ -252,7 +267,11 @@ function currentJobPoint(hubDir, projectId, dir) {
   }
 }
 
-const sameFiles = (a, b) => a.length === b.length && a.every((f, i) => f.rel === b[i].rel && f.size === b[i].size && f.mtimeMs === b[i].mtimeMs);
+// The same permissions too (review F02: chmod +x alone is a change a point must hold); a point without them (version 1)
+// is not the present on Linux and macOS, so the next point is a new one that holds them
+const sameFiles = (a, b) => a.length === b.length && a.every((f, i) => f.rel === b[i].rel && f.size === b[i].size && f.mtimeMs === b[i].mtimeMs && f.mode === b[i].mode);
+// A file's permissions now against a point's: a point or a look without them (version 1, Windows) compares bytes only
+const sameMode = (cur, f) => cur.mode === undefined || f.mode === undefined || cur.mode === f.mode;
 
 const stampOf = (at) => {
   const d = new Date(at);
@@ -430,9 +449,19 @@ async function sameContentAsync(dir, files) {
 // Secrets typed into a job (a key, a password) are masked before the label reaches the disk (review 2026-10-02); cut
 // on whole characters so an emoji is never split
 const pointLabel = (label) => (typeof label === 'string' ? Array.from(redact(label).replace(/\s+/g, ' ').trim()).slice(0, LABEL_MAX).join('') : '');
-const manifestOf = ({ scan, id, at }, projectId, reason, files, label) => ({ version: 1, id, projectId, at, reason: POINT_REASONS.includes(reason) ? reason : 'manual', files, ...(pointLabel(label) ? { label: pointLabel(label) } : {}), ...(scan.scope === 'lean' ? { scope: 'lean', leftOut: scan.leftOut } : {}) });
+const manifestOf = ({ scan, id, at }, projectId, reason, files, label) => ({ version: MANIFEST_VERSION, id, projectId, at, reason: POINT_REASONS.includes(reason) ? reason : 'manual', files, ...(pointLabel(label) ? { label: pointLabel(label) } : {}), ...(scan.scope === 'lean' ? { scope: 'lean', leftOut: scan.leftOut } : {}) });
 // Read once: the copy and its digest are the same bytes, even if the file changes meanwhile
-const copied = (f, buf) => ({ rel: f.rel, size: buf.length, mtimeMs: f.size === buf.length ? f.mtimeMs : 0, sha256: digestOf(buf) });
+const copied = (f, buf) => ({ rel: f.rel, size: buf.length, mtimeMs: f.size === buf.length ? f.mtimeMs : 0, sha256: digestOf(buf), ...(f.mode !== undefined ? { mode: f.mode } : {}) });
+// The project's points folder: the owner's only, also when an older version made it open to others (a folder, never
+// a shared file). On Windows the modes mean nothing and are left alone.
+function privateBase(base) {
+  if (!KEEPS_MODES) return;
+  try {
+    fs.chmodSync(base, HUB_DIR_MODE);
+  } catch {
+    /* the point is still taken; the folder keeps what it had */
+  }
+}
 const pointAnswer = ({ scan, id }, files) => ({ ok: true, id, reused: false, files: files.length, bytes: files.reduce((n, x) => n + x.size, 0), scope: scan.scope, leftOut: scan.leftOut });
 
 // Take a point of the project's files. When nothing changed since the newest point (same paths, sizes and times pick
@@ -447,17 +476,18 @@ export function createPoint({ hubDir, projectId, dir, reason = 'manual', now = D
   if (p.candidate && sameContent(dir, p.candidate.files)) return p.candidate.answer;
   const files = [];
   try {
-    fs.mkdirSync(path.join(p.tmp, 'files'), { recursive: true });
+    fs.mkdirSync(path.join(p.tmp, 'files'), { recursive: true, mode: HUB_DIR_MODE });
+    privateBase(p.base);
     for (const f of p.scan.files) {
       const buf = fs.readFileSync(path.join(dir, ...f.rel.split('/')));
       const dest = path.join(p.tmp, 'files', ...f.rel.split('/'));
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.mkdirSync(path.dirname(dest), { recursive: true, mode: HUB_DIR_MODE });
       const rec = copied(f, buf);
       const from = sharedSource(p.shared, rec);
-      if (!(from && linkShared(from, dest, buf))) fs.writeFileSync(dest, buf, { flag: 'wx' });
+      if (!(from && linkShared(from, dest, buf))) fs.writeFileSync(dest, buf, { flag: 'wx', mode: HUB_FILE_MODE });
       files.push(rec);
     }
-    fs.writeFileSync(path.join(p.tmp, MANIFEST), JSON.stringify(manifestOf(p, projectId, reason, files, label)));
+    fs.writeFileSync(path.join(p.tmp, MANIFEST), JSON.stringify(manifestOf(p, projectId, reason, files, label)), { mode: HUB_FILE_MODE });
     fs.renameSync(p.tmp, path.join(p.base, p.id));
   } catch {
     fs.rmSync(p.tmp, { recursive: true, force: true });
@@ -476,17 +506,18 @@ export async function createPointAsync({ hubDir, projectId, dir, reason = 'manua
   if (p.candidate && (await sameContentAsync(dir, p.candidate.files))) return p.candidate.answer;
   const files = [];
   try {
-    await fs.promises.mkdir(path.join(p.tmp, 'files'), { recursive: true });
+    await fs.promises.mkdir(path.join(p.tmp, 'files'), { recursive: true, mode: HUB_DIR_MODE });
+    privateBase(p.base);
     for (const f of p.scan.files) {
       const buf = await fs.promises.readFile(path.join(dir, ...f.rel.split('/')));
       const dest = path.join(p.tmp, 'files', ...f.rel.split('/'));
-      await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+      await fs.promises.mkdir(path.dirname(dest), { recursive: true, mode: HUB_DIR_MODE });
       const rec = copied(f, buf);
       const from = sharedSource(p.shared, rec);
-      if (!(from && (await linkSharedAsync(from, dest, buf)))) await fs.promises.writeFile(dest, buf, { flag: 'wx' });
+      if (!(from && (await linkSharedAsync(from, dest, buf)))) await fs.promises.writeFile(dest, buf, { flag: 'wx', mode: HUB_FILE_MODE });
       files.push(rec);
     }
-    await fs.promises.writeFile(path.join(p.tmp, MANIFEST), JSON.stringify(manifestOf(p, projectId, reason, files, label)));
+    await fs.promises.writeFile(path.join(p.tmp, MANIFEST), JSON.stringify(manifestOf(p, projectId, reason, files, label)), { mode: HUB_FILE_MODE });
     await fs.promises.rename(p.tmp, path.join(p.base, p.id));
   } catch {
     await fs.promises.rm(p.tmp, { recursive: true, force: true });
@@ -505,7 +536,21 @@ function readPoint(hubDir, projectId, id) {
   return m && m.id === id && m.projectId === projectId ? { dir: pd, manifest: m } : null;
 }
 
-const key = (rel) => rel.toLowerCase(); // Windows names ignore case
+// The key of a project file in the maps below (review 2026-10 F03): its path as written where the project's file
+// system tells README.md and readme.md apart (Linux), lower case where it does not (Windows, macOS by default).
+// Asked of the project folder once per plan, restore or comparison (fsutil.mjs caselessAt).
+const keyIn = (dir) => relKeyFor(dir);
+// A map of a point's files by key, or null when two of them are one file to this file system (a manifest written by
+// hand, or a point taken on a case-sensitive drive and gone back to on a caseless one): going back would write one
+// over the other, so it is refused (point-ambiguous) rather than half applied
+function fileMap(files, key) {
+  const out = new Map();
+  for (const f of files) {
+    if (out.has(key(f.rel))) return null;
+    out.set(key(f.rel), f);
+  }
+  return out;
+}
 const readRel = (dir, rel) => fs.readFileSync(path.join(dir, ...rel.split('/')));
 
 // The digest of a plan: the preview hands it to the page, the apply refuses a plan that differs (plan-changed), so
@@ -523,22 +568,24 @@ export function planRestore({ hubDir, projectId, dir, id, limits = RESTORE_LIMIT
   if (!pt) return fail('point-missing');
   // A lean point is compared with the project seen the same way: what it left out is neither added nor removed
   const scope = pt.manifest.scope === 'lean' ? 'lean' : 'full';
+  const key = keyIn(dir);
+  const inPoint = fileMap(pt.manifest.files, key);
+  if (!inPoint) return fail('point-ambiguous');
   const scan = scanProject(dir, limitsFor(scope, limits), [hubDir], scope);
   if (!scan.ok) return scan;
   const now = new Map(scan.files.map((f) => [key(f.rel), f]));
-  const inPoint = new Set();
   const changed = [];
   const missing = [];
   for (const f of pt.manifest.files) {
-    inPoint.add(key(f.rel));
     const cur = now.get(key(f.rel));
     if (!cur) {
       missing.push(f.rel);
       continue;
     }
+    // The bytes decide, and the permissions where the point holds them (review F02: chmod -x is a change)
     let same = false;
     try {
-      same = cur.rel === f.rel && cur.size === f.size && sameBytes(readRel(dir, cur.rel), f);
+      same = cur.rel === f.rel && cur.size === f.size && sameMode(cur, f) && sameBytes(readRel(dir, cur.rel), f);
     } catch {
       same = false;
     }
@@ -606,7 +653,7 @@ async function clearRestoreMark(hubDir, projectId) {
 
 const readRelAsync = (dir, rel) => fs.promises.readFile(path.join(dir, ...rel.split('/')));
 // backedUp, without holding the server
-async function backedUpAsync(dir, rel, kept) {
+async function backedUpAsync(dir, rel, kept, key) {
   const file = path.join(dir, ...rel.split('/'));
   const st = lstat(file);
   if (!st) return true;
@@ -657,7 +704,10 @@ export async function applyRestore({ hubDir, projectId, dir, id, planId = null, 
   const before = await createPointAsync({ hubDir, projectId, dir, reason: 'before-restore', now, limits, protect: [id], reuse: false, scope: pt.manifest.scope === 'lean' ? 'lean' : 'full' });
   if (!before.ok) return fail('backup-failed');
   if (!(await writeRestoreMark(hubDir, projectId, { to: id, before: before.id, at: now() }))) return fail('backup-failed');
-  const kept = new Map((readPoint(hubDir, projectId, before.id)?.manifest.files || []).map((f) => [key(f.rel), f]));
+  const key = keyIn(dir);
+  // The present's point, by the same key (two names that are one file here cannot both be in it; if a hand-made one
+  // did, nothing would count as backed up, so nothing would be touched)
+  const kept = fileMap(readPoint(hubDir, projectId, before.id)?.manifest.files || [], key) || new Map();
   const failed = [];
   let removed = 0;
   const emptied = new Set();
@@ -668,7 +718,7 @@ export async function applyRestore({ hubDir, projectId, dir, id, planId = null, 
       const st = lstat(file);
       if (!st) continue;
       if (!st.isFile()) throw coded('not-a-file');
-      if (!(await backedUpAsync(dir, rel, kept))) throw coded('not-backed-up');
+      if (!(await backedUpAsync(dir, rel, kept, key))) throw coded('not-backed-up');
       await fs.promises.rm(file);
       removed++;
       const parts = rel.split('/');
@@ -699,9 +749,15 @@ export async function applyRestore({ hubDir, projectId, dir, id, planId = null, 
       if (!safeParents(dir, rel)) throw coded('link-in-path');
       const st = lstat(dest);
       if (st && !st.isFile()) throw coded('not-a-file');
-      if (!(await backedUpAsync(dir, rel, kept))) throw coded('not-backed-up');
+      if (!(await backedUpAsync(dir, rel, kept, key))) throw coded('not-backed-up');
       await fs.promises.mkdir(path.dirname(dest), { recursive: true });
-      await fs.promises.writeFile(tmp, buf, { flag: 'wx' });
+      // Review F02: the permissions the point holds (a script runnable again, a .env private again); a point without
+      // them (version 1) leaves a rewritten file the ones it has. The new file is the owner's only until it has them
+      // (a private file is never readable by others on the way), and has them before it takes the name. Only the
+      // project's file is changed, never a copy in the hub.
+      const mode = KEEPS_MODES ? (byRel.get(rel).mode ?? (st ? st.mode & MODE_BITS : undefined)) : undefined;
+      await fs.promises.writeFile(tmp, buf, { flag: 'wx', ...(mode !== undefined ? { mode: HUB_FILE_MODE } : {}) });
+      if (mode !== undefined) await fs.promises.chmod(tmp, mode);
       await fs.promises.rename(tmp, dest);
       restored++;
     } catch (e) {
@@ -824,6 +880,7 @@ export async function projectJobChanges({ catalog, projectId, jobId, limits = RE
   if (!scan.ok) return { status: 200, body: { ...body, basis: 'unreadable', problem: scan.problem } };
   const isNote = (rel) => rel.toLowerCase().startsWith(`${FIRST_DIR}/`);
   const leftOut = Number.isInteger(pt.manifest.leftOut) ? pt.manifest.leftOut : 0;
+  const key = keyIn(dir);
   const now = new Map(scan.files.map((f) => [key(f.rel), f]));
   const inCopy = new Set();
   const changed = [];

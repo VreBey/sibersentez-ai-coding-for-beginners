@@ -206,6 +206,34 @@ export function folderSpelling(p, readDirs = (d) => listDirs(d, { hidden: true }
   return upperDrive(cur);
 }
 
+// Names inside this folder that differ only in letter case are one file (review 2026-10 F03): asked of the file system
+// itself, since a Linux computer can hold a case-insensitive drive (a USB stick, /mnt/c in WSL) and a Mac a
+// case-sensitive one. The folder's own name with its case swapped names the same folder (same device and file id) on
+// a caseless file system; on a case-sensitive one it is missing or another folder. A name without a letter to swap,
+// or a folder that cannot be looked at, answers by the platform (platform.mjs caseless).
+export function caselessAt(dir, plat = PLATFORM) {
+  const name = path.basename(String(dir || ''));
+  const swapped = name === name.toUpperCase() ? name.toLowerCase() : name.toUpperCase();
+  if (!name || swapped === name) return plat.caseless;
+  try {
+    const a = fs.statSync(dir, { bigint: true });
+    let b;
+    try {
+      b = fs.statSync(path.join(path.dirname(dir), swapped), { bigint: true });
+    } catch (e) {
+      if (e?.code === 'ENOENT' || e?.code === 'ENOTDIR') return false;
+      throw e;
+    }
+    // A file system without file ids cannot tell the two apart this way
+    if (a.ino === 0n || b.ino === 0n) return plat.caseless;
+    return a.dev === b.dev && a.ino === b.ino;
+  } catch {
+    return plat.caseless;
+  }
+}
+// The key of a relative path inside dir for maps and sets: as written where case counts, lower case where it does not
+export const relKeyFor = (dir, plat = PLATFORM) => (caselessAt(dir, plat) ? (rel) => String(rel).toLowerCase() : (rel) => String(rel));
+
 // A lower-cased spelling: nothing after the drive letter has an upper-case form (Gemini CLI stores paths this way,
 // so such a spelling tells nothing about the real one)
 export function isLowerCased(p) {

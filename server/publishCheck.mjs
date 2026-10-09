@@ -104,10 +104,34 @@ export function nameFinding(rel) {
 }
 
 const looksBinary = (buf) => buf.subarray(0, 8192).includes(0);
+// The start of a file too big to read whole: binary as looksBinary sees it (false when it cannot be opened: then it
+// counts as a gap, never as a binary left out on purpose)
+async function startsBinary(fsp, abs) {
+  let fh;
+  try {
+    fh = await fsp.open(abs, 'r');
+    const buf = Buffer.alloc(8192);
+    const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+    return looksBinary(buf.subarray(0, bytesRead));
+  } catch {
+    return false;
+  } finally {
+    await fh?.close().catch(() => {});
+  }
+}
 
-// The walk (asynchronous: the server keeps answering). Links are never followed. Returns { ok: true, files,
-// truncated, findings: [{ kind, level, file, line, sample }] } with the most serious first.
-export async function publishCheck(dir, { limits = PUBLISH_LIMITS } = {}) {
+// The walk (asynchronous: the server keeps answering). Links are never followed. Returns { ok, status, complete,
+// files, truncated, skipped, findings: [{ kind, level, file, line, sample }], more } with the most serious first.
+// status (review F04: a skipped file was a silent "nothing found"):
+//   clean       the whole project was read and nothing was found
+//   findings    the whole project was read and something was found
+//   incomplete  part of it could not be read (skipped says why); what was found in the rest is still in findings
+//   failed      the folder itself could not be read (ok: false)
+// skipped counts by reason: limit (files past PUBLISH_LIMITS.files, at least those in the folder where the walk
+// stopped; truncated says the same), large (files over fileBytes), deep (folders below depth, not entered),
+// unreadable (files or folders that could not be opened). Folders that are never published (SKIP_DIRS), links and
+// binary files are left out on purpose and are not counted. fsp: fs.promises (a test gives its own errors).
+export async function publishCheck(dir, { limits = PUBLISH_LIMITS, fsp = fs.promises } = {}) {
   // At most limits.findings kept per level while walking (review E1: a long list of addresses grew without end); the
   // rest only counted
   const kept = { danger: [], warn: [], info: [] };
@@ -121,25 +145,33 @@ export async function publishCheck(dir, { limits = PUBLISH_LIMITS } = {}) {
   };
   let files = 0;
   let truncated = false;
+  const skipped = { limit: 0, large: 0, deep: 0, unreadable: 0 };
   const queue = [['', 0]];
   while (queue.length) {
     const [rel, depth] = /** @type {[string, number]} */ (queue.shift());
     let entries;
     try {
-      entries = await fs.promises.readdir(rel ? path.join(dir, ...rel.split('/')) : dir, { withFileTypes: true });
+      entries = await fsp.readdir(rel ? path.join(dir, ...rel.split('/')) : dir, { withFileTypes: true });
     } catch {
+      // The project folder itself: nothing was looked through, which is never "nothing found"
+      if (!rel) return { ok: false, status: 'failed', complete: false, files: 0, truncated: false, skipped, findings: [], more: 0 };
+      skipped.unreadable++;
       continue;
     }
-    for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    entries.sort((a, b) => (a.name < b.name ? -1 : 1));
+    for (const [i, e] of entries.entries()) {
       const r = rel ? `${rel}/${e.name}` : e.name;
       if (e.isSymbolicLink()) continue;
       if (e.isDirectory()) {
-        if (!SKIP_DIRS.has(e.name.toLowerCase()) && depth + 1 <= limits.depth) queue.push([r, depth + 1]);
+        if (SKIP_DIRS.has(e.name.toLowerCase())) continue;
+        if (depth + 1 <= limits.depth) queue.push([r, depth + 1]);
+        else skipped.deep++;
         continue;
       }
       if (!e.isFile()) continue;
       if (++files > limits.files) {
         truncated = true;
+        skipped.limit = entries.slice(i).filter((x) => x.isFile() && !x.isSymbolicLink()).length;
         break;
       }
       const byName = nameFinding(r);
@@ -147,10 +179,19 @@ export async function publishCheck(dir, { limits = PUBLISH_LIMITS } = {}) {
       let buf;
       try {
         const abs = path.join(dir, ...r.split('/'));
-        const st = await fs.promises.lstat(abs);
-        if (!st.isFile() || st.size > limits.fileBytes) continue;
-        buf = await fs.promises.readFile(abs);
+        const st = await fsp.lstat(abs);
+        if (!st.isFile()) {
+          skipped.unreadable++;
+          continue;
+        }
+        if (st.size > limits.fileBytes) {
+          // A big image or video is binary like a small one (never read either): only a big text file is a gap
+          if (!(await startsBinary(fsp, abs))) skipped.large++;
+          continue;
+        }
+        buf = await fsp.readFile(abs);
       } catch {
+        skipped.unreadable++;
         continue;
       }
       if (looksBinary(buf)) continue;
@@ -162,7 +203,9 @@ export async function publishCheck(dir, { limits = PUBLISH_LIMITS } = {}) {
   }
   const byPlace = (a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line);
   const all = [...kept.danger.sort(byPlace), ...kept.warn.sort(byPlace), ...kept.info.sort(byPlace)].slice(0, limits.findings);
-  return { ok: true, files: Math.min(files, limits.files), truncated, findings: all, more: Math.max(0, total - all.length) };
+  const complete = !truncated && !skipped.large && !skipped.deep && !skipped.unreadable;
+  const status = !complete ? 'incomplete' : total ? 'findings' : 'clean';
+  return { ok: true, status, complete, files: Math.min(files, limits.files), truncated, skipped, findings: all, more: Math.max(0, total - all.length) };
 }
 
 // GET /api/projects/<id>/publish-check: a listed project's own local folder only, with the guards of the other project

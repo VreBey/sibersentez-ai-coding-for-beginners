@@ -51,6 +51,7 @@ export class ProjectMemory {
     this.dirty = false;
     this.timer = null;
     this.saves = 0;
+    this.lastFirstSeenAt = 0; // the firstSeenAt of the last folder recorded in this process (record)
     this.load();
   }
 
@@ -130,7 +131,11 @@ export class ProjectMemory {
     let e = this.entries.get(n);
     let changed = false;
     if (!e) {
-      const now = this.now();
+      // Every new folder is seen first at its own millisecond (one pass records many): the catalog gives the plain id
+      // of two folders that differ only in case (Linux) to the one seen first, and this keeps that order the order
+      // they were recorded in (review 2026-10 F01)
+      const now = Math.max(this.now(), this.lastFirstSeenAt + 1);
+      this.lastFirstSeenAt = now;
       e = { path: folder, firstSeenAt: now, lastSeenAt: seenAt || now, savedLastSeenAt: 0, via: new Set(), idea: '' };
       this.entries.set(n, e);
       changed = true;

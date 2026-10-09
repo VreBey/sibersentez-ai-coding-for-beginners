@@ -21,7 +21,7 @@ import { codeError, lstat, isLink, isRealDir, findLibraryItem, treeHash, measure
 import { readKit, findKitItem, defaultKitDir, KIT_SOURCE } from './kit.mjs';
 import { AGENT_FORMATS, AGENT_FORMAT_VERSION, agentFileName, convertAgent } from './agentFormats.mjs';
 import crypto from 'node:crypto';
-import { normalizeDir, isSystemFolder } from './platform.mjs';
+import { PLATFORM, normalizeDir, isSystemFolder } from './platform.mjs';
 
 // claude and agents hold skills (and claude the agents as they are); gemini, qwen, opencode and codex hold agents only,
 // converted to that tool's own file (server/agentFormats.mjs, 2026-10-07)
@@ -116,7 +116,7 @@ export function isBroadFolder(dir, homeDir) {
   const homes = homeDir ? [homeDir, realPath(homeDir)].filter(Boolean) : [];
   return forms.some((f) => {
     const n = normPath(f);
-    if (isDriveRoot(f) || /^[a-z]:$/.test(n) || isSystemFolder(n)) return true;
+    if (isDriveRoot(f) || /^[a-z]:$/i.test(n) || isSystemFolder(n)) return true;
     return homes.some((h) => ['', 'Desktop', 'Documents', 'Downloads'].some((x) => n === normPath(x ? path.join(h, x) : h)));
   });
 }
@@ -162,7 +162,9 @@ export function destination(dir, kind, name, target) {
   const base = path.resolve(dir, TOOL_FOLDER[target] || '.claude');
   const group = path.join(base, kind === 'skill' ? 'skills' : 'agents');
   const dest = path.resolve(group, kind === 'skill' ? name : agentFileName(name, target));
-  const inside = dest.toLowerCase().startsWith(group.toLowerCase() + path.sep) && path.dirname(dest).toLowerCase() === group.toLowerCase();
+  // Letter case is ignored only where the file system ignores it (review 2026-10 F01: on Linux skills and Skills are two folders)
+  const fold = (s) => (PLATFORM.caseless ? s.toLowerCase() : s);
+  const inside = fold(dest).startsWith(fold(group) + path.sep) && fold(path.dirname(dest)) === fold(group);
   return { base, group, dest, inside };
 }
 

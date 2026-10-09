@@ -34,8 +34,18 @@ export const jobFileName = (f) => {
 export function publishJobText(data) {
   const serious = [...new Set(publishFindings(data).filter((f) => f.level !== 'info').map((f) => f.file))];
   const fix = serious.length ? ` ${t('pcJobFix', { files: serious.slice(0, FIX_FILES).map(jobFileName).join(', ') + (serious.length > FIX_FILES ? ', …' : '') })}` : '';
-  return `${t('pcJobText')}${fix}`;
+  const gap = publishIncomplete(data) ? ` ${t('pcJobIncomplete')}` : '';
+  return `${t('pcJobText')}${fix}${gap}`;
 }
+
+// What the walk skipped, by reason (pure; review F04). An answer from before the reasons were counted has only its
+// truncated flag.
+const SKIP_REASONS = ['large', 'deep', 'unreadable'];
+const skippedCount = (data, k) => Math.max(0, Math.floor(Number(data?.skipped?.[k]) || 0));
+// The walk did not see every file (pure): then the page never says "nothing found"
+export const publishIncomplete = (data) => data?.complete === false || data?.status === 'incomplete' || !!data?.truncated || SKIP_REASONS.some((k) => skippedCount(data, k) > 0);
+// The folder itself could not be read (pure)
+export const publishFailed = (data) => data?.ok === false || data?.status === 'failed';
 
 // The section (pure). st: { step: 'loading' | 'done' | 'error', data } or null (not asked: nothing shown)
 export function publishCheckHtml(p, st) {
@@ -44,10 +54,15 @@ export function publishCheckHtml(p, st) {
   const wrap = (inner) => `<section class="dr-sec pc" data-sec="publish" aria-labelledby="pcH">${head}${inner}</section>`;
   const close = `<button type="button" class="act-btn" data-pub-act="close">${esc(t('pcClose'))}</button>`;
   if (st.step === 'loading') return wrap(`<p class="small" role="status">${esc(t('pcLoading'))}</p>`);
-  if (st.step === 'error') return wrap(`<p class="small warn" role="status">${esc(t('pcFailed'))}</p><div class="flow-btns"><button type="button" class="act-btn" data-pub-act="again">${esc(t('pcAgain'))}</button>${close}</div>`);
+  if (st.step === 'error' || publishFailed(st.data)) return wrap(`<p class="small warn" role="status">${esc(t('pcFailed'))}</p><div class="flow-btns"><button type="button" class="act-btn" data-pub-act="again">${esc(t('pcAgain'))}</button>${close}</div>`);
   const list = publishFindings(st.data);
   const serious = list.filter((f) => f.level !== 'info').length;
-  const head2 = serious ? `<p class="small warn" role="status">${esc(t('pcFound', { count: serious }))}</p>` : `<p class="small ok" role="status">${icon('check')} ${esc(t(list.length ? 'pcOnlyInfo' : 'pcClean'))}</p>`;
+  // Review F04: "nothing found" only when every file was looked through; otherwise what was skipped, by reason
+  const partial = publishIncomplete(st.data);
+  const gapNote = `<p class="small warn"${serious ? '' : ' role="status"'}>${esc(t('pcIncomplete'))}</p>`;
+  const head2 = serious ? `<p class="small warn" role="status">${esc(t('pcFound', { count: serious }))}</p>` : partial ? gapNote : `<p class="small ok" role="status">${icon('check')} ${esc(t(list.length ? 'pcOnlyInfo' : 'pcClean'))}</p>`;
+  const reasons = SKIP_REASONS.filter((k) => skippedCount(st.data, k) > 0).map((k) => `<li>${esc(t(`pcSkipped_${k}`, { count: skippedCount(st.data, k) }))}</li>`).join('');
+  const gap = partial ? `${serious ? gapNote : ''}${reasons ? `<ul class="small muted">${reasons}</ul>` : ''}` : '';
   const rows = list
     .slice(0, SHOWN)
     .map((f) => `<li class="pc-${f.level}"><span class="pc-kind">${esc(t(`pcKind_${f.kind}`))}</span> <code translate="no">${esc(f.file)}${Number(f.line) > 0 ? `:${Number(f.line)}` : ''}</code>${typeof f.sample === 'string' && f.sample ? ` <span class="muted small">${esc(f.sample)}</span>` : ''}</li>`)
@@ -57,7 +72,7 @@ export function publishCheckHtml(p, st) {
   const cut = st.data?.truncated ? `<p class="small muted">${esc(t('pcTruncated'))}</p>` : '';
   const what = `<p class="small muted">${esc(t('pcWhat'))}</p>`;
   const btns = `<div class="flow-btns"><button type="button" class="act-btn primary" data-pub-act="write">${esc(t('pcWrite'))}</button><button type="button" class="act-btn" data-pub-act="again">${esc(t('pcAgain'))}</button>${close}</div>`;
-  return wrap(`${head2}${rows ? `<ul class="pc-list">${rows}</ul>` : ''}${more}${cut}${what}${btns}`);
+  return wrap(`${head2}${rows ? `<ul class="pc-list">${rows}</ul>` : ''}${more}${gap}${cut}${what}${btns}`);
 }
 
 // The check per project: start(projectId) asks (again), get(projectId) the state, close(projectId) hides it.

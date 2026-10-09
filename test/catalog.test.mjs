@@ -851,7 +851,9 @@ test('project memory: writes are debounced, a small lastSeenAt move is not writt
   assert.deepEqual(l.list().map((e) => [e.path, e.via]), [['C:\\d', []]]);
 });
 
-test('project memory: a folder first remembered lower-cased takes its on-disk spelling when a later report gives exactly that (written); a lower-cased or wrongly cased report never replaces it', () => {
+// Where letter case counts (Linux) a lower-cased path is another folder, not a spelling of this one (review F01:
+// test/path-case.test.mjs)
+test('project memory: a folder first remembered lower-cased takes its on-disk spelling when a later report gives exactly that (written); a lower-cased or wrongly cased report never replaces it', { skip: process.platform === 'linux' && 'case counts on Linux: two folders' }, () => {
   const hub = path.join(ROOT, 'mem-hub-5');
   initHub(hub);
   const file = path.join(hub, 'registry', 'discovered.json');

@@ -20,6 +20,7 @@ test('the entry: the program and its arguments quoted as the spec wants; an AppI
   assert.match(autostartEntry({ exe: '/tmp/.mount_x/sibersentez', args: ['--hidden'], appImage: '/home/a/Apps/SiberSentez.AppImage' }), /^Exec="\/home\/a\/Apps\/SiberSentez\.AppImage" "--hidden"$/m);
   assert.ok(autostartEntry({ exe: '/home/a/my "$x" app/run', args: [] }).includes(String.raw`Exec="/home/a/my \\"\\$x\\" app/run"`), 'escaped inside the quotes, then the backslashes doubled');
   assert.ok(autostartEntry({ exe: '/home/a/100% app/run', args: [] }).includes('Exec="/home/a/100%% app/run"'), '% is a field code');
+  assert.ok(autostartEntry({ exe: '/home/a/b\\c`d', args: [] }).includes(String.raw`Exec="/home/a/b\\\\c\\` + '`d"'), 'a backslash becomes four, a backquote takes two');
   assert.equal(autostartEntry({ exe: 'relative', args: [] }), null);
   assert.equal(autostartEntry({ exe: '/a/b', args: ['x\nExec=evil'] }), null, 'a line break never adds a line');
 });

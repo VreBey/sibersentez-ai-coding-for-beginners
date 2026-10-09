@@ -23,17 +23,26 @@ export function jobIdLine(line) {
   return m ? m[1].replace(/`+|\*\*|__/g, '').trim() : null;
 }
 
-// Ignore fenced examples. Metadata is before the first level-two heading in plans and task lists.
-export function documentJobId(text) {
+// The text with every fenced code block (its marker lines included) emptied (pure). Line count stays, so line
+// positions keep their meaning; an unclosed fence runs to the end, as in CommonMark. Templates and examples quoted in
+// a team file are never metadata, approval or tasks.
+export function blankFences(text) {
   let fence = null;
-  const ids = [];
-  for (const line of String(text || '').split(/\r?\n/)) {
+  return String(text || '').split(/\r?\n/).map((line) => {
     const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
       if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null;
-      continue;
+      return '';
     }
-    if (marker) { fence = marker[1]; continue; }
+    if (marker) { fence = marker[1]; return ''; }
+    return line;
+  }).join('\n');
+}
+
+// Ignore fenced examples. Metadata is before the first level-two heading in plans and task lists.
+export function documentJobId(text) {
+  const ids = [];
+  for (const line of blankFences(text).split('\n')) {
     if (/^ {0,3}#{2,6}[ \t]/.test(line)) break;
     const id = jobIdLine(line);
     if (id !== null) ids.push(id);

@@ -25,8 +25,10 @@ export function autostartEntry({ exe, args = [], appImage = '' }) {
   const parts = [program, ...args];
   if (!program.startsWith('/') || parts.some((p) => typeof p !== 'string' || /[\r\n\u0000]/.test(p))) return null;
   // The Desktop Entry spec: inside quotes ", `, $ and \ take a backslash; then the whole value's string escaping doubles
-  // every backslash; % is a field code, written %% (review G)
-  const quote = (p) => `"${p.replace(/(["`$\\])/g, '\\$1').replace(/\\/g, '\\\\').replace(/%/g, '%%')}"`;
+  // every backslash; % is a field code, written %% (review G). One pass, each character once (code scanning #12: two
+  // chained replacements read as double escaping): " ` $ become \\x, a backslash becomes four
+  const ESC = { '"': '\\\\"', '`': '\\\\`', $: '\\\\$', '\\': '\\\\\\\\', '%': '%%' };
+  const quote = (p) => `"${p.replace(/["`$\\%]/g, (c) => ESC[c])}"`;
   return ['[Desktop Entry]', 'Type=Application', 'Name=SiberSentez', `Exec=${parts.map(quote).join(' ')}`, 'X-GNOME-Autostart-enabled=true', 'NoDisplay=false', 'Terminal=false', ''].join('\n');
 }
 

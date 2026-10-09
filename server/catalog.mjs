@@ -34,6 +34,9 @@ export const STEP_MS = 16;
 const ID_TAIL = 48;
 // Claude Code scratchpad and task folders are never projects of their own
 const SCRATCH_MARKER = '/appdata/local/temp/claude/';
+// A path key (normPath) inside a Claude Code scratchpad: the marker in any letter case, since a key keeps its case on
+// Linux (review 2026-10 F01) and a Windows home is seen from WSL as /mnt/c/Users/<name>/AppData/...
+const isScratch = (n) => String(n).toLowerCase().includes(SCRATCH_MARKER);
 
 // The same name can live in several places: an item's primary `source` is the widest place where it is active.
 // Personal applies in every project; a library item installed into a project stays a library item (the client
@@ -188,8 +191,8 @@ export class Catalog {
   isProjectFolder(folder) {
     if (!isLocalPath(folder)) return false;
     const n = normPath(folder);
-    if (!n || n.includes(SCRATCH_MARKER)) return false;
-    if (this.isBroad(n) || /windows\/system32$/.test(n)) return false;
+    if (!n || isScratch(n)) return false;
+    if (this.isBroad(n) || /windows\/system32$/i.test(n)) return false;
     return exists(folder);
   }
 
@@ -222,7 +225,7 @@ export class Catalog {
     const ideas = new Map(); // project id -> { idea, own }
     for (const m of this.memory.list()) {
       const n = normPath(m.path);
-      if (!n || !isLocalPath(m.path) || n.includes(SCRATCH_MARKER) || this.isBroad(n) || isSystemFolder(n)) continue;
+      if (!n || !isLocalPath(m.path) || isScratch(n) || this.isBroad(n) || isSystemFolder(n)) continue;
       const pid = this.resolve(m.path, hints.get(n));
       const p = pid ? this.getProject(pid) : null;
       if (!p) continue;
@@ -295,7 +298,7 @@ export class Catalog {
         const v = k ? this.env[k] : null;
         if (typeof v !== 'string' || !/^[a-zA-Z]:[\\/]/.test(v.trim())) return [];
         const dir = v.trim();
-        return [...new Set([dir, realPath(dir)].filter(Boolean).map(normPath))].filter((n) => n && !/^[a-z]:$/.test(n));
+        return [...new Set([dir, realPath(dir)].filter(Boolean).map(normPath))].filter((n) => n && !/^[a-z]:$/i.test(n));
       };
       this.sysFolders = { trees: SYSTEM_TREE_VARS.flatMap(read), roots: ONEDRIVE_ROOT_VARS.flatMap(read) };
     }
@@ -327,9 +330,9 @@ export class Catalog {
     const home = normPath(this.homeDir);
     const why = (p) => {
       const n = normPath(p);
-      if (isDriveRoot(p) || /^[a-z]:$/.test(n)) return 'drive-root';
+      if (isDriveRoot(p) || /^[a-z]:$/i.test(n)) return 'drive-root';
       if (home && (n === home || home.startsWith(n + '/'))) return 'home';
-      if (n.includes(SCRATCH_MARKER) || this.isBroad(n) || /windows\/system32$/.test(n) || isBroadFolder(p, this.homeDir) || this.isSystemFolder(n)) return 'broad';
+      if (isScratch(n) || this.isBroad(n) || /windows\/system32$/i.test(n) || isBroadFolder(p, this.homeDir) || this.isSystemFolder(n)) return 'broad';
       // The hub, a folder inside it, or a folder that holds it (as a project it would take the hub in)
       if (this.hubDir && (within(p, this.hubDir) || within(this.hubDir, p))) return 'hub';
       if (this.claudeDir && within(p, this.claudeDir)) return 'personal';
@@ -538,8 +541,9 @@ export class Catalog {
     const s = (slug || '').toLowerCase();
     if (!best && s) best = this.projects.find((p) => p._slugs.includes(s)) || null;
     // Temporary scratchpad/tasks folders: the real project name is embedded in the path
-    const tmpMarker = '/appdata/local/temp/claude/';
-    const probe = n.includes(tmpMarker) ? n.split(tmpMarker)[1] : s.includes('-temp-claude-') ? s.split('-temp-claude-')[1] : '';
+    // (slugs are lower case: the folder name embedded in the path is looked at in lower case too)
+    const ln = n.toLowerCase();
+    const probe = ln.includes(SCRATCH_MARKER) ? ln.split(SCRATCH_MARKER)[1] : s.includes('-temp-claude-') ? s.split('-temp-claude-')[1] : '';
     if (!best && probe) {
       const embedded = probe.split('/')[0];
       // Bounded, longest match: "...-demo" does not match "...-demo2"
@@ -587,7 +591,7 @@ export class Catalog {
       this.tempRoots = temps.map(normPath).filter((t) => this.appDataRoots.some((a) => t.startsWith(a + '/')));
       this.homeKey = h ? normPath(h) : '';
     }
-    if (this.broad.has(n) || /^[a-z]:$/.test(n)) return true;
+    if (this.broad.has(n) || /^[a-z]:$/i.test(n)) return true;
     // Linux and macOS: the home folder's program folders (~/.npm, ~/.nvm, ~/.cargo...: platform.mjs) and what is below
     // them are the programs' own, as AppData is on Windows; a hidden folder of the person's own (~/.dotfiles) is not.
     // The system's own folders (/usr, /etc/nginx...) never become projects from a tool record either (review G)
@@ -608,7 +612,7 @@ export class Catalog {
     const n = p.path ? normPath(p.path) : '';
     if (!n) return null;
     this.isBroad(n); // builds the broad and temp lists
-    if (this.isSystemFolder(n) || /windows\/system32$/.test(n)) return 'broad';
+    if (this.isSystemFolder(n) || /windows\/system32$/i.test(n)) return 'broad';
     const temps = tempFolders(this.env, this.homeDir).map(normPath);
     if (temps.some((t) => n.startsWith(t + '/'))) return 'temp';
     const docs = normPath(path.join(this.homeDir, 'Documents', 'Codex'));
@@ -642,6 +646,27 @@ export class Catalog {
     const words = s[s.length - ID_TAIL - 1] === '-' ? tail : tail.slice(tail.indexOf('-') + 1);
     const hash = crypto.createHash('sha1').update(s).digest('hex').slice(0, 6);
     return `x-${words}-${hash}`;
+  }
+
+  // The id of an unregistered folder n (normPath form) whose slug is slugLower (review 2026-10 F01). The slug is lower
+  // case, as it always was, so every id stored so far (restore points, usage, job records) stays the same. Where letter
+  // case counts (Linux), two folders can share that slug (work/App and work/app): the one the project memory saw first
+  // (firstSeenAt, ties by byte order) keeps the plain id, every other one gets a short digest of its exact path after
+  // it. Decided from the memory, not from the order the folders show up in, so a restart gives each the same id; an
+  // id another listed folder already has is never given twice. A record that merged two such folders before is not
+  // split: it stays one folder's, under its old id.
+  adhocIdFor(n, slugLower) {
+    const plain = this.adhocId(slugLower);
+    if (PLATFORM.caseless) return plain;
+    const mine = this.memory.entries?.get(n);
+    const before = (k, e) => !mine || e.firstSeenAt < mine.firstSeenAt || (e.firstSeenAt === mine.firstSeenAt && k < n);
+    let taken = false;
+    for (const [k, e] of this.memory.entries || []) {
+      if (k !== n && before(k, e) && slugify(k).toLowerCase() === slugLower) taken = true;
+    }
+    for (const [k, p] of this.adhoc) if (k !== n && p.id === plain) taken = true;
+    if (!taken) return plain;
+    return `${plain}-${crypto.createHash('sha1').update(n).digest('hex').slice(0, 6)}`;
   }
 
   tmpAdhoc(embedded) {
@@ -684,9 +709,9 @@ export class Catalog {
     const raw = cwd;
     let name = path.basename(String(raw).replace(/[\\/]+$/, '')) || raw;
     if (n === normPath(this.homeDir)) name = 'Home folder';
-    if (/windows\/system32$/.test(n)) name = 'Windows';
+    if (/windows\/system32$/i.test(n)) name = 'Windows';
     // A broad/system folder is not a project: the UI does not offer "add to registry"
-    const broad = this.isBroad(n) || /windows\/system32$/.test(n);
+    const broad = this.isBroad(n) || /windows\/system32$/i.test(n);
     // If a project was opened earlier only from a temporary folder, promote it to the real path (the id stays the same)
     const slugLower = slugify(n).toLowerCase();
     const tmp = this.adhoc.get('tmp:' + slugLower);
@@ -697,7 +722,7 @@ export class Catalog {
       return tmp;
     }
     const p = {
-      id: this.adhocId(slugLower),
+      id: this.adhocIdFor(n, slugLower),
       name,
       kind: 'adhoc',
       path: cwd,
@@ -753,7 +778,7 @@ export class Catalog {
       else if (/\.md$/i.test(file) && path.basename(path.dirname(file)).toLowerCase() === 'agents') dir = path.dirname(file);
       if (!dir || dir.length > 260) continue;
       const n = normPath(dir);
-      if ((hub && (n === hub || n.startsWith(hub + '/'))) || (home && n === home) || /^[a-z]:\/?$/.test(n)) continue;
+      if ((hub && (n === hub || n.startsWith(hub + '/'))) || (home && n === home) || /^[a-z]:\/?$/i.test(n)) continue;
       return true;
     }
     return false;
@@ -789,7 +814,7 @@ export class Catalog {
   // The same rule for a bare folder (a remembered or discovered working directory)
   scanFolderOf(folder) {
     const n = normPath(folder);
-    if (!n || n === normPath(this.homeDir) || this.isBroad(n) || /windows\/system32$/.test(n)) return null;
+    if (!n || n === normPath(this.homeDir) || this.isBroad(n) || /windows\/system32$/i.test(n)) return null;
     return exists(folder) ? folder : null;
   }
 

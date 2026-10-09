@@ -2,6 +2,50 @@
 
 Open items that are known but not scheduled yet. Newest first. Each item names where it was found.
 
+## Independent review of 0.18.0 (2026-10-09)
+
+An outside review of commit 859bc2d. Its five reproduced defects (F01-F05) are fixed (after 0.18.0); what it raised besides
+them is here, with its section number.
+
+- **The app keeps no record of its own for a job's verdict** (§7.1). Plan approval, task state, review and acceptance
+  are what the AI writes into the project's Markdown; the Job-ID stops a stale review, but nothing ties a verdict to the
+  files it looked at. Wanted: a result record the app keeps (job id, a fingerprint of the source tree, reviewer mode:
+  separate agent or the same session, the commands and their exit codes, when the person accepted), and a verdict
+  shown as out of date when its files change after it.
+- **A converted agent loses its tool limits** (§7.2). `server/agentFormats.mjs` drops the tool lists when it writes an
+  agent for another tool, so a read-only scout is read-only by its text alone. Wanted: per tool and version, which
+  limits can be enforced; where they cannot, the role is labelled as instructions only; checked against the real CLI.
+- **The restore scope is not shown before a job** (§7.3, §8.3, §11). Wanted: before a risky job, what the point covers
+  (files and bytes), what it leaves out and why (lean scope, big files, logs, tool folders), so nobody counts on undoing
+  something a point does not hold. The start-up scans and the preview still read the disk synchronously.
+- **No size limit for one log line** (§7.5). `readLinesFrom()` (server/util.mjs) keeps an unfinished line however long
+  it grows and joins the carry buffer again and again; old whole-file formats are read with plain JSON helpers. Wanted:
+  byte budgets per record, per file and per scan pass; an oversized record skipped up to its next newline, with a count
+  of what was skipped.
+- **Big modules, a partial type check** (§7.6). drawer.js, electron/main.mjs, ingest.mjs, roster, githubImport and
+  workshop are each 1,200-2,200 lines; checkJs and strict are off and the lint skip list has 36 files, some of the most
+  sensitive among them. Split policy, file transfer, state changes and rendering behind small interfaces, path identity
+  and evidence types first.
+- **Costs look more exact than they are** (§7.7). A job's cost shares hourly project totals, splits shared hours
+  evenly, caps an inferred job at three hours and can include other sessions of the project. Keep "approximate API
+  equivalent" next to every figure; show whether token data exists, how sure the attribution is and the price date.
+- **The function coverage floor fails on Linux** (§9): 83.26% against 84%. CI checks coverage on Windows only. Raise
+  the Linux coverage or check it there too.
+- **Release gates** (§10, phase 2). The release build runs the tests but not the type check, lint or the packaged-app QA,
+  and third-party actions are pinned by tag. Make QA of the real installer and AppImage a condition of a release, pin
+  actions to reviewed commit SHAs, publish checksums and provenance.
+- **One support matrix** (§7.8). docs/platforms.md records a signed-in Linux job yet lists one as untried; the education
+  pilot still says Windows only. Keep one dated matrix of what is supported and tried.
+- **Plainer states in the interface** (§8). Tell apart "tool running", "working", "waiting", "reported done" and
+  "checked done"; missing logs must not look idle or finished. Show at the tool choice what each tool supports (plan
+  mode, separate reviewer, resume, sign-in check, usage). Check the whole app at 1280x720 and 1366x768, by keyboard
+  only, with a screen reader and reduced motion, in both languages.
+- **Ideas it ranked highest** (§11): an evidence card (commands, exit codes, source fingerprint, reviewer mode,
+  freshness), a beginner's acceptance guide (a short checklist from the job; the person records what they saw), a
+  project identity repair flow (relink or merge with a preview), an exportable support bundle (masked settings and
+  bounded logs, previewed before it is shared), the tested version range per AI tool, and a compact text-first
+  activity view.
+
 ## The workshop building (docs/hq.md)
 
 Until 2026-10-09 the look was designed by the user with ChatGPT/Codex; since then it is designed here (docs/theme.md).

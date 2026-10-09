@@ -52,8 +52,10 @@ test('config: a valid key is taken; an invalid one closes /api instead of openin
 test('config: the key leaves the environment once read, so programs the server starts never inherit it', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-key-env-'));
   try {
-    const code = `import(${JSON.stringify(new URL('server/config.mjs', `file:///${ROOT.replace(/\\/g, '/')}/`).href)}).then((m) => console.log(JSON.stringify({ taken: m.SESSION_KEY === ${JSON.stringify(KEY)}, left: process.env.SIBERSENTEZ_SESSION_KEY ?? null })))`;
-    const out = execFileSync(process.execPath, ['--input-type=module', '-e', code], {
+    // A fixed program; the module and the key come as arguments, never written into the code (code scanning #14)
+    const code = 'const [url, key] = process.argv.slice(1); import(url).then((m) => console.log(JSON.stringify({ taken: m.SESSION_KEY === key, left: process.env.SIBERSENTEZ_SESSION_KEY ?? null })))';
+    const url = new URL('server/config.mjs', `file:///${ROOT.replace(/\\/g, '/')}/`).href;
+    const out = execFileSync(process.execPath, ['--input-type=module', '-e', code, url, KEY], {
       env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, USERPROFILE: dir, HOME: dir, SIBERSENTEZ_HUB: path.join(dir, 'no-hub'), SIBERSENTEZ_SESSION_KEY: KEY },
       encoding: 'utf8',
       windowsHide: true,

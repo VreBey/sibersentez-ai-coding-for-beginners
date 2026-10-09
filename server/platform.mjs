@@ -177,8 +177,10 @@ export function isFsRoot(p, plat = PLATFORM) {
 // A folder of the system itself, never a project: Windows' System32; on Linux and macOS every top folder (/usr, /home,
 // /tmp...) and the folders one level below those that hold only the system's own files (/usr/bin, /etc/x, /lib/x...).
 // /srv/site, /opt/app, /var/www and /home/<name>/x stay possible project folders.
-/** @param {string} n a normPath()ed path (lower case, forward slashes) @param {Platform} [plat] */
+/** @param {string} n a normPath()ed path (forward slashes; lower case where the platform ignores case) @param {Platform} [plat] */
 export function isSystemFolder(n, plat = PLATFORM) {
+  // A key made on another platform (a test, or Linux keeping case) is read with this platform's rule
+  if (plat.caseless) n = String(n).toLowerCase();
   if (plat.windows) return /\/windows\/system32$/.test(n);
   // The root, its known top folders (an unknown one such as /app, /workspace or /data can be a project: a container)
   if (n === '/' || /^\/(usr|etc|bin|sbin|boot|dev|proc|sys|lib|lib32|lib64|libx32|run|tmp|var|opt|srv|home|root|mnt|media|snap|system|library|applications|volumes|private|cores|users)$/.test(n)) return true;

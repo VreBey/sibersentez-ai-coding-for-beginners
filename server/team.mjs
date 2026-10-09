@@ -9,7 +9,7 @@ import { isLocalPath } from './fsutil.mjs';
 import { normPath } from './util.mjs';
 import { isRealDir, hasStreamColon } from './library.mjs';
 import { readSmall } from './suggest.mjs';
-import { documentJobId, jobIdLine, validJobId, readCurrentJob, CURRENT_JOB_FILE } from './job-id.mjs';
+import { blankFences, documentJobId, jobIdLine, validJobId, readCurrentJob, CURRENT_JOB_FILE } from './job-id.mjs';
 
 const TEAM_DIR = '.sibersentez';
 // A project that has only the folder of the product's old name (renamed 2026-09-30) is read from there
@@ -22,20 +22,24 @@ const TITLE_MAX = 120;
 const clip = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/`+|\*\*|__/g, '').trim()).slice(0, TITLE_MAX).join('');
 
 // PLAN.md: its title, its size, whether the person approved it and whether they accepted the result (pure). legacy:
-// written before job identities existed (no Job-ID line at all, as opposed to a broken one).
+// written before job identities existed (no Job-ID line at all, as opposed to a broken one; a Job-ID in an example
+// still counts here, so an example never makes a plan legacy). Fenced examples never approve or accept.
 export function parsePlan(text) {
   if (typeof text !== 'string' || !text.trim()) return null;
-  const title = /^#\s*Plan:\s*(.+)$/im.exec(text)?.[1];
-  const size = /^Size:\s*(small|medium|big)\b/im.exec(text)?.[1]?.toLowerCase();
   const legacy = !text.split(/\r?\n/).some((l) => jobIdLine(l) !== null);
-  return { title: title ? clip(title) : '', size: SIZES.has(size) ? size : null, approved: /^Approved:\s*yes\b/im.test(text), accepted: /^Result:\s*accepted\b/im.test(text), jobId: documentJobId(text), legacy };
+  const body = blankFences(text);
+  const title = /^#\s*Plan:\s*(.+)$/im.exec(body)?.[1];
+  const size = /^Size:\s*(small|medium|big)\b/im.exec(body)?.[1]?.toLowerCase();
+  return { title: title ? clip(title) : '', size: SIZES.has(size) ? size : null, approved: /^Approved:\s*yes\b/im.test(body), accepted: /^Result:\s*accepted\b/im.test(body), jobId: documentJobId(text), legacy };
 }
 
 // TASKS.md: every "## T<n>: title" block with its owner and status (pure). A block without a known status is todo.
+// Example tasks in fenced code blocks are not tasks.
 export function parseTasks(text) {
   if (typeof text !== 'string') return [];
   const out = [];
   const jobId = documentJobId(text);
+  text = blankFences(text);
   const heads = [...text.matchAll(/^##\s+(T\d{1,4})\s*:\s*(.*)$/gim)];
   heads.forEach((m, i) => {
     const block = text.slice(m.index, i + 1 < heads.length ? heads[i + 1].index : text.length);

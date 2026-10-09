@@ -121,3 +121,29 @@ test('route body: unknown project 404; a broad or temp folder and a folder witho
   const r = projectTeam({ catalog, projectId: 'a' });
   assert.deepEqual([r.status, r.body.step, r.body.current.id, r.body.review.verdict], [200, 'build', 'T2', 'REVISE']);
 });
+
+// Review 2026-10 F05: a plan or task list that quotes the format in a fenced example (as the kit's own templates do)
+// must not approve, accept or add tasks; the review and Job-ID parsers already skip fences
+test('fenced examples: "Approved: yes", "Result: accepted" and example tasks inside code blocks change nothing', () => {
+  const jobId = 'J' + 'b'.repeat(32);
+  const fence = (...l) => ['```markdown', ...l, '```'].join('\n');
+  const plan = parsePlan(['# Plan: Real job', `Job-ID: ${jobId}`, 'Approved: no', 'Result: open', '', '## How approval looks', fence('Approved: yes', 'Result: accepted'), ''].join('\n'));
+  assert.deepEqual([plan.approved, plan.accepted, plan.jobId], [false, false, jobId], 'explicit no/open stays no/open');
+  assert.deepEqual([parsePlan(fence('# Plan: Example', 'Approved: yes')).approved, parsePlan('~~~\nResult: accepted\n~~~\n').accepted], [false, false]);
+  // A tilde fence holding a backtick line and an unclosed fence: still an example to the end
+  assert.equal(parsePlan('~~~\n```\nApproved: yes\n```\n~~~\n').approved, false);
+  assert.equal(parsePlan('# Plan: x\n```\nApproved: yes\n').approved, false);
+  // Outside a fence the same lines still count
+  assert.deepEqual([parsePlan('# Plan: x\n```\nexample\n```\nApproved: yes\nResult: accepted\n').approved, parsePlan('# Plan: x\n```\nexample\n```\nApproved: yes\nResult: accepted\n').accepted], [true, true]);
+  const tasks = parseTasks([`Job-ID: ${jobId}`, '', '## T1: Real task', '- status: doing', '', 'Example of a finished task:', fence('## T2: Example task', '- status: done'), ''].join('\n'));
+  assert.deepEqual(tasks.map((t) => [t.id, t.status]), [['T1', 'doing']], 'the example task is not counted');
+  // A fence inside a real task block does not change its status either
+  assert.equal(parseTasks('## T1: Real\n```\n- status: done\n```\n- status: todo\n')[0].status, 'todo');
+  // The step: an example approval and example done tasks never make the job look approved or finished
+  const p = parsePlan(['# Plan: Real job', `Job-ID: ${jobId}`, fence('Approved: yes', 'Result: accepted'), ''].join('\n'));
+  const t = parseTasks([`Job-ID: ${jobId}`, fence('## T1: Example', '- status: done'), ''].join('\n'));
+  assert.equal(teamStep({ plan: p, tasks: t, review: null }), 'plan');
+  const approve = { verdict: 'APPROVE', blockers: 0, nits: 0, tasks: [], scope: 'whole', jobId };
+  const realPlan = parsePlan(['# Plan: Real job', `Job-ID: ${jobId}`, 'Approved: yes', fence('Result: accepted'), ''].join('\n'));
+  assert.equal(teamStep({ plan: realPlan, tasks: parseTasks(`Job-ID: ${jobId}\n## T1: Real\n- status: done\n`), review: approve }), 'finish', 'an example acceptance is not the person saying yes');
+});

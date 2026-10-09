@@ -164,7 +164,7 @@ export function lintText(rel, text, { unchecked = UNCHECKED } = {}) {
     const without = codeOnly(text.slice(0, m.index) + text.slice(m.index + m[0].length));
     for (const name of importedNames(m[0])) {
       // A dot before the name is a property (x.name), unless it is a spread (...name)
-      if (!new RegExp(`(^|[^\\w$.]|\\.\\.\\.)${name.replace(/\$/g, '\\$')}(?![\\w$])`).test(without)) out.push({ rule: 'unused-import', line, text: name });
+      if (!new RegExp(`(^|[^\\w$.]|\\.\\.\\.)${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w$])`).test(without)) out.push({ rule: 'unused-import', line, text: name });
     }
   }
   // Matched in the code only, reported as written
