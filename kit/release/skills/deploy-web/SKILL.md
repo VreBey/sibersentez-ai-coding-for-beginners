@@ -4,7 +4,8 @@ description: "Puts a website or web app online: picks a host, checks the build, 
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.3.0"
+  version: "0.3.1"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "devops, web"
   sibersentez-stage: "ship"
   sibersentez-keywords-tr: "internete koy*, canlıya al*, online yap*, alan adı, domain, hosting, vercel, netlify, linki paylaş*"

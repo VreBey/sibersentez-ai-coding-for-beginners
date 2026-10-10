@@ -1,4 +1,4 @@
-// Performance baseline (docs/evidence-2026-10-08.md): starts the server on its own port with actions off, and measures
+// Performance baseline (docs/internal/evidence-2026-10-08.md): starts the server on its own port with actions off, and measures
 // how long it takes to answer, to finish the first scan of the AI tools' logs, and the snapshot's time and size. It
 // only reads the logs; the hub given is used instead of the real one. Three runs.
 // Run: node tools/perf-baseline.mjs <repo folder> <an empty hub folder>

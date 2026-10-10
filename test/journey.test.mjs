@@ -91,7 +91,15 @@ test('a beginner\'s journey: new project from an idea → a job in the app\'s te
   const catalog = new Catalog({ hubDir: hub, claudeDir, homeDir: home, adapters: [], env: {}, memory: new ProjectMemory({ hubDir: hub, debounceMs: 0 }) });
   catalog.load();
   let clock = Date.UTC(2026, 9, 8, 9, 0, 0);
-  const ingest = { sessions: new Map(), scan: { done: true } };
+  // jobCommands: the commands the job's AI ran, as ingest reads them from its log (server/jobCommands.mjs); here it says
+  // which job it was asked about, so the answer is seen to carry it for the right job. jobReviewers: the job's reviewer
+  // agents (server/jobReviewers.mjs), with the REVIEW.md time it was asked with
+  const ingest = {
+    sessions: new Map(),
+    scan: { done: true },
+    jobCommands: (id) => ({ ran: 2, ok: 2, failed: 0, notRun: 0, noEnd: 0, unknownTools: [], failures: [], failedLines: 0, askedFor: id }),
+    jobReviewers: (id, opts) => ({ agents: 1, types: ['reviewer'], said: 'APPROVE', saidAt: 1, lastAt: 1, unknownTools: [], askedFor: id, before: opts?.before ?? null }),
+  };
   const server = http.createServer();
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
@@ -101,7 +109,7 @@ test('a beginner\'s journey: new project from an idea → a job in the app\'s te
     let id = 0;
     return (msg) => channel.handle({ sibersentez: 'shell-call', id: ++id, ...msg });
   })();
-  server.on('request', createHandler({ ingest, catalog, clients: new Set(), port, publicDir: PUBLIC_DIR, actions, tools: detector }));
+  server.on('request', createHandler({ ingest, catalog, clients: new Set(), port, publicDir: PUBLIC_DIR, actions, tools: detector, jobResultTtl: 0 }));
   const page = { Origin: `http://127.0.0.1:${port}`, 'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json', 'X-SiberSentez-Token': actions.token };
   const post = (body) => {
     clock += 5000; // past the repeat guard
@@ -135,6 +143,10 @@ test('a beginner\'s journey: new project from an idea → a job in the app\'s te
     assert.deepEqual(tree(dir, { notes: true }), [], 'a new, empty folder');
     let team = await get(`/api/projects/${projectId}/team`);
     assert.equal(team.json.step, 'none', 'no job yet');
+    // Before the job: what the copy its start takes would hold (docs/restore.md §12), nothing copied yet
+    const scope = await get(`/api/projects/${projectId}/restore-scope`);
+    assert.equal(scope.status, 200);
+    assert.deepEqual([scope.json.ok, scope.json.scope, scope.json.files, scope.json.leftOut], [true, 'full', 0, 0], JSON.stringify(scope.json));
 
     // ---- 2. The job starts in the app's own terminal: a copy of the project first, the job's message, its marker
     const started = await post({ action: 'start-ai', projectId, tool: 'claude', job: 'Kafe için menü ve iletişim sayfası yap', inDock: true });
@@ -188,6 +200,32 @@ test('a beginner\'s journey: new project from an idea → a job in the app\'s te
     team_('PLAN.md', `# Plan: Kafe sayfası\nJob-ID: ${jobId}\nSize: small\nApproved: yes\nResult: accepted\n`);
     team = await get(`/api/projects/${projectId}/team`);
     assert.equal(team.json.step, 'done');
+    // The app's own record (docs/internal/evidence-card-plan.md E1): the verdict as the app saw it, the files then, the
+    // acceptance seen; the record is written after the /team answer, so it is asked until it is there
+    const jobResult = async () => {
+      for (let i = 0; i < 40; i++) {
+        const r = await get(`/api/projects/${projectId}/job-result?job=${jobId}`);
+        if (r.json.record?.acceptedSeenAt) return r;
+        await new Promise((ok) => setTimeout(ok, 50));
+        await get(`/api/projects/${projectId}/team`);
+      }
+      return get(`/api/projects/${projectId}/job-result?job=${jobId}`);
+    };
+    const seen = await jobResult();
+    assert.equal(seen.status, 200);
+    assert.deepEqual([seen.json.record.verdict.value, seen.json.record.tree.files, seen.json.fresh], ['APPROVE', 1, 'same'], seen.text);
+    assert.ok(seen.json.record.acceptedSeenAt >= seen.json.record.verdict.seenAt);
+    assert.deepEqual([seen.json.commands?.ran, seen.json.commands?.askedFor], [2, jobId], 'the answer carries the job\'s commands');
+    // The reviewer agents: asked for the job with REVIEW.md's time, and kept in the record when the verdict was seen
+    assert.deepEqual([seen.json.reviewers?.askedFor, seen.json.reviewers?.before], [jobId, seen.json.record.verdict.reviewAt]);
+    assert.deepEqual([seen.json.record.reviewers?.agents, seen.json.record.reviewers?.said], [1, 'APPROVE'], 'kept with the verdict');
+    // The page changed after the verdict, with no new review: the verdict is about an earlier state. The record stays as
+    // the app saw it; nothing of the change is put down to the review
+    touch(path.join(dir, 'index.html'), '<!doctype html><title>Kafe</title><h1>Menü</h1><p>Çay 25 TL</p><footer>İletişim</footer>\n');
+    const later = await get(`/api/projects/${projectId}/job-result?job=${jobId}`);
+    assert.deepEqual([later.json.fresh, later.json.writtenSince, later.json.record.verdict.seenAt], ['changed', 1, seen.json.record.verdict.seenAt], later.text);
+    team = await get(`/api/projects/${projectId}/team`);
+    assert.equal(team.json.step, 'done', 'still accepted: the app says the files changed, it does not undo the acceptance');
 
     // ---- 5. Going back: refused while the tool still runs, then a preview and the return to before the job
     const restore = (await get(`/api/projects/${projectId}/restore`)).json;

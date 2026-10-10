@@ -1,3 +1,4 @@
+// @ts-check
 // Projects tab: a card per project with "what is going on now / what finished last"
 import { store } from '../store.js';
 import { esc, ago, num, tok, projectColor, agentColor, modelName, dayTime, actionLine, locale, shownDescription, replaceHtml, projectKindText, projectNames } from '../format.js';
@@ -43,7 +44,7 @@ export function fitBadgeHtml(projectId, count) {
 // time, each answer cached (ttl; a failure is tried again after failTtl). A fit the drawer loaded is taken as it is
 // (note), without a request. fetchFit(id) resolves to the fit or rejects; eligible(id) says whether a project can
 // have a fit worth asking for; onChange(id) runs when a badge number changed. Pure apart from the injected calls.
-export function createFitBadges({ fetchFit, eligible = () => true, onChange = () => {}, now = () => Date.now(), ttl = 5 * 60 * 1000, failTtl = 60 * 1000 } = {}) {
+export function createFitBadges({ fetchFit = undefined, eligible = (_id) => /** @type {boolean} */ (true), onChange = (_id) => {}, now = () => Date.now(), ttl = 5 * 60 * 1000, failTtl = 60 * 1000 } = {}) {
   const cache = new Map(); // id -> { at, ok, count }
   let queue = [];
   let inflight = null;
@@ -165,7 +166,7 @@ export function newProjectOutcome(reply, nameOf = (id) => id, { made = false, wi
 // One picker at a time. The server lists the new project before it answers; the page may still be a moment behind, so
 // it waits up to waitMs for the project, then loads the list again once. Resolves 'opened' | 'cancelled' | 'failed' |
 // 'busy' | 'unavailable'.
-export function createNewProjectFlow({ bridge, toast = () => {}, openProject = () => {}, hasProject = () => true, refresh = async () => {}, nameOf = (id) => id, ask = null, wait = (ms) => new Promise((r) => setTimeout(r, ms)), waitMs = 4000, stepMs = 150 } = {}) {
+export function createNewProjectFlow({ bridge = undefined, toast = (_msg) => {}, openProject = (_projectId, _idea) => {}, hasProject = (_id) => /** @type {boolean} */ (true), refresh = async () => {}, nameOf = (id) => id, ask = null, wait = (ms) => new Promise((r) => setTimeout(r, ms)), waitMs = 4000, stepMs = 150 } = {}) {
   let busy = false;
   async function until(id, ms) {
     for (let waited = 0; !hasProject(id) && waited < ms; waited += stepMs) await wait(stepMs);
@@ -343,7 +344,7 @@ export function createProjectsView(root, openDrawer, { onNewProject = () => {} }
     typeof IntersectionObserver === 'function'
       ? new IntersectionObserver((entries) => {
           for (const e of entries) {
-            const id = e.target.dataset.project;
+            const id = /** @type {HTMLElement} */ (e.target).dataset.project;
             if (e.isIntersecting) visible.add(id);
             else visible.delete(id);
           }
@@ -461,13 +462,13 @@ export function createProjectsView(root, openDrawer, { onNewProject = () => {} }
   function render() {
     const startHtml = store.loaded && startCardVisible(store.projects, startHidden) ? startCardHtml() : '';
     if (startEl._html !== startHtml) {
-      const back = startEl.contains(document.activeElement) ? document.activeElement.dataset?.startFk : null;
+      const back = startEl.contains(document.activeElement) ? /** @type {HTMLElement} */ (document.activeElement).dataset?.startFk : null;
       startEl._html = startHtml;
       startEl.innerHTML = startHtml;
       if (back) startEl.querySelector(`[data-start-fk="${back}"]`)?.focus({ preventScroll: true });
     }
     renderSort();
-    const multi = multiTool(store.tools, store.projects.values());
+    const multi = multiTool(store.tools, [...store.projects.values()]);
     shownNames = projectNames([...store.projects.values()]);
     const toolHtml = multi ? toolSelectHtml(toolOptions([...store.projects.values()], store.tools), tool, t('tvAllTools')) : '';
     if (toolEl._html !== toolHtml) {

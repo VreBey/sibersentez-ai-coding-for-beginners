@@ -1,5 +1,8 @@
 # Unity game prototype: reference
 
+Contents: PlayerController.cs (2D, Input System) · .gitignore for the Unity project folder · Checks without the editor window
+· Common errors · Next steps that stay small · Sound · Saving and loading · A simple menu · Making a build (Windows)
+
 Paths assume the Unity project lives in `Game/` inside the project folder.
 
 ## PlayerController.cs (2D, Input System)
@@ -22,10 +25,7 @@ public class PlayerController : MonoBehaviour
     float moveInput;
     bool jumpQueued;
 
-    void Awake()
-    {
-        body = GetComponent<Rigidbody2D>();
-    }
+    void Awake() => body = GetComponent<Rigidbody2D>();
 
     // Input is read every frame
     void Update()

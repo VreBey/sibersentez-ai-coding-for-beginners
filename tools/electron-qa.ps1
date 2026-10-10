@@ -222,7 +222,7 @@ try {
   $R.first_instance_notified = Strip (Wait-Log $from 'second launch: ' 10)
   $R.second_instance_logged = [bool](Wait-Log $from 'another SiberSentez is already running' 5)
   # Idle memory (plan D5): the server ready, nothing happening for 20 s; every process of the app (main, page, GPU,
-  # server). The ceiling only catches a leak; the numbers go next to the last ones in docs/evidence-*.md
+  # server). The ceiling only catches a leak; the numbers go next to the last ones in docs/internal/evidence-*.md
   Start-Sleep -Seconds 20
   $mem = @(App-Processes | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
   $R.idle_processes = $mem.Count
@@ -312,7 +312,7 @@ try {
   $entry = if ($disc) { $disc.projects | Where-Object { $_.path -eq $ProjectDir } | Select-Object -First 1 } else { $null }
   $R.run6_discovered_entry = $entry
   Check 'run 6: exit code 0' ($R.run6_exit_code -eq 0)
-  Check 'probe: window.sibersentezShell has exactly its ten functions' ($P6['bridge'] -eq 'createIdeaProject:function,openLogs:function,pickLibraryFolder:function,pickProjectFolder:function,reportError:function,saveProjectIdea:function,setActionsMode:function,setAttention:function,setLanguage:function,setTheme:function')
+  Check 'probe: window.sibersentezShell has exactly its twelve functions' ($P6['bridge'] -eq 'createIdeaProject:function,openLogs:function,pickLibraryFolder:function,pickProjectFolder:function,reportError:function,saveProjectIdea:function,saveSupport:function,setActionsMode:function,setAttention:function,setLanguage:function,setTheme:function,supportParts:function')
   # The expected counts come from the kit's own catalog, so a bigger kit needs no edit here
   $kitCat = Get-Content (Join-Path $PSScriptRoot '..\kit\catalog.json') -Raw -Encoding UTF8 | ConvertFrom-Json
   $kitSkills = @($kitCat.items | Where-Object { $_.kind -eq 'skill' }).Count

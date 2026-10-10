@@ -1,3 +1,4 @@
+// @ts-check
 // Diagnostics (docs/shell.md, "Diagnostics"): the text Settings copies for a problem report. It says which SiberSentez,
 // which Windows and which AI tools, and what the setup check found, so whoever helps does not have to ask. It holds
 // no folder path, no user name, no project name and no account: only versions and fixed words. diagnosticsText is
@@ -45,7 +46,7 @@ export function diagnosticsText({ about = null, tools = null, mode = 'off', lang
 
 // Asks the server for the versions and the tools (a fresh check is not forced: the last one is at most five minutes
 // old). deps: { fetch, loadTools, toolsState }. Never throws: a part that fails is left out of the text.
-export async function collectDiagnostics({ fetch = (...a) => globalThis.fetch(...a), loadTools, toolsState } = {}) {
+export async function collectDiagnostics({ fetch = (input, init) => globalThis.fetch(input, init), loadTools = undefined, toolsState = undefined } = {}) {
   let about = null;
   try {
     const res = await fetch('/api/about', { cache: 'no-store', credentials: 'same-origin' });

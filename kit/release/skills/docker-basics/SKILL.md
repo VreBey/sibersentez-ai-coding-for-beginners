@@ -4,7 +4,8 @@ description: "Puts a project in a container: a first Dockerfile and a compose fi
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "devops"
   sibersentez-stage: "ship"
   sibersentez-keywords-tr: "docker*, dockerfile, konteyner*, compose, container, docker compose, imaj*, her yerde aynı çalışsın"

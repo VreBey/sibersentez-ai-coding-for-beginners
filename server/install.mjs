@@ -195,7 +195,7 @@ const isKitItem = (it) => it?.origin === KIT_SOURCE;
 // kit-changed (update from a newer kit copy), up-to-date, modified, project-owned, not-in-library (neither in the
 // library nor in the kit), reparse-point, outside-project, too-large, too-many-files, too-many-folders, too-deep. A
 // library or kit item is measured before it is hashed; one over the limits is never hashed. kit: see findSourceItem.
-export function planInstall({ project, dir, items, targets, library, installs, limits = LIMITS, kit }) {
+export function planInstall({ project, dir, items, targets, library, installs, limits = LIMITS, kit = undefined }) {
   const plan = [];
   const hashes = new Map();
   for (const it of items) {
@@ -270,7 +270,7 @@ export function planInstall({ project, dir, items, targets, library, installs, l
 // even when the old copy could not be deleted (contract §3.7). rows: every row of the record file (readInstalls),
 // rewritten with the changes so unusable rows are kept. removeTree: see placeCopy.
 // Returns { copied, updated, recordError }.
-export function executeInstall({ plan, project, hubDir, installs, rows = installs, now = Date.now, limits = LIMITS, removeTree }) {
+export function executeInstall({ plan, project, hubDir, installs, rows = installs, now = Date.now, limits = LIMITS, removeTree = undefined }) {
   const records = rows.slice();
   let copied = 0;
   let updated = 0;
@@ -409,7 +409,7 @@ export function trialName(projectId, now) {
 // Trial plan: the session-only plugin folder <hub>/trials/<name>/ with skills/<name>/ and agents/<name>.md copies
 // (from the library, or from the kit: see findSourceItem). Other tools of the project get a skip entry: trials start
 // Claude Code only. Returns { dir, plan }.
-export function planTrial({ hubDir, projectId, items, library, via = [], now = Date.now(), limits = LIMITS, kit }) {
+export function planTrial({ hubDir, projectId, items, library, via = [], now = Date.now(), limits = LIMITS, kit = undefined }) {
   const trials = path.join(hubDir, 'trials');
   const name = trialName(projectId, now);
   let dir = path.join(trials, name);

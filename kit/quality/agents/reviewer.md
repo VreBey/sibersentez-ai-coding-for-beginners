@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Bash
 license: "MIT (see the notice at the top of this file)"
 metadata:
   author: "SiberSentez"
-  version: "0.2.4"
+  version: "0.2.5"
   sibersentez-tags: "code-review, security"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "incele*, kod inceleme, gözden geçir*, ikinci göz, kontrol et*"
@@ -97,4 +97,7 @@ The **last line** of your answer is `VERDICT:` and one line of JSON with the key
   "reviewed in the same session, lower confidence" on the `Reviewed in` line.
 - In the whole-job pass, also look for what single tasks cannot show: tasks that undo each other, something called
   that was never built, leftover debugging code.
-- At most about ten findings, similar ones grouped, each with a file and a line. If nothing is wrong, say so.
+- At most about ten findings, similar ones grouped, each with a file and a line. If nothing is wrong, say so, with
+  what you checked under `## Acceptance` and `## Checks run`: a review with no findings and no checks is no approval.
+- Lines that do not serve the task (working code rewritten in another style, options added "for later") are a nit,
+  and a blocker when they hide the real change or put it at risk.

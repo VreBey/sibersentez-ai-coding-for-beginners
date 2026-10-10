@@ -1,3 +1,4 @@
+// @ts-check
 // Live usage tracking (docs/usage.md): tokens in and out of every Claude Code message and their API-equivalent cost,
 // per hour, project and model, kept in a ledger that survives restarts and the deletion of old logs.
 //
@@ -200,6 +201,7 @@ export class UsageLedger {
     this.archive = { hours: new Map(), days: new Map() }; // from the file: hour -> pid -> model -> cell; day -> ...
     this.fresh = new Map(); // counted from the logs in this run: hour -> pid -> model -> cell
     this.keys = new Map(); // message key -> { h, pid, cell, v: [5 largest values] }
+    this.joins = new Map(); // a moved project's new folder id -> { to, untilHour (null: for good) } (setJoins)
     this.version = 0;
     this.state = 'ready'; // 'scanning' while the logs of the horizon are still being read (server/index.mjs)
     this.scanInfo = { done: 0, total: 0 };
@@ -232,7 +234,10 @@ export class UsageLedger {
     let rec = this.keys.get(key);
     let changed = false;
     if (!rec) {
-      const pid = typeof projectId === 'string' ? projectId : '';
+      let pid = typeof projectId === 'string' ? projectId : '';
+      // A joined folder id (setJoins): its hours are booked under the kept project
+      const j = this.joins.get(pid);
+      if (j && (j.untilHour === null || h <= j.untilHour)) pid = j.to;
       rec = { h, pid, cell: this.freshCell(h, pid, typeof model === 'string' && model ? model : 'unknown'), v: [0, 0, 0, 0, 0] };
       this.keys.set(key, rec);
       rec.cell[MSG]++;
@@ -255,6 +260,7 @@ export class UsageLedger {
 
   // An assistant line from the log reader (server/ingest.mjs). fileKey names the log file (used only for a message
   // without a requestId); projectId is the project the reader gave the session.
+  /** @param {any} o @param {{ fileKey?: string, projectId?: string | null }} [options] */
   line(o, { fileKey, projectId } = {}) {
     const m = o?.message;
     if (!m || !m.usage || !m.id) return false;
@@ -295,6 +301,7 @@ export class UsageLedger {
   // Report of one period (GET /api/usage): totals, per project (without projectId), per model, per local day for
   // the last DAILY_DAYS days, the price table date and the models without a price.
   // nameOf(projectId) -> the project's name or null.
+  /** @param {string} period @param {{ projectId?: string | null, nameOf?: (id: string) => string | null }} [options] */
   report(period, { projectId = null, nameOf = () => null } = {}) {
     const now = this.now();
     const r = periodRange(period, now);
@@ -310,7 +317,10 @@ export class UsageLedger {
       }
     }
     const totals = totalsOf(all);
-    const noList = ({ unpriced, ...t }) => t;
+    const noList = (x) => {
+      const { unpriced, ...t } = /** @type {ReturnType<typeof totalsOf>} */ (x);
+      return t;
+    };
     const models = [...all]
       .map(([model, c]) => ({ model, priced: !!priceOf(model), ...noList(totalsOf(new Map([[model, c]]))) }))
       .sort((a, b) => b.usd - a.usd || b.processed - a.processed || a.model.localeCompare(b.model));
@@ -453,6 +463,97 @@ export class UsageLedger {
     }
   }
 
+  // The joins of moved projects (relinks.mjs; catalog.ledgerJoins): [{ from, to, until (ms, or null: for good) }].
+  // What is booked under from joins to now (joinProject), and what comes later is booked under to (add). An undone
+  // link keeps its join until the time it was undone: those hours stay with the kept project, so the logs, which book
+  // them under the folder's own id again, never count them twice. Returns true when a number moved.
+  setJoins(list) {
+    this.joins = new Map();
+    for (const j of Array.isArray(list) ? list : []) {
+      if (!j?.from || !j.to || j.from === j.to) continue;
+      this.joins.set(j.from, { to: j.to, untilHour: Number.isFinite(j.until) ? Math.floor(j.until / HOUR) : null });
+    }
+    let moved = false;
+    for (const [from, j] of this.joins) if (this.joinProject(from, j.to, { untilHour: j.untilHour })) moved = true;
+    return moved;
+  }
+
+  // A moved project linked to its new folder (relinks.mjs): the hours the new folder was booked under its own id
+  // (from) become hours of the kept project (to), up to untilHour (null: all), in the file's side and in this run's
+  // counts. A message is booked under one project only (its key), so the two rows of one hour are different messages:
+  // added up, each as the merged view counts it (cells: the side with more messages), so an hour whose logs are gone
+  // for one project and not for the other loses nothing. Idempotent (from has nothing left there the second time).
+  joinProject(from, to, { untilHour = null } = {}) {
+    if (!from || !to || from === to) return false;
+    const upTo = (h) => untilHour === null || h <= untilHour;
+    let moved = false;
+    const winner = (h, pid) => {
+      const am = this.archive.hours.get(h)?.get(pid);
+      const fm = this.fresh.get(h)?.get(pid);
+      return !am ? fm : !fm ? am : msgsOf(am) > msgsOf(fm) ? am : fm;
+    };
+    // The file's hours: the kept project's merged hour plus the folder's merged hour, so the file's side wins (more
+    // messages than the two log sides added up below, or as many with the same numbers)
+    const hours = new Set();
+    for (const [h, pm] of this.archive.hours) if (pm.has(from) && upTo(h)) hours.add(h);
+    for (const [h, pm] of this.fresh) if (pm.has(from) && upTo(h)) hours.add(h);
+    for (const h of hours) {
+      const sum = new Map();
+      for (const pid of [to, from]) {
+        const w = winner(h, pid);
+        if (w) addModels(sum, w);
+      }
+      let a = this.archive.hours.get(h);
+      if (!a) this.archive.hours.set(h, (a = new Map()));
+      a.set(to, sum);
+      a.delete(from);
+      moved = true;
+    }
+    for (const [day, pm] of this.archive.days) {
+      const fm = pm.get(from);
+      if (!fm || !upTo(Math.floor(Date.parse(`${day}T23:59:59`) / HOUR))) continue;
+      let into = pm.get(to);
+      if (!into) pm.set(to, (into = new Map()));
+      addModels(into, fm);
+      pm.delete(from);
+      moved = true;
+    }
+    // This run's counts: a message's record points at its cell (add), so the cells themselves move; where the kept
+    // project already has the model's cell in that hour, the counts are added there and the records follow
+    const follow = new Map(); // old cell -> the cell it went into
+    for (const [h, pm] of this.fresh) {
+      if (!upTo(h)) continue;
+      const fm = pm.get(from);
+      if (!fm) continue;
+      const into = pm.get(to);
+      if (!into) pm.set(to, fm);
+      else {
+        for (const [m, c] of fm) {
+          const t = into.get(m);
+          if (!t) into.set(m, c);
+          else {
+            for (let i = 0; i < CELL; i++) t[i] += c[i];
+            follow.set(c, t);
+          }
+        }
+      }
+      pm.delete(from);
+      moved = true;
+    }
+    for (const rec of this.keys.values()) {
+      if (rec.pid === from && upTo(rec.h)) rec.pid = to;
+      const t = follow.get(rec.cell);
+      if (t) rec.cell = t;
+    }
+    if (moved) {
+      this.version++;
+      this.touched.add(from);
+      this.touched.add(to);
+      this.touch();
+    }
+    return moved;
+  }
+
   mergeHourIntoArchive(h, pm) {
     let a = this.archive.hours.get(h);
     if (!a) this.archive.hours.set(h, (a = new Map()));
@@ -537,6 +638,7 @@ export class UsageLedger {
       const dir = path.dirname(this.file);
       const head = `${path.basename(broken)}-`;
       // Oldest first: by the stamp, then by its number (-10 after -9)
+      /** @returns {[string, number]} */
       const order = (n) => {
         const m = /^(.*?)(?:-(\d+))?$/.exec(n.slice(head.length));
         return [m[1], Number(m[2] || 0)];

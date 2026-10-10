@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setLanguage, STRINGS } from '../public/js/i18n.js';
-import { nextFor, NEXT_KEYS, jobSectionHtml, teamSectionHtml, jobNowText, stepsHtml, aiIdleIn, teamInstalled, teamUpdates, createJob, preferredTool, jobKeys, giveJob, TEAM_KEYS, TEAM_ITEMS, JOB_MAX, KEYS_MAX } from '../public/js/views/job.js';
+import { nextFor, NEXT_KEYS, jobSectionHtml, teamSectionHtml, jobNowText, stepsHtml, aiIdleIn, aiStateIn, NOT_KNOWN_RECENT_MS, teamInstalled, teamUpdates, createJob, preferredTool, jobKeys, giveJob, TEAM_KEYS, TEAM_ITEMS, JOB_MAX, KEYS_MAX } from '../public/js/views/job.js';
 import { jobOf } from '../public/js/hq-live.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -16,12 +16,21 @@ const P = { id: 'demo', name: 'Demo', path: 'C:\\p\\demo', exists: true };
 const TOOLS = { status: 'ready', tools: [{ id: 'claude', name: 'Claude Code', installed: true, ready: 'yes' }, { id: 'codex', name: 'Codex CLI', installed: true, ready: 'yes' }] };
 const NONE = { status: 'ready', tools: [] };
 
-test('section: one question, one box, one Start with the chosen tool; disabled when actions are off; the text is kept and escaped', () => {
+test('section: one question, one box, one Start with the chosen tool; disabled when actions are off; the text is kept and escaped', async () => {
   const live = jobSectionHtml(P, null, { mode: 'live', tools: TOOLS, text: '<b>giriş</b> "sayfası"' });
   assert.equal((live.match(/data-job-act="start"/g) || []).length, 1, 'one Start (docs/simplify.md)');
   assert.ok(live.includes('data-job-tool="claude"'), 'Claude Code when nothing was chosen');
   assert.ok(live.includes(S.jobAsk) && live.includes(S.jobGoWith.replace('{tool}', 'Claude Code')));
   assert.ok(!live.includes('aria-disabled'), 'live: enabled');
+  // "It shows you its plan first" only for a tool that starts a job in its plan mode (ui-states-plan U2)
+  const codexOnly = { status: 'ready', tools: [{ id: 'codex', name: 'Codex CLI', installed: true, ready: 'yes', planNow: false }] };
+  const noPlan = jobSectionHtml(P, null, { mode: 'live', tools: codexOnly });
+  assert.ok(noPlan.includes(S.jobGoWithNoPlan.replaceAll('{tool}', 'Codex CLI')), noPlan);
+  assert.ok(!noPlan.includes('It shows you its plan first'));
+  assert.ok(jobSectionHtml(P, null, { mode: 'live', tools: codexOnly, noCopy: true }).includes(S.jobGoWithNoCopyNoPlan.replaceAll('{tool}', 'Codex CLI')));
+  const { settingsHtml } = await import('../public/js/views/settings.js');
+  const set = settingsHtml({ tools: [{ id: 'codex', name: 'Codex CLI', caps: { plan: 'no', resume: 'yes', live: 'no', usage: 'yes', signIn: 'yes', observe: 'no' } }], tool: 'codex' });
+  assert.match(set, /plan mode: no.*live status: no.*commands and reviewer agents in the result: no/s, 'what the chosen tool supports, where it is chosen');
   // A textarea now (several lines, review U06): the text inside it, escaped
   assert.ok(live.includes('>&lt;b&gt;giriş&lt;/b&gt; &quot;sayfası&quot;</textarea>'), 'the text is escaped');
   assert.ok(live.includes('<textarea') && live.includes('rows="3"'));
@@ -159,6 +168,36 @@ test('progress: the four steps with the current one marked, and one plain senten
   assert.equal(aiIdleIn({ sessions: [{ projectId: 'q', live: true }, { projectId: 'p', live: false }], projectId: 'p', dock: [{ projectId: 'q' }] }), true, 'others work elsewhere');
   assert.equal(aiIdleIn({ sessions: [], projectId: 'p', dock: [{ projectId: 'p', tool: 'claude' }] }), false, 'an AI tab runs in the terminal');
   assert.equal(aiIdleIn({ sessions: [], projectId: null }), false);
+  // A tool without a live state (Codex, Gemini...): a session of it that wrote lately makes it not known, never idle
+  // (docs/internal/ui-states-plan.md U1); a quiet one long ago does not
+  const now = 10 * 3600000;
+  assert.equal(aiIdleIn({ sessions: [{ projectId: 'p', tool: 'codex', live: null, lastAt: now - 5 * 60000 }], projectId: 'p', now }), false, 'Codex wrote 5 minutes ago: not known');
+  assert.equal(aiIdleIn({ sessions: [{ projectId: 'p', tool: 'codex', live: null, lastAt: now - NOT_KNOWN_RECENT_MS - 1 }], projectId: 'p', now }), true);
+  assert.equal(aiIdleIn({ sessions: [{ projectId: 'p', live: null, lastAt: now - 60000 }], projectId: 'p', now }), true, 'Claude Code says itself when it is closed');
+  // With no AI at work, no task is said to be worked on (the job box said "Working on T2" after the tool had closed)
+  assert.equal(jobNowText(d, { idle: true }), 'No AI is working on this job now. 1 of 3 tasks done; next: T2 Implement.');
+  assert.equal(jobNowText({ ...d, current: null }, { idle: true }), 'No AI is working on this job now. 1 of 3 tasks done.');
+  assert.equal(jobNowText({ ...d, current: { ...d.current, status: 'blocked' } }, { idle: true }), 'T2 Implement is stuck, and no AI is working on it now.', 'stuck, and nobody on it');
+  // Problems found: fixed only while an AI works (review U1-U3: the build step said both "no AI" and "being fixed")
+  const revise = { ...d, review: { verdict: 'REVISE', blockers: 2 } };
+  assert.equal(jobNowText(revise, { idle: true }), 'No AI is working on this job now. 1 of 3 tasks done; next: T2 Implement. The check found 2 problems; no AI is fixing them now.');
+  assert.equal(jobNowText({ step: 'check', tasks: d.tasks, review: { verdict: 'REVISE', blockers: 2 } }, { idle: true }), S.jobNowReviseIdle.replace('{count}', '2'));
+  // Not known (a tool without a live state wrote lately): no sentence says the AI works, nor that none does
+  for (const [data, key] of [[d, 'jobNowBuildUnknown'], [{ step: 'check', tasks: d.tasks }, 'jobNowCheckUnknown'], [{ step: 'plan', plan: null }, 'jobNowPlanUnknown']]) {
+    const text = jobNowText(data, { unknown: true });
+    assert.equal(text, S[key].replace('{done}', '1').replace('{total}', '3').replace('{task}', 'T2 Implement'), key);
+    assert.doesNotMatch(text, /Working on|^The AI is writing|No AI is working/);
+  }
+  assert.ok(stepsHtml(d, { unknown: true }).includes('is not known'), 'the steps pass it on');
+  // An approved plan being cut into tasks, and a stuck task: neither claims an AI at work when none is, or it is not known
+  assert.equal(jobNowText({ step: 'plan', plan: { approved: true } }, { idle: true }), S.jobNowPlanSlicingIdle);
+  assert.equal(jobNowText({ step: 'plan', plan: { approved: true } }, { unknown: true }), S.jobNowPlanSlicingUnknown);
+  assert.equal(jobNowText({ ...d, current: { ...d.current, status: 'blocked' } }, { unknown: true }), S.jobNowBlockedUnknown.replace('{task}', 'T2 Implement'));
+  // The three-way state: running agents of a closed lead are work; a recent Codex session is not known
+  assert.equal(aiStateIn({ sessions: [{ projectId: 'p', live: null, runningAgents: 1 }], projectId: 'p' }), 'busy');
+  assert.equal(aiStateIn({ sessions: [{ projectId: 'p', tool: 'codex', lastAt: now - 60000 }], projectId: 'p', now }), 'unknown');
+  assert.equal(aiStateIn({ sessions: [], projectId: 'p' }), 'idle');
+  assert.equal(jobNowText({ step: 'check', tasks: d.tasks }, { idle: true }), S.jobNowCheckIdle);
   // The person accepted the result: every step ticked, none current
   const doneData = { step: 'done', plan: { title: 'x', approved: true, accepted: true }, tasks: d.tasks, current: null, review: { verdict: 'APPROVE', blockers: 0, nits: 0 } };
   assert.equal(jobNowText(doneData), S.jobNowDone);
@@ -166,6 +205,12 @@ test('progress: the four steps with the current one marked, and one plain senten
   assert.equal((doneHtml.match(/<li class="done"/g) || []).length, 4);
   assert.ok(!doneHtml.includes('aria-current'));
   assert.ok(!jobSectionHtml(P, { step: 'none' }, { mode: 'live', tools: TOOLS }).includes('job-steps'), 'no job yet: no bar');
+  // The tools could not be checked: said so, with the way to the tools panel; never "no tool yet, install one" (the
+  // error words were never reached: found by the type check, 2026-10-10)
+  const failed = jobSectionHtml(P, null, { mode: 'live', tools: { status: 'error', tools: [] } });
+  assert.match(failed, /The AI tools could not be checked/);
+  assert.ok(!failed.includes(S.jobNoTool), 'not "no tool yet"');
+  assert.ok(failed.includes('data-ai-act="tools"'), 'the way to the tools panel');
 });
 
 test('cache: asked once per ttl, the answer redraws; the typed text is cut at the limit', async () => {
@@ -198,7 +243,7 @@ test('every team key names an item of the SiberSentez kit; the drawer leads with
   const more = drawer.indexOf('<details class="dr-more"');
   const fit = drawer.indexOf('${fitSection(p)}');
   assert.ok(job > 0 && rest > job && late > rest && more > late && fit > more, 'the job (after the result while it waits), the restore points, then Details with the skills inside');
-  assert.ok(drawer.includes("const resultFirst = job.get(p.id).data?.step === 'finish';") && drawer.includes('asNew: resultFirst, idle: aiIdleIn('), 'the result first only while it waits (review U07)');
+  assert.ok(drawer.includes("const resultFirst = job.get(p.id).data?.step === 'finish';") && drawer.includes('asNew: resultFirst, ...aiNow(p.id),'), 'the result first only while it waits (review U07)');
   assert.ok(drawer.includes('giveJob(p, text, { mode, tools: toolsState(), fetchFit: fetchFitFor, runAction, runMenuItem, openDrawer: open, toast })'), 'Start: the shared path');
   const jobSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'views', 'job.js'), 'utf8');
   assert.ok(jobSrc.includes("payload: { projectId: p.id, tool: tool.id, job }"), 'the job rides in the request');

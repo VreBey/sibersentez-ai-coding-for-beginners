@@ -1,5 +1,8 @@
 # Landing page starter: reference
 
+Contents: Folder · index.html skeleton · style.css skeleton (phone first) · Forms · Checks before publishing ·
+Problems
+
 Checked 2026-09-30 (revisit every six months): the `serve` preview tool, https://github.com/vercel/serve ; HTML and CSS
 basics, https://developer.mozilla.org/en-US/docs/Learn_web_development . If a command fails, read the tool's page.
 

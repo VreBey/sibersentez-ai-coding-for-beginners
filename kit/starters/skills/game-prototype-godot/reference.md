@@ -1,5 +1,8 @@
 # Godot game prototype: reference
 
+Contents: player.gd (2D movement and jump) · .gitignore (if the project dialog did not write one) · Checks without the
+editor window · Common errors · Next steps that stay small
+
 Paths assume the Godot project lives in `Game/` inside the project folder. Written for Godot 4; check
 https://docs.godotengine.org/ for the current names if something is not found. Indent GDScript with tabs.
 
@@ -69,6 +72,9 @@ $godot = "C:\Tools\Godot\Godot_v4.x-stable_win64_console.exe"
 & $godot --headless --path "C:\path\to\project\Game" --quit
 $LASTEXITCODE
 ```
+
+On macOS and Linux the same in a terminal: `"/path/to/Godot" --headless --path "/path/to/project/Game" --quit`, then
+`echo $?` (0 means it loaded without errors).
 
 The project loads and quits; script errors are printed in the terminal. Exit code 0 means it loaded. `--help` lists the
 options of the version in use: read it before relying on a flag. The window itself is for the user to look at.

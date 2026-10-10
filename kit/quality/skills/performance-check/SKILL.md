@@ -4,7 +4,7 @@ description: "Makes something faster without guessing: states what feels slow, m
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
   sibersentez-tags: "performance"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "yavaş*, çok yavaş, performans*, hızlandır*, geç açılıyor, takılıyor, donuyor, optimizasyon*, bellek şişiyor"
@@ -37,10 +37,10 @@ Pick a way to measure and use the same one every time. Run the action five times
 | What is slow | Ways to measure |
 |---|---|
 | A web page | browser developer tools: the Network list (what loads, how big, how long) and the Performance panel |
-| A command or script | `Measure-Command { <command> }` in PowerShell, or timing lines printed by the program itself |
+| A command or script | `Measure-Command { <command> }` in PowerShell, `time <command>` on macOS and Linux, or timing lines printed by the program itself |
 | A database query | the database's own explain output, and the time of the call in code |
 | An API route | time of the call (`curl.exe -w` with timing variables, or the route's own log) |
-| Memory growth | the task manager or the language's profiler, watched while repeating the action |
+| Memory growth | the task manager (or `top` on macOS and Linux) or the language's profiler, watched while repeating the action |
 | A game | the engine's profiler and the frames per second counter |
 
 Write the table of baseline numbers down in the conversation (and in a notes file if the user wants). Use a realistic

@@ -1,3 +1,4 @@
+// @ts-check
 // Context menu.
 // 1) menuModel(): which items for which target: a pure function without the DOM, tested in node.
 // 2) createContextMenu(): the accessible DOM menu (role="menu", up/down, Home/End, Enter/Space, Esc,
@@ -12,6 +13,7 @@ import { t, tOs, language, pagePlatformNow } from './i18n.js';
 import { sessionTool, sessionToolName, canContinueTool } from './jobId.js';
 // "Start with AI" items, their notice, and asking for the tools on first need (docs/ai-start.md)
 import { aiStartMenuItems, aiStartToast, needTools } from './views/tools.js';
+import { q, qAll, activeEl, up } from './dom.js';
 
 // Server actions the context menu sends itself (contract §5). The skill flow items of the menu ("Suggested skills…",
 // "Install into a project…") send nothing: they open the drawer section where the flow runs (docs/skills-flow.md §5).
@@ -210,6 +212,7 @@ function projectMenu(id, d, mode, on) {
   if (!p) return tidy([header(t('shCmProjectNotFound'), '', mode), { id: 'open', label: t('shCmOpenDetail'), icon: 'detail', open: { type: 'project', id } }]);
   const folderOk = !!p.path && p.exists !== false;
   const note = p.broad ? t('shCmBroad') : !folderOk ? t('shCmFolderMissing') : null;
+  /** @type {any[]} */
   const items = [header(p.name, p.path || kindLabel(p.kind) || '', mode, note, !!p.path)];
   if (on && !p.broad && folderOk) {
     // "Start with <tool>" for each AI tool found (docs/ai-start.md), then the AI-agnostic plain terminal;
@@ -239,6 +242,7 @@ function sessionMenu(id, d, mode, on) {
   const tail = [SEP(), { id: 'copy-id', label: t('shCmCopyId'), icon: 'copy', copy: String(id) }, { id: 'open', label: t('shCmOpenDetail'), icon: 'detail', open: { type: 'session', id } }];
   if (!s) return tidy([header(t('shCmSession'), String(id).slice(0, 8), mode), ...tail]);
   const p = get(d.projects, s.projectId);
+  /** @type {any[]} */
   const items = [header(clip(sessionTitle(s), 60), p?.name || '', mode, s.cwd ? null : t('shCmSessionNoFolder'))];
   if (on && sessionActionable(s)) {
     items.push(...[].concat(continueItem(s, 'session')));
@@ -256,6 +260,7 @@ function agentMenu(id, d, mode, on) {
   if (!a) return tidy([header(t('shCmAgent'), '', mode), open]);
   const p = get(d.projects, a.projectId);
   const s = get(d.sessions, a.sessionId);
+  /** @type {any[]} */
   const items = [header(clip(a.label || a.type, 60), [a.type, p?.name].filter(Boolean).join(' · '), mode)];
   if (on && sessionActionable(s)) items.push(...[].concat(continueItem(s, 'agent')));
   items.push(SEP(), open);
@@ -266,6 +271,7 @@ function rosterMenu(id, d, mode, on) {
   const r = values(d.roster).find((x) => x && x.id === id);
   const open = { id: 'open', label: t('shCmOpenDetail'), icon: 'detail', open: { type: 'roster', id } };
   if (!r) return tidy([header(t('shCmRosterItem'), '', mode), open]);
+  /** @type {any[]} */
   const items = [header(r.name, [rosterKindLabel(r.kind), r.category].filter(Boolean).join(' · '), mode)];
   // Same rule as the drawer's "Install into a project" section: a library skill or agent the server accepts
   if (on && libraryInstallable(r)) {
@@ -574,6 +580,7 @@ function focusableScope(el) {
 // What a menu item does: copy, open details, the skill flow, or a server action.
 // ctx = { openDrawer, openSkills, toast }. A flow item opens its drawer section (openSkills maps a project to
 // "Suggested skills" and a roster item to "Install into a project") and sends nothing.
+/** @param {any} it @param {{ openDrawer?: any, openSkills?: any, toast?: any, target?: any }} [options] */
 export async function runMenuItem(it, { openDrawer, openSkills, toast } = {}) {
   if (!it || it.disabled || it.sep || it.header) return;
   if (it.copy != null) return copyText(it.copy, it.id === 'copy-id' ? t('shCmCopiedId') : t('shCmCopiedPath'), toast);
@@ -612,14 +619,14 @@ async function copyText(text, title, toast) {
 }
 
 // { openDrawer(target), openSkills(target), toast({tone,title,body,code}), getData() → store, qa }
-export function createContextMenu({ openDrawer, openSkills, toast, getData, qa = false } = {}) {
+export function createContextMenu({ openDrawer = undefined, openSkills = undefined, toast = undefined, getData = undefined, qa = false } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'ctx-menu';
   wrap.hidden = true;
   wrap.innerHTML = `<div class="cm-head" id="cmHead"></div><div class="cm-list" role="menu" id="cmList" aria-labelledby="cmHead" tabindex="-1"></div>`;
   document.body.appendChild(wrap);
   const headEl = wrap.querySelector('.cm-head');
-  const list = wrap.querySelector('.cm-list');
+  const list = q(wrap, '.cm-list');
   let model = [];
   let target = null;
   let returnFocus = null;
@@ -627,7 +634,7 @@ export function createContextMenu({ openDrawer, openSkills, toast, getData, qa =
   let returnTag = null;
   let returnScope = null;
 
-  const buttons = () => [...list.querySelectorAll('[role=menuitem]')];
+  const buttons = () => qAll(list, '[role=menuitem]');
   const enabled = (b) => b && b.getAttribute('aria-disabled') !== 'true';
 
   function render() {
@@ -726,7 +733,7 @@ export function createContextMenu({ openDrawer, openSkills, toast, getData, qa =
   function typeahead(ch) {
     const btns = buttons();
     if (!btns.length) return;
-    const cur = btns.indexOf(document.activeElement);
+    const cur = btns.indexOf(activeEl());
     const c = ch.toLocaleLowerCase(loc());
     for (let k = 1; k <= btns.length; k++) {
       const b = btns[(cur + k) % btns.length];
@@ -734,9 +741,9 @@ export function createContextMenu({ openDrawer, openSkills, toast, getData, qa =
     }
   }
 
-  wrap.addEventListener('keydown', (e) => {
+  wrap.addEventListener('keydown', (/** @type {KeyboardEvent} */ e) => {
     const btns = buttons();
-    const cur = btns.indexOf(document.activeElement);
+    const cur = btns.indexOf(activeEl());
     switch (e.key) {
       case 'ArrowDown':
       case 'ArrowUp':
@@ -766,12 +773,12 @@ export function createContextMenu({ openDrawer, openSkills, toast, getData, qa =
     e.stopPropagation();
   });
   list.addEventListener('click', (e) => {
-    const b = e.target.closest('[role=menuitem]');
+    const b = up(e.target, '[role=menuitem]');
     if (b) activate(b);
   });
   // The item under the mouse takes focus: keyboard and mouse share the same highlight
   list.addEventListener('pointermove', (e) => {
-    const b = e.target.closest('[role=menuitem]');
+    const b = up(e.target, '[role=menuitem]');
     if (b && document.activeElement !== b) b.focus({ preventScroll: true });
   });
   wrap.addEventListener('contextmenu', (e) => e.preventDefault());

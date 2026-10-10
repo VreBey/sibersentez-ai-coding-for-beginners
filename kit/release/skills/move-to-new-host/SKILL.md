@@ -4,7 +4,8 @@ description: "Moves a running site or web app to another host without losing dat
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
+  sibersentez-checked: "2026-10-05"
   sibersentez-tags: "devops, web"
   sibersentez-stage: "ship"
   sibersentez-keywords-tr: "hosting değiştir*, sunucu değiştir*, siteyi taşı*, sunucu taşı*, sunucuyu taşı*, hostinge taşı*, başka hostinge, vps kapat*, vds kapat*"

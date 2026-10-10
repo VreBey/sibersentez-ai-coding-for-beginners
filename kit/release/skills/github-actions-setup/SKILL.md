@@ -4,7 +4,8 @@ description: "Sets up a first automatic check on GitHub: a workflow file that in
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.2.1"
+  version: "0.2.2"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "devops, git"
   sibersentez-stage: "ship"
   sibersentez-keywords-tr: "github actions, ci, otomatik test*, her push, testler otomatik, sürekli entegrasyon, yeşil tik"

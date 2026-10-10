@@ -1,3 +1,4 @@
+// @ts-check
 // The full tour (2026-10-05): SiberSentez from the first click to the result, on an example. A box at the bottom of the
 // window explains one step at a time while the real screen shows it: the element in question is highlighted, the job
 // box gets an example job typed into it, and the Building plays its own example (hq-scene.js createDemo) held at the
@@ -49,7 +50,7 @@ export function tourStepHtml(i) {
 }
 
 // scene(step): sets the page up for a step (main.js); end(): puts everything back. Keys: → ← move, Esc ends.
-export function createTour({ scene = () => {}, end = () => {}, doc = document } = {}) {
+export function createTour({ scene = (_step) => {}, end = () => {}, doc = document } = {}) {
   const root = doc.createElement('div');
   root.className = 'tour-wrap';
   root.hidden = true;
@@ -64,7 +65,7 @@ export function createTour({ scene = () => {}, end = () => {}, doc = document } 
     spot?.classList.remove('guide-spot');
     spot = null;
     const sel = TOUR_STEPS[step].target;
-    const el = sel ? doc.querySelector(sel) : null;
+    const el = /** @type {HTMLElement | null} */ (sel ? doc.querySelector(sel) : null);
     if (el && !el.hidden && el.offsetParent !== null) {
       spot = el;
       el.classList.add('guide-spot');
@@ -81,7 +82,7 @@ export function createTour({ scene = () => {}, end = () => {}, doc = document } 
     }
     // The scene may have drawn the element first (the Building's tab): highlight after it
     setTimeout(highlight, 60);
-    box.querySelector(focusSel)?.focus({ preventScroll: true });
+    /** @type {HTMLElement | null} */ (box.querySelector(focusSel))?.focus({ preventScroll: true });
   }
 
   function show(at = 0) {
@@ -116,14 +117,14 @@ export function createTour({ scene = () => {}, end = () => {}, doc = document } 
     render(d < 0 ? '[data-tour="back"], .guide-next' : '.guide-next');
   }
 
-  box.addEventListener('click', (e) => {
+  box.addEventListener('click', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.tour === 'next') move(1);
     else if (b.dataset.tour === 'back') move(-1);
     else if (b.dataset.tour === 'close') hide();
   });
-  box.addEventListener('keydown', (e) => {
+  box.addEventListener('keydown', (/** @type {KeyboardEvent} */ e) => {
     e.stopPropagation();
     if (e.key === 'Escape') {
       e.preventDefault();

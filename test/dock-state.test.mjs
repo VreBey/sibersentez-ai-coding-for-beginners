@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { isRunningAi, pickRunningTab, toolEndedEvent, takeEarlyToolEnd, tabResumeSession, EARLY_MAX, RECENT_MS } from '../public/js/dockState.js';
+import { isRunningAi, tabState, pickRunningTab, toolEndedEvent, takeEarlyToolEnd, tabResumeSession, EARLY_MAX, RECENT_MS } from '../public/js/dockState.js';
 import { escapeClosesDrawer, tabTitle } from '../public/js/terminalDock.js';
 
 const tab = (projectId, over = {}) => ({ ai: true, projectId, tool: 'codex', ended: false, toolEnded: false, ...over });
@@ -158,4 +158,24 @@ test('the shell prompt is seen when the screen ends with a cursor move (it reads
   assert.equal(atPrompt('PS C:\p>\n'), true);
   assert.equal(atPrompt('PS C:\p> \n  \n'), true);
   assert.equal(atPrompt('PS C:\p> npm run dev\n'), false);
+});
+
+test('a tab says its state in words, not by its dot\'s color alone; an open AI tool is "open", never "working" (ui-states U3)', async () => {
+  assert.equal(tabState(tab('p')), 'ai');
+  assert.equal(tabState(tab('p', { asks: true })), 'asks');
+  assert.equal(tabState(tab('p', { toolEnded: true, asks: true })), 'toolEnded', 'a question of a tool that ended is gone');
+  assert.equal(tabState(tab('p', { ended: true, toolEnded: true })), 'ended');
+  assert.equal(tabState({ ai: false, ended: false }), 'shell');
+  assert.equal(tabState(null), 'shell');
+  const { STRINGS } = await import('../public/js/i18n.js');
+  for (const lang of ['en', 'tr']) for (const st of ['ai', 'asks', 'toolEnded', 'ended', 'shell']) assert.ok(STRINGS[lang][`dockSt_${st}`], `${lang} dockSt_${st}`);
+  assert.doesNotMatch(STRINGS.en.dockSt_ai, /work/i);
+  const src = fs.readFileSync(new URL('../public/js/terminalDock.js', import.meta.url), 'utf8');
+  assert.ok(src.includes('<span class="sr-only td-state"></span>'), 'read with the tab\'s name');
+  assert.equal((src.match(/paintState\(x\);/g) || []).length, 4, 'painted when the tab opens, asks, its tool ends and it ends');
+});
+
+test('a plain shell whose screen asks says so in words too (review U1-U3)', () => {
+  assert.equal(tabState({ ai: false, asks: true }), 'asks');
+  assert.equal(tabState({ ai: false, asks: true, ended: true }), 'ended');
 });

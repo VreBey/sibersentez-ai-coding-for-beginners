@@ -3,13 +3,23 @@
 SiberSentez was built on Windows. Plan G made the code ready for Linux and, experimentally, macOS; since 0.18.0 the
 Linux AppImage is released next to the Windows installer. This page says what differs, where the rules live, and what has really been tried.
 
-## Status
+## Support matrix (as of 2026-10-10)
 
-| | Windows 10/11 | Linux | macOS |
+The one place that says what is supported and what has really been tried (independent review of 0.18.0 §7.8); other
+documents point here. "Tried" names what was done and when; a row with no date was not tried.
+
+| | Windows 10/11 (x64) | Linux (x86_64) | macOS |
 |---|---|---|---|
-| Released | yes (installer) | yes, since 0.18.0 (AppImage; tried on Ubuntu in WSL, below) | no: experimental, CI only (the owner has no Mac) |
-| Package | NSIS installer | AppImage (x64) | dmg (arm64, x64), unsigned |
+| Supported | yes | yes, since 0.18.0 | no: experimental, not released (the owner has no Mac) |
+| Package | NSIS installer, for the user only, unsigned | AppImage, nothing to install, unsigned | dmg (arm64, x64), unsigned, CI only |
 | AI tool starts in | SiberSentez's own terminal, or Windows Terminal | SiberSentez's own terminal only | SiberSentez's own terminal only |
+| Test suite | every push (CI) and on the owner's computer | every push (CI, Ubuntu); Ubuntu 26.04 in WSL 2, 2026-10-09 | every push (CI), a failure allowed |
+| Packaged app, hidden checks | every release (`tools/electron-qa.ps1`) | Ubuntu in WSL 2, 2026-10-09 (`tools/linux-qa.sh`); the Packaged QA workflow | never |
+| Used by hand in the window | on the owner's own computer, where it is built | WSLg, a fresh hub, 2026-10-09 (below) | never |
+| A real job end to end, signed in | Claude Code, 2026-10-08 (docs/internal/evidence-2026-10-08.md) | Claude Code 2.1.295, 2026-10-09 (below) | never |
+| Other AI tools | found and their logs read by the app; their agent formats checked with the installed CLI (Gemini CLI 0.63, OpenCode 1.18.35, Qwen Code 0.25, Codex 0.160), 2026-10-09; a start and a whole job with them not recorded | install commands from their docs, 2026-10-09; never signed in | never |
+| Install, upgrade, uninstall on a clean system | Windows Sandbox, 0.16.0 to 0.17.0-rc.1, 2026-10-08 | not tried (an AppImage is one file) | never |
+| Desktop parts: tray, notifications, start at login | yes | written for it; not tried on a real desktop (WSLg has none) | never |
 
 ## One place for the differences: `server/platform.mjs`
 
@@ -90,8 +100,8 @@ On Ubuntu 26.04 in WSL 2 (WSLg for the window), Node.js 24.18.0, node-pty built 
   in English; and "Open the result" selected the lead's card below the fold, under the terminal, so it seemed to do
   nothing (now scrolled into sight, its first action focused).
 
-Not tried yet: a real Linux desktop (GNOME, KDE) with its tray, notifications and "start at login"; a real AI tool
-signed in on Linux.
+Not tried yet: a real Linux desktop (GNOME, KDE) with its tray, notifications and "start at login" (WSLg has none of
+them); AI tools other than Claude Code signed in on Linux.
 
 ## Known limits
 

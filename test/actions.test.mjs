@@ -569,6 +569,8 @@ test('the page and the server agree on every action and on the fields each one m
       pointId: 'R20260930120000abcd',
       planId: '0123456789abcdef',
       open: 'index.html',
+      folder: DIR_B,
+      from: 'beta',
     })[k];
   const universe = [...new Set(Object.values(CLIENT_ACTION_FIELDS).flat())];
   const refused = (r) => r.status === 400 && /^(unexpected-field|beklenmeyen alan)/.test(String(r.json?.error));

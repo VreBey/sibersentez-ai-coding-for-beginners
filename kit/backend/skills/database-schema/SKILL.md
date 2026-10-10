@@ -4,7 +4,8 @@ description: "Designs the tables a small project needs: what each table holds, h
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "database, backend"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "veritabanı tasarla*, veri modeli, veritabanı*, tablo*, sqlite, migration*, şema tasarla*, kayıtları sakla*"

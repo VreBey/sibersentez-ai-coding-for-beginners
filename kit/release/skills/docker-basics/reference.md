@@ -1,6 +1,9 @@
 # Docker basics: reference
 
-Checked 2026-10-01 (revisit every six months). Official pages: https://docs.docker.com/get-started/ ,
+Contents: Example A: a Node.js app that listens on port 3000 · Example B: a Python app that listens on port 8000 ·
+.dockerignore · compose.yaml · The commands · Common problems · Every line, explained
+
+Checked 2026-10-09 (revisit every six months). Official pages: https://docs.docker.com/get-started/ ,
 https://docs.docker.com/reference/dockerfile/ and https://docs.docker.com/compose/ . Image names and versions
 change: look up the current long-term-support tag of the runtime image on its official page and use that, not the
 numbers written here. These files were written from the documentation; read what the build prints.
@@ -11,7 +14,7 @@ numbers written here. These files were written from the documentation; read what
 
 ```dockerfile
 # Starting layer: a small Node.js image with a pinned version (check the current LTS tag)
-FROM node:22-alpine
+FROM node:24-alpine
 
 # Everything below happens in /app inside the container
 WORKDIR /app

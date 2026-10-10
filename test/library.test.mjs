@@ -12,6 +12,7 @@ import { createHandler } from '../server/app.mjs';
 import { PUBLIC_DIR } from '../server/config.mjs';
 import { initHub } from '../server/hub.mjs';
 import { Catalog } from '../server/catalog.mjs';
+import { readFrontmatter as readFrontmatterForTest } from '../server/util.mjs';
 import { CATEGORIES, CATEGORY_KEYWORDS, LIMITS, OVER_LIMIT, LEFTOVER_RE, listLibrary, libraryItems, isLegacyHub, scanSource, checkSource, proposeCategory, planImport, executeImport, normRel, validName, treeHash, measureTree, sizeProblem, placeCopy, realPath, writeCatalog } from '../server/library.mjs';
 import { sweepLeftovers } from '../server/install.mjs';
 import { WIN_ONLY } from './lib/winonly.mjs';
@@ -160,6 +161,52 @@ test('scan: skills (folders with SKILL.md, taken whole) and agents (*.md in an a
   const long = path.join(ROOT, 'src-long');
   write(path.join(long, 'skills', 'l', 'SKILL.md'), fm('l', 'x'.repeat(900)));
   assert.equal(scanSource(long, { hubDir: h }).items[0].description.length, 400);
+});
+
+test('scan: agents kept in topic folders (engineering/, testing/) are found by their name, description and an agent key; a display name becomes a slug the library keeps (2026-10-09)', () => {
+  // The layout of large public agent collections: one folder per topic, the agent files right in it, display names
+  const s = path.join(ROOT, 'src-divisions');
+  const agent = (name, description) => `---\nname: ${name}\ndescription: ${description}\ncolor: slate\n---\n\n# ${name}\n\nWork carefully.\n`;
+  write(path.join(s, 'engineering', 'engineering-minimal-change-engineer.md'), agent('Minimal Change Engineer', 'Smallest diff that solves the task'));
+  write(path.join(s, 'engineering', 'engineering-sre.md'), agent('SRE', 'Keeps the service up'));
+  write(path.join(s, 'testing', 'testing-reality-checker.md'), agent('Reality Checker', 'Asks for evidence before approval'));
+  write(path.join(s, 'testing', 'device.md'), agent('con', 'A device name as its name'));
+  // Not agents: no frontmatter, a name without a description, a note with a name and a description but no agent key,
+  // slash commands kept in a folder not named commands (two of them), project documents, commands and rules
+  write(path.join(s, 'strategy', 'playbook.md'), '# Phase 0\n\nDiscovery.\n');
+  write(path.join(s, 'notes', 'lone.md'), '---\nname: lone-note\ndescription: One file with a name and no agent key is a note\n---\n\nbody\n');
+  write(path.join(s, 'tools', 'catalog', 'search.md'), '---\nname: search\ndescription: "Search the catalog. Use when the user wants to find one."\n---\n\nSearch.\n');
+  write(path.join(s, 'tools', 'catalog', 'fetch.md'), '---\nname: fetch\ndescription: "Fetch one entry. Use when the user wants one."\n---\n\nFetch.\n');
+  // A lone agent in its own folder counts: it carries an agent key
+  write(path.join(s, 'game-development', 'blender', 'blender-addon.md'), '---\nname: Blender Add-on Builder\ndescription: Builds Blender add-ons\ntools: Read, Write\n---\n\nBuild it.\n');
+  write(path.join(s, 'notes', 'half.md'), '---\nname: half\n---\n\nbody\n');
+  write(path.join(s, 'README.md'), agent('readme-agent', 'A README is never an agent'));
+  write(path.join(s, 'engineering', 'CONTRIBUTING.md'), agent('contrib', 'Neither is a contributing guide'));
+  write(path.join(s, 'commands', 'deploy.md'), agent('deploy', 'A slash command, not an agent'));
+  write(path.join(s, 'rules', 'style.md'), agent('style', 'An editor rule, not an agent'));
+  const h = hub();
+  const r = scanSource(s, { hubDir: h, homeDir: HOME });
+  const p = byPath(r.items);
+  assert.deepEqual(Object.keys(p).sort(), ['engineering/engineering-minimal-change-engineer.md', 'engineering/engineering-sre.md', 'game-development/blender/blender-addon.md', 'testing/device.md', 'testing/testing-reality-checker.md']);
+  assert.equal(p['game-development/blender/blender-addon.md'].name, 'blender-add-on-builder');
+  assert.equal(p['engineering/engineering-sre.md'].name, 'SRE', 'a name the hub takes is kept as written');
+  assert.equal(p['engineering/engineering-minimal-change-engineer.md'].kind, 'agent');
+  assert.equal(p['engineering/engineering-minimal-change-engineer.md'].name, 'minimal-change-engineer', 'the display name as a slug');
+  assert.deepEqual(p['engineering/engineering-minimal-change-engineer.md'].problems, []);
+  assert.equal(p['testing/testing-reality-checker.md'].name, 'reality-checker');
+  assert.equal(p['testing/device.md'].name, 'device', 'a name no slug can save: the file name');
+  // A skill keeps the Agent Skills rule: its name is its identity, a display name is still a bad name
+  write(path.join(s, 'skills', 'spaced', 'SKILL.md'), fm('Spaced Skill'));
+  assert.deepEqual(byPath(scanSource(s, { hubDir: h, homeDir: HOME }).items)['skills/spaced'].problems, ['bad-name']);
+  // The library reads an imported agent under the same name, so it can be installed and compared later
+  write(path.join(h, 'library', 'general', 'agents', 'minimal-change-engineer.md'), agent('Minimal Change Engineer', 'Smallest diff that solves the task'));
+  const lib = listLibrary(h).find((x) => x.kind === 'agent' && x.name === 'minimal-change-engineer');
+  assert.ok(lib, 'listed under the slug');
+  assert.equal(byPath(scanSource(s, { hubDir: h, homeDir: HOME }).items)['engineering/engineering-minimal-change-engineer.md'].status, 'same');
+  // Two library agents that come to the same name: the first in byte order keeps it, the other is listed under its file name
+  write(path.join(h, 'library', 'general', 'agents', 'other-file.md'), agent('Minimal-Change Engineer', 'Another agent with a near name'));
+  const twins = listLibrary(h).filter((x) => x.kind === 'agent').map((x) => `${x.name} <- ${path.basename(x.path)}`).sort();
+  assert.deepEqual(twins, ['minimal-change-engineer <- minimal-change-engineer.md', 'other-file <- other-file.md']);
 });
 
 test('import: .git and node_modules (at any depth, any letter case) are never copied into the library; the scan measures and compares only what is copied', () => {
@@ -812,4 +859,18 @@ test('library-adopt over HTTP: by kind and name only; dry plans, live copies fro
   } finally {
     await live.close();
   }
+});
+
+test('scan: past the candidate limit no more agent files are read (a folder of thousands of Markdown files is not read whole)', () => {
+  const s = path.join(ROOT, 'src-many-agents');
+  for (let i = 0; i < 12; i++) write(path.join(s, 'topic', `a${String(i).padStart(2, '0')}.md`), `---\nname: a${i}\ndescription: d\ntools: Read\n---\n\nx\n`);
+  let reads = 0;
+  const counting = (file) => {
+    reads++;
+    return readFrontmatterForTest(file);
+  };
+  const r = scanSource(s, { hubDir: hub(), homeDir: HOME, limits: { ...LIMITS, maxCandidates: 3 }, frontmatter: counting });
+  assert.equal(r.truncated, true);
+  assert.equal(r.items.length, 3);
+  assert.ok(reads <= 4, `read ${reads} files`);
 });

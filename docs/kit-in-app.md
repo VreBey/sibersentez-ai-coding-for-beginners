@@ -111,3 +111,75 @@ Competitors keep the requests behind a project. The team moves a finished job's 
 `jobHistory`: newest first by the date prefix, at most 10, real folders only, any letter in the name, each read like the
 current job: plan title or the folder's words, date, task count, accepted, last verdict). The drawer folds them under
 the job box as "Earlier jobs (N)". Read only.
+
+## Try it before you accept (2026-10-10)
+
+When the job is finished, the result card adds "Try it yourself" (`public/js/acceptGuide.js`): the plan's "Done when"
+points (`PLAN.md`; a Turkish heading is read too), or one general point ("Open the result and try what you asked
+for") when the plan lists none. The person marks each one "Works" or "Not as asked" after trying it; the marks are kept
+in this browser only (per project and job), never sent and never written into the project, and the app does not check
+them. "Ask for a change about these" puts the points marked "Not as asked" into a change request (cut to the AI tab's
+draft limit) in the AI's terminal tab, or in the job box when no tab takes it; the person reads it and sends it.
+Tests: `test/accept-guide.test.mjs`.
+
+## The app's own record of a result (2026-10-09, independent review §7.1)
+
+What the steps above read is what the AI writes. Next to it the app keeps what it saw itself
+(`server/jobResults.mjs`, plan: `docs/internal/evidence-card-plan.md`):
+
+- In the hub, `restore/<project key>/job-results.json` (never in the project): `{ version: 1, jobs }`, per Job-ID,
+  newest first, at most 20, written whole and renamed, only known fields of this version read back. A record: the
+  whole-job verdict of the plan's job (`APPROVE` or `REVISE`, blockers, nits), when REVIEW.md was last written
+  (`reviewAt`) and when the app first saw the verdict (`seenAt`); the project's files at that moment (`tree`: count,
+  bytes, scope, a quick fingerprint of paths, sizes, write and change times, a content fingerprint, and
+  `writtenAfterReview`: files written after REVIEW.md, so before the app looked; or why no fingerprint could be taken);
+  the reviewer agents the app's log reading saw then (`reviewers`, below); and when the app first saw the job accepted
+  (`acceptedSeenAt`).
+- Taken after a `/team` answer is sent (the drawer and the building ask every 8 s per project), and only when the
+  answer holds the plan's job's whole verdict or its acceptance and the team's files changed since the last look (an
+  in-memory signature with `updatedAt`): no disk work on the other polls. A new verdict is another value or count, or
+  REVIEW.md written again (a new round with the same counts). A look that could not finish (the record not written,
+  a file locked) is tried again after a minute. "Seen" is when the app looked, not when the AI wrote: with no window
+  open the app sees it later, which `writtenAfterReview` covers.
+- The fingerprint covers the files a restore point would hold (same skips and limits, lean over them) without the
+  team's notes (`.sibersentez/`, `.orkestra/`): skipped folders such as `node_modules` and build output at the top, a
+  lean scan's big files and logs, links and unreadable folders are not compared (`restore.mjs treeFingerprint`).
+- "Written since" counts files whose write or change time is later (a copy keeping its old write time, a renamed file)
+  and every folder the scan entered whose time is later, an emptied one too (a deletion or a rename away). It is
+  cautious: a new top-level folder such as `node_modules`, or a cache a test run leaves (`__pycache__`), moves a
+  folder's time too, which makes the answer unknown, never a wrong "same". REVIEW.md's write time
+  stands for the moment of the review, so a REVIEW.md saved again without a new review moves it. On FAT32 and exFAT
+  there is no change time and write times have a 2 s grain, so these checks are weaker there.
+- `GET /api/projects/<id>/job-result?job=<Job-ID>` (read-only): the record and `fresh`: `same` (nothing written; no
+  file read), `same-content` (written since, same content), `changed` (`writtenSince`) or `unknown` with a `reason`
+  (`no-record`, `written-before-seen`, `no-review-time`, `unreadable`, `folder`, or the scan's problem such as
+  `too-large`). The change time is in the quick fingerprint, so a file rewritten with its size and write time set back
+  is caught without reading every file; the content decides whenever the quick one differs, and a `changed` or
+  `same-content` answer is kept with the quick fingerprint it was found with, so nothing is read again until more is
+  written. The comparison is kept 15 s per record; the record in the answer is always read fresh.
+- The same answer carries two things read from the AI's own log, in memory, never stored as text (the job's sessions are
+  the ones whose first prompt names its Job-ID, with their sub-agents):
+  - `commands` (`server/jobCommands.mjs`): the Bash and PowerShell calls of the job's Claude Code sessions and how each
+    ended, read from its tool result (Claude Code 2.1.283-2.1.296): `ok` (no error, an exit code Claude Code reads as
+    fine included), `failed` with its code ("Exit code N"), `notRun` (refused, blocked, could not start), `noEnd`
+    (stopped, or run in the background with no end seen; a background end comes in a `<task-notification>` with the
+    same tool-use id), and up to five failed command lines, newest first. A line is named by its program and, for a few
+    well-known programs, a plain sub-command (`npm test`, `git push`; no argument, no path, no environment value); "a
+    later run ended without an error" is said only of the very same line in the same folder (a hash kept in memory) and
+    never of a line joined by `;`, `||`, `|` or `&`. A call copied into a resumed or forked session counts once.
+  - `reviewers` (`server/jobReviewers.mjs`): the job's sub-agents whose type reviews (`reviewer`, `*-reviewer`,
+    `security-auditor`), and the verdict the newest of their own answers gave on the whole job (only under a
+    `## Review: whole job` heading, read as REVIEW.md is, and not one naming another Job-ID) before REVIEW.md was
+    written. It is kept in the record when the verdict is seen (not while the app's first log scan still runs; a later
+    look fills it), so it still shows once the log is out of the app's window (14 days by default).
+  Other tools' logs are not read for these: the answer says which tools are not known (never "0 commands").
+- The drawer's result card (`public/js/jobResult.js`) shows, under "Checks", the reviewer's own words first (declared),
+  then what the app observed: when it saw the verdict and whether the compared files are still those (`changed`: a
+  warning and "Ask for a new review", a draft into the AI's tab), whether a separate reviewer agent was seen and what
+  its own last answer said (in bold when it differs from the review file), and the commands with how they ended (at
+  most three failed lines named, the others counted; "an exit code says how a command ended, not what it checked").
+  Nothing there is called proof; when no reviewer agent was seen, the card says a review done in another session is not
+  seen.
+- Tests: `test/job-results.test.mjs`, `test/job-commands.test.mjs`, `test/job-reviewers.test.mjs`,
+  `test/journey.test.mjs` (the record after the review and the acceptance, then a file changed after the verdict:
+  `changed`).

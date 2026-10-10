@@ -1,3 +1,4 @@
+// @ts-check
 // First-run guide (docs/first-run.md): five short steps: what SiberSentez shows, the AI tool, idea to skills and start,
 // the actions mode, and the help while the AI works. It opens by itself once (the seen version stays in this browser), and again from the header's
 // "?" button, the "?" key or the
@@ -76,6 +77,7 @@ export function markSeen(storage = globalThis.localStorage) {
 }
 
 // The step's markup; available(go) says whether this page can do the step's button (the actions panel needs the app)
+/** @param {number} i @param {{ mode?: string, available?: (key: string) => boolean }} [options] */
 export function stepHtml(i, { mode = 'off', available = () => true } = {}) {
   const s = GUIDE_STEPS[clampStep(i)];
   const last = i === GUIDE_STEPS.length - 1;
@@ -98,7 +100,7 @@ export function stepHtml(i, { mode = 'off', available = () => true } = {}) {
 
 // go: { tools, newProject, projects, roster, actions } -> functions; a missing one hides that step's button.
 // getMode: the current actions mode, for the last step.
-export function createGuide({ go = {}, getMode = () => 'off', storage = globalThis.localStorage, doc = document } = {}) {
+export function createGuide({ go = {}, getMode = () => /** @type {string} */ ('off'), storage = globalThis.localStorage, doc = document } = {}) {
   const root = doc.createElement('div');
   root.className = 'guide-wrap';
   root.hidden = true;
@@ -115,7 +117,7 @@ export function createGuide({ go = {}, getMode = () => 'off', storage = globalTh
     spot?.classList.remove('guide-spot');
     spot = null;
     const sel = GUIDE_STEPS[step].target;
-    const el = sel ? doc.querySelector(sel) : null;
+    const el = /** @type {HTMLElement | null} */ (sel ? doc.querySelector(sel) : null);
     if (el && !el.hidden && el.offsetParent !== null) {
       spot = el;
       el.classList.add('guide-spot');
@@ -125,12 +127,12 @@ export function createGuide({ go = {}, getMode = () => 'off', storage = globalTh
   function render(focusSel = '.guide-next') {
     box.innerHTML = stepHtml(step, { mode: getMode(), available });
     highlight();
-    box.querySelector(focusSel)?.focus({ preventScroll: true });
+    /** @type {HTMLElement | null} */ (box.querySelector(focusSel))?.focus({ preventScroll: true });
   }
 
   function show(at = 0) {
     if (root.hidden) {
-      const a = doc.activeElement;
+      const a = /** @type {HTMLElement} */ (doc.activeElement);
       prevFocus = a && a !== doc.body ? a : doc.getElementById('guideBtn');
     }
     step = clampStep(at);
@@ -145,7 +147,7 @@ export function createGuide({ go = {}, getMode = () => 'off', storage = globalTh
     spot?.classList.remove('guide-spot');
     spot = null;
     box.innerHTML = glossaryHtml();
-    box.querySelector('[data-guide="words-back"]')?.focus({ preventScroll: true });
+    /** @type {HTMLElement | null} */ (box.querySelector('[data-guide="words-back"]'))?.focus({ preventScroll: true });
   }
 
   // Closing in any way (Done, Skip, Esc, the X, a step button) counts as seen
@@ -167,7 +169,7 @@ export function createGuide({ go = {}, getMode = () => 'off', storage = globalTh
     render(d < 0 ? '[data-guide="back"], [data-guide="close"]' : '.guide-next');
   }
 
-  box.addEventListener('click', (e) => {
+  box.addEventListener('click', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.guideStep) {
@@ -198,9 +200,10 @@ export function createGuide({ go = {}, getMode = () => 'off', storage = globalTh
       e.preventDefault();
       move(e.key === 'ArrowRight' ? 1 : -1);
     } else if (e.key === 'Tab') {
+      /** @type {HTMLElement[]} */
       const f = [...box.querySelectorAll('button')];
       if (!f.length) return;
-      const i = f.indexOf(doc.activeElement);
+      const i = f.indexOf(/** @type {HTMLElement} */ (doc.activeElement));
       const to = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : i === f.length - 1 ? 0 : i + 1;
       e.preventDefault();
       f[to].focus();
@@ -210,7 +213,7 @@ export function createGuide({ go = {}, getMode = () => 'off', storage = globalTh
   // The actions mode arrives after the first render (and changes later): draw the open step again, focus kept in place
   function refresh() {
     if (root.hidden || box.querySelector('.guide-words-list')) return;
-    const a = doc.activeElement;
+    const a = /** @type {HTMLElement} */ (doc.activeElement);
     const keep = !box.contains(a) || a.classList.contains('guide-next') ? '.guide-next' : a.dataset.guide ? `[data-guide="${a.dataset.guide}"]` : a?.dataset?.guideStep ? `[data-guide-step="${a.dataset.guideStep}"]` : '.guide-next';
     render(keep);
   }

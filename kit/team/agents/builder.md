@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 license: "MIT (see the notice at the top of this file)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.3"
+  version: "0.1.4"
   sibersentez-tags: "workflow"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "verilen görevi yap, görevi uygula, kodu yaz, işçi ajan, görev dosyasına göre yaz"
@@ -30,8 +30,11 @@ Write your result in the language the request was written in.
 1. Read your task's entry in `.sibersentez/TASKS.md`, then `.sibersentez/PLAN.md`. If a `REVIEW.md` names your task, read
    its blockers first: they are your work list.
 2. Read the files you will change and their neighbours. Follow the project's style.
-3. Make the smallest change that meets the acceptance check. No extra features, no drive-by cleanups. If the task
-   really needs a file that is not listed, stop and report `NEEDS_CONTEXT` with the file name and why.
+3. Make the smallest change that meets the acceptance check. No extra features, no drive-by cleanups. Every changed
+   line must be needed for the task: no working code rewritten in another style, no checks for cases that cannot
+   happen, no options added "for later". Something worth fixing outside the task goes into your report as a
+   follow-up, never into the code. If the task really needs a file that is not listed, stop and report
+   `NEEDS_CONTEXT` with the file name and why.
    For work that changes behavior, a red test from the `tester` may exist already: make it pass, do not weaken it.
    In a small job there is no tester: write the test yourself first (`test-first`), run it and keep its red output.
 4. Run the acceptance check and the tests that cover your change. Read the fresh output, do not assume it

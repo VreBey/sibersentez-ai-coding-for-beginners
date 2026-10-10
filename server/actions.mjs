@@ -1,3 +1,4 @@
+// @ts-check
 // SiberSentez action layer (contract §5, §7; skill flow: docs/skills-flow.md; terminal: docs/terminal.md).
 // Starts local actions from the panel's context menu: a plain terminal in a project or session folder (Windows
 // Terminal, else Windows PowerShell; no AI command, the user starts the tool of their choice), a Claude Code session
@@ -28,7 +29,9 @@ import { fileURLToPath } from 'node:url';
 import { spawn as nodeSpawn } from 'node:child_process';
 import { isLegacyHub, listLibrary, findLibraryItem, scanSource, publicScanItems, planImport, executeImport, writeCatalog, publicPlan, normRel, lstat, treeHash, sameHash } from './library.mjs';
 import { resolveProject, readInstalls, planInstall, executeInstall, planRemove, executeRemove, planTrial, makeTrial } from './install.mjs';
-import { createPointAsync, planRestore, applyRestore, recordJobPoint } from './restore.mjs';
+import { createPointAsync, planRestore, applyRestore, recordJobPoint, listPoints } from './restore.mjs';
+import { planRelink, setRelink, removeRelink } from './relinks.mjs';
+import { listJobResults } from './jobResults.mjs';
 import { createFit, planApplyImports } from './fit.mjs';
 // "Start with AI" (docs/ai-start.md)
 import { sharedToolDetector, toolById } from './tools.mjs';
@@ -36,7 +39,7 @@ import { firstMessageText, jobMessageText, planFirstMessage, writeFirstMessage, 
 import { newJobId, readCurrentJob, writeCurrentJob, markerError, CURRENT_JOB_FILE } from './job-id.mjs';
 import { createGitHub, cleanupIncoming, parseRepoName, describeDownload, planDownloadImport, readSources, findSource, updateSources, sourceRow, diffItems } from './github.mjs';
 import { reviewItem } from './review.mjs';
-import { PROJECT_ID_RE } from './util.mjs';
+import { PROJECT_ID_RE, normPath, slugify } from './util.mjs';
 import { PLATFORM, appDataDir, terminalShell, editorCandidates, homeOf } from './platform.mjs';
 import { readKit } from './kit.mjs';
 import { createValidators, ACTION_NAMES, UUID_RE, UNSAFE_RE, GITHUB_SET, SKILL_SET, buildArgv, isDir, isFile, reject, GITHUB_ACTIONS } from './actionInput.mjs';
@@ -83,7 +86,9 @@ const JSON_TYPE_RE = /^application\/json\s*(?:;\s*charset=utf-8\s*)?$/i;
 const PROGRAM_CODES = { resume: 'wt', fork: 'wt', new: 'wt', explorer: 'explorer', vscode: 'vscode' };
 
 // Actions that write in live mode (one at a time). A GitHub fetch writes the download into the hub's incoming/ folder.
-const WRITING = new Set(['library-import', 'library-adopt', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-apply', ...GITHUB_ACTIONS]);
+const WRITING = new Set(['library-import', 'library-adopt', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-apply', 'project-relink', 'project-unlink', ...GITHUB_ACTIONS]);
+// Writing actions that may also only plan (plan: true), outside the one-writing-action lock
+const PLAN_ONLY_OK = new Set(['skills-remove', 'project-relink', 'project-unlink']);
 // Names per list in a restore reply (the counts are whole)
 const RESTORE_LIST_MAX = 50;
 // HTTP status of a GitHub error code (never 403 or 429: the page reads those as "refused" and "asked again too soon")
@@ -174,6 +179,7 @@ function send(res, status, body, headers = {}) {
 // github: the GitHub download service (server/github.mjs createGitHub; tests inject one with a fake network and a fake
 // git); made on first use when absent. Downloads older than seven days in <hub>/incoming are removed when the action
 // layer starts (docs/github-import.md §3), whatever the mode: that folder is SiberSentez's own.
+/** @param {{ catalog?: any, ingest?: any, mode?: string, port?: number, [key: string]: any }} [options] */
 export function createActions({
   catalog,
   ingest,
@@ -275,7 +281,7 @@ export function createActions({
   async function executeSkill(v) {
     const { action, ctx } = v;
     const live = mode === 'live';
-    if (live && WRITING.has(action) && !(action === 'skills-remove' && ctx.planOnly)) {
+    if (live && WRITING.has(action) && !(PLAN_ONLY_OK.has(action) && ctx.planOnly)) {
       if (writing) return failed(409, 'busy', 'busy');
       writing = true;
       try {
@@ -399,6 +405,7 @@ export function createActions({
       }
       if (action === 'skills-apply') return applySkills(ctx, execute, base);
       if (action === 'restore-preview' || action === 'restore-apply') return await runRestore(action, ctx, execute, base);
+      if (action === 'project-relink' || action === 'project-unlink') return runRelink(action, ctx, execute, base);
       if (action === 'skills-trial') {
         const t = planTrial({ hubDir, projectId: project.id, items: ctx.items, library: listLibrary(hubDir), via: project.via, now: now() });
         const plan = publicPlan(t.plan);
@@ -521,6 +528,38 @@ export function createActions({
     return { status: 200, body: { ...base, ...summary, before: r.before, result: { executed: true, restored: r.restored, removed: r.removed, failed: r.failed.slice(0, RESTORE_LIST_MAX) } }, note: r.failed.length ? 'partial' : 'live' };
   }
 
+  // A moved project linked to its new folder (docs/internal/project-relink-plan.md, server/relinks.mjs). Dry mode, and
+  // live mode with plan: true (the preview), answer what it would do (relinks.mjs planRelink: what joins, what stays,
+  // or why not) and write nothing. Live mode writes the link only with the preview's planId, and only while the plan
+  // still has it (plan-changed otherwise), in the hub's own memory, and reloads the catalog (onChange), which moves the
+  // sessions and books the new folder's hours under the kept project (index.mjs followLinks). Undoing the link keeps
+  // the hours joined so far with the kept project (relinks.mjs removeRelink). Nothing else is written, moved or deleted.
+  function runRelink(action, ctx, execute, base) {
+    const { projectId } = ctx.relink;
+    if (action === 'project-unlink') {
+      const p = catalog?.getProject?.(projectId);
+      if (!p?.linked) return failed(409, 'not-linked', 'relink');
+      if (!execute || ctx.planOnly) return { status: 200, body: { ...base, projectId, linked: p.linked, result: { executed: false } }, note: 'dry' };
+      // A link made to a folder that was not listed: the id that folder takes again (made from its path)
+      const n = normPath(p.path);
+      const folderId = p.linked.from ? null : catalog.adhocIdFor?.(n, slugify(n).toLowerCase()) || null;
+      if (!removeRelink(hubDir, projectId, now(), { folderId })) return failed(500, 'record-write-failed', 'record');
+      changed();
+      return { status: 200, body: { ...base, projectId, result: { executed: true } }, note: 'live' };
+    }
+    const counts = (id) => ({ points: listPoints({ hubDir, projectId: id }).length, jobs: listJobResults({ hubDir, projectId: id }).length });
+    const sessions = (id) => ingest?.projectSessions?.get(id)?.size || 0;
+    const plan = planRelink({ catalog, projectId, folder: ctx.relink.folder, from: ctx.relink.from, appDir: appCwd, counts, sessions });
+    if (!plan.ok) return failed(plan.problem === 'not-a-project' ? 404 : 409, plan.problem, 'relink');
+    const summary = { planId: plan.planId, kept: plan.kept, folder: plan.folder, joining: plan.joining };
+    if (!execute || ctx.planOnly) return { status: 200, body: { ...base, ...summary, result: { executed: false } }, note: 'plan' };
+    if (ctx.relink.planId !== plan.planId) return failed(409, 'plan-changed', 'relink', summary);
+    const link = { id: plan.kept.id, path: plan.folder, oldPath: plan.kept.oldPath, from: plan.from, at: now() };
+    if (!setRelink(hubDir, plan.kept.id, link)) return failed(500, 'record-write-failed', 'record');
+    changed();
+    return { status: 200, body: { ...base, ...summary, result: { executed: true } }, note: 'live' };
+  }
+
   // A restore point before an AI tool starts in a live mode (docs/restore.md): the project of the start (a session's
   // project for a session). It never stops the start: a problem is only reported ({ problem }). The answer says what
   // the point holds, so the page can tell a full copy from a lean one (big files and logs left out, docs/restore.md §7).
@@ -625,7 +664,7 @@ export function createActions({
         items.push({ kind, name, status: 'not-in-library' });
         continue;
       }
-      const parsed = parseRepoName(row.source.repo, row.source.ref ?? null);
+      const parsed = /** @type {any} */ (parseRepoName(row.source.repo, row.source.ref ?? null));
       const rel = normRel(row.source.path);
       if (!parsed || !rel) {
         items.push({ kind, name, status: 'error', error: 'bad-record' });
@@ -681,8 +720,9 @@ export function createActions({
   // Starts the process detached; resolved on the 'spawn' event, rejected on 'error' (e.g. ENOENT).
   // The exit code is not awaited (explorer returns 1 even on success; that is not an error).
   // A working directory inside an archive is refused before spawn: the OS cannot enter it.
+  /** @returns {Promise<void>} */
   function launch(argv, opts) {
-    return new Promise((resolve, reject) => {
+    return new Promise((/** @type {(value?: void) => void} */ resolve, reject) => {
       if (hasAsarSegment(opts?.cwd)) return reject(Object.assign(new Error('working directory inside an archive'), { code: ASAR_CWD }));
       let child;
       try {
@@ -1076,6 +1116,7 @@ export function createActions({
     // still running, the safe side)
     return { id: x.id, projectId, ai: x.ai === true, tool: DOCK_TOOL.test(x.tool || '') ? x.tool : null, jobId: DOCK_JOB.test(x.jobId || '') ? x.jobId : null, startedAt: Number.isFinite(x.startedAt) ? x.startedAt : null, running: x.running !== false };
   };
+  /** @param {{ sessions?: any[] }} [state] */
   function terminalState({ sessions } = {}) {
     if (!Array.isArray(sessions) || sessions.length > 100) return { ok: false, reason: 'invalid' };
     dockRunning = sessions.map(dockItem).filter(Boolean);

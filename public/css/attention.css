@@ -55,6 +55,13 @@
 .dr-missing { margin: 12px 0 4px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(var(--stop-rgb), 0.45); background: rgba(var(--stop-rgb), 0.1); }
 .dr-missing b { display: block; font-size: 14px; color: var(--stop); }
 .dr-missing p { margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: var(--text-2); }
+/* A moved project linked to its new folder (relink.js): the listed folders with its name, and a linked project's note */
+.rl-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; }
+.rl-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.rl-list code { overflow-wrap: anywhere; min-width: 0; }
+.rl-what { margin: 6px 0; padding-left: 18px; }
+.dr-linked { margin: 10px 0 4px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.dr-linked p { margin: 0; flex: 1 1 260px; color: var(--text-2); overflow-wrap: anywhere; }
 /* The AI stopped on an error (apiError.js): a dropped connection or a limit that opened again is a warning, not a stop */
 .dr-missing.ai-stop.warn { border-color: rgba(var(--gold-rgb), 0.45); background: rgba(var(--gold-rgb), 0.08); }
 .dr-missing.ai-stop.warn b { color: var(--text); }
@@ -78,3 +85,15 @@
 .job-history ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
 .job-history li { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); }
 .job-history li b { font-size: 13px; font-weight: 600; }
+
+/* What the start's copy would hold (restore.js scopeHtml): one line under Start, what it leaves out folded */
+.job-scope { margin: 6px 0 0; }
+.job-scope summary { cursor: pointer; }
+.job-scope-more { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.job-scope-list { list-style: none; margin: 6px 0 4px; padding: 0; display: grid; gap: 4px; }
+.job-scope-list code { font: 12px/1.4 var(--mono); color: var(--text); }
+.job-scope-big { list-style: none; margin: 4px 0 0 12px; padding: 0; display: grid; gap: 2px; }
+/* One line per big file: a long path ends in an ellipsis, its size stays in view (the title holds the whole path) */
+.job-scope-big li { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.job-scope-big code { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-scope-big span { flex: none; }

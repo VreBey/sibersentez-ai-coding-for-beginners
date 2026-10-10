@@ -1210,7 +1210,7 @@ test('kit in the roster model: its own folder group (kit:<kit category>), its ow
   assert.equal(accessText(byId(r, 'skill:idea-to-plan')), 'In the SiberSentez kit; ready to be installed in a project.');
 });
 
-test('reload without the roster: the projects are read again, the skill and agent scan is left for its own turn (docs/backlog.md "Long-running load")', () => {
+test('reload without the roster: the projects are read again, the skill and agent scan is left for its own turn (docs/internal/backlog.md "Long-running load")', () => {
   const c = new Catalog({ env: FAKE_ENV, hubDir: HUB, claudeDir: CLAUDE, homeDir: HOME });
   let scans = 0;
   const real = c.loadRoster.bind(c);

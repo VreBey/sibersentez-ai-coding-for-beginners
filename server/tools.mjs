@@ -1,3 +1,4 @@
+// @ts-check
 // AI tool detection (docs/ai-start.md): which AI command-line tools are on this computer, their version, how each
 // was installed and, for Claude Code and Codex, whether the user is signed in.
 //
@@ -16,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn as nodeSpawn } from 'node:child_process';
 import { PLATFORM, installerDirs, homeOf, isLocalAbsolute, isWindowsDriveFromWsl } from './platform.mjs';
+import { jobArgs, versionAtLeast } from './launch.mjs';
 
 // Tools SiberSentez can start (docs/ai-start.md, "Tools"). commands: file names looked up in PATH order (first found
 // wins; for Cursor the specific name first, so an unrelated "agent" program is not preferred). version: arguments
@@ -50,13 +52,42 @@ export const TOOLS = Object.freeze([
 ]);
 export const TOOL_IDS = Object.freeze(TOOLS.map((t) => t.id));
 
+// The versions SiberSentez was checked with, per tool (independent review of 0.18.0 §11): from the oldest the app's
+// start options were checked on (planMin, resumeMin; for Claude Code the oldest log the result card's reading was
+// checked against, 2.1.283) to the newest that passed tools/check-tool-flags.mjs, and when. The release checklist
+// (docs/release.md) moves "to" and "at" when the check passes on a newer version; the tools panel says where the
+// installed version stands (toolTested). Checked 2026-10-10 on the owner's computer: every tool "ok".
+export const TOOL_CHECKED = Object.freeze({
+  claude: Object.freeze({ from: '2.1.283', to: '2.1.296', at: '2026-10-10' }),
+  codex: Object.freeze({ from: '0.160.0', to: '0.160.1', at: '2026-10-10' }),
+  gemini: Object.freeze({ from: '0.61.0', to: '0.63.0', at: '2026-10-10' }),
+  copilot: Object.freeze({ from: '1.0.92', to: '1.0.93', at: '2026-10-10' }),
+  cursor: Object.freeze({ from: '2026.10.01', to: '2026.10.01', at: '2026-10-10' }),
+  qwen: Object.freeze({ from: '0.25.0', to: '0.25.0', at: '2026-10-10' }),
+  opencode: Object.freeze({ from: '1.18.35', to: '1.18.35', at: '2026-10-10' }),
+});
+
+// Where a version stands against what was checked (pure): 'in' (within the range), 'newer' (past it: not checked yet,
+// it may well work), 'older' (before it: a start option may be missing) or 'unknown' (no version read)
+export function toolTested(id, version) {
+  const c = TOOL_CHECKED[id];
+  if (!c) return null;
+  const fit = !version ? 'unknown' : !versionAtLeast(version, c.from) ? 'older' : versionAtLeast(c.to, version) ? 'in' : 'newer';
+  return { from: c.from, to: c.to, at: c.at, fit };
+}
+
 // What SiberSentez does with each tool (plan D4), in one place, each 'yes' | 'no' | 'unknown': plan (a job starts in
 // the tool's plan mode), resume (a stopped session goes on where it stopped), live (its session shows working or
 // waiting as it happens: only Claude Code writes the session files live.mjs reads), usage (its tokens are counted:
 // Cursor's logs carry none, toolLogs.mjs), signIn (whether it is signed in can be checked: the tool has a status
 // command; 'file': its settings files say, often not for sure: fileReady). A version below planMin or resumeMin starts as usual; the panel says
-// the minimum.
+// the minimum. observe: what a job's result card observes in its log (server/jobCommands.mjs, jobReviewers.mjs: the
+// commands and how they ended, a separate reviewer agent): Claude Code's only.
 const LIVE_TOOLS = new Set(['claude']);
+// The tools whose logs a job's result card reads for commands and reviewer agents (server/jobCommands.mjs COMMAND_TOOLS,
+// server/jobReviewers.mjs REVIEWER_TOOLS take it from here, so the capability line and the card never disagree)
+// (one shared Set: nothing adds to it at run time)
+export const OBSERVED_TOOLS = new Set(['claude']);
 const NO_TOKENS = new Set(['cursor']);
 export function capabilities(t) {
   if (!t) return null;
@@ -68,8 +99,12 @@ export function capabilities(t) {
     live: LIVE_TOOLS.has(t.id) ? 'yes' : 'no',
     usage: NO_TOKENS.has(t.id) ? 'no' : 'yes',
     signIn: t.ready ? 'yes' : FILE_READY.has(t.id) ? 'file' : 'unknown',
+    observe: OBSERVED_TOOLS.has(t.id) ? 'yes' : 'no',
   };
 }
+// One tool of TOOLS, its optional fields said (the table is a list of different literals)
+/** @typedef {{ id: string, name: string, commands: string[], version: string[], ready: string[] | null, readyOut?: (out: string) => boolean, prompt: string, plan?: readonly string[], planMin?: string, resume?: readonly string[], resumeMin?: string, appPackage?: RegExp, generic?: Readonly<Record<string, RegExp>> }} ToolDef */
+/** @type {(id: string) => ToolDef | null} */
 export const toolById = (id) => TOOLS.find((t) => t.id === id) || null;
 
 // Node.js: the npm installs need it (shown as a prerequisite in the tools panel)
@@ -151,7 +186,8 @@ export function findInstalls(commands, dirs, isFile, plat = PLATFORM) {
 
 // How a file was installed, from its path alone (pure; hasNodeModules(dir) tells an npm shim folder). Linux and macOS:
 // npm's folders (a global npm command is a link into node_modules), Homebrew's, ~/.local/bin (the native installers)
-export function installKind(file, hasNodeModules = () => false, plat = PLATFORM) {
+/** @param {string} file @param {(dir: string) => boolean} [hasNodeModules] @param {any} [plat] */
+export function installKind(file, hasNodeModules = (_dir) => false, plat = PLATFORM) {
   if (!plat.windows) {
     const f = String(file || '');
     if (/\/node_modules\/|\/\.npm-global\/|\/\.nvm\//.test(f)) return 'npm';
@@ -383,14 +419,14 @@ export function detectGit(dirs, env, isFile, plat = PLATFORM) {
     return { installed: !!found, onPath: !!found && !found.extra };
   }
   const extra = [];
-  for (const [root, sub] of [
+  for (const [root, sub] of /** @type {[string, string[]][]} */ ([
     [envValue(env, 'ProgramFiles'), ['Git', 'cmd']],
     [envValue(env, 'LOCALAPPDATA'), ['Programs', 'Git', 'cmd']],
-  ]) {
+  ])) {
     if (root && path.win32.isAbsolute(root)) extra.push({ dir: path.win32.join(root, ...sub), extra: true });
   }
   const seen = new Set(dirs.map((d) => d.dir.toLowerCase()));
-  const found = findInstalls(['git'], [...dirs, ...extra.filter((d) => !seen.has(d.dir.toLowerCase()))], (f) => f.toLowerCase().endsWith('.exe') && isFile(f))[0];
+  const found = findInstalls(['git'], [...dirs, ...extra.filter((d) => !seen.has(d.dir.toLowerCase()))], (f) => f.toLowerCase().endsWith('.exe') && isFile(f), plat)[0];
   return { installed: !!found, onPath: !!found && !found.extra };
 }
 
@@ -489,7 +525,7 @@ export function createToolDetector({
   async function runDetection() {
     stats.detections++;
     startedAt = now();
-    const dirs = searchDirs(env, plat);
+    const dirs = searchDirs(env, plat, readDir);
     const [tools, node] = await Promise.all([Promise.all(TOOLS.map((t) => detectTool(t, dirs))), detectNode(dirs)]);
     last = { at: now(), tools, node, git: detectGit(dirs, env, isFile, plat), env: envFlags(env) };
     return last;
@@ -528,6 +564,11 @@ export function publicTools(result) {
     app: !!t.app,
     // What SiberSentez does with it (the one table above)
     caps: capabilities(toolById(t.id)),
+    // Whether a job with the version installed starts in the tool's plan mode (launch.mjs jobArgs: a version below
+    // planMin starts as usual): the Start sentence promises a plan first only then
+    planNow: !!t.installed && jobArgs(toolById(t.id), clean(t.version)).length > 0,
+    // The versions SiberSentez was checked with, and where the installed one stands (TOOL_CHECKED)
+    tested: toolTested(t.id, t.installed ? clean(t.version) : null),
     // The command's name only (no folder), for the setup wizard's sign-in line ("agent login")
     cmd: t.installed && t.chosen?.file && /^[a-z][a-z0-9-]{0,30}$/i.test(path.win32.basename(t.chosen.file).replace(/\.[^.]+$/, '')) ? path.win32.basename(t.chosen.file).replace(/\.[^.]+$/, '').toLowerCase() : null,
   }));

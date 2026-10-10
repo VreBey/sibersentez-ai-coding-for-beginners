@@ -1,3 +1,4 @@
+// @ts-check
 // Project registry and roster (skills, agents, plugins) catalog (contract §4, §9).
 // The catalog knows no AI tool: source adapters (adapters/index.mjs) report the projects a tool has been used in
 // and the items it provides. Every project folder an adapter reports is remembered by the project memory
@@ -24,6 +25,7 @@ import { DirLister, exists, isLocalPath, isLowerCased, localExists, toolsOnly } 
 import { readPlan } from './plan.mjs';
 import { ADAPTERS } from './adapters/index.mjs';
 import { ProjectMemory, SIBERSENTEZ_VIA } from './memory.mjs';
+import { readRelinks, readJoins } from './relinks.mjs';
 import { PLATFORM, PROGRAM_HOME_FOLDERS, configRoot, normalizeDir, isSystemFolder, tempFolders, programDataFolders } from './platform.mjs';
 
 export { BUILTIN_AGENTS, readHeadCwd, resolveSlug } from './adapters/claude-code.mjs';
@@ -94,6 +96,7 @@ export class Catalog {
   // projectsDir defaults to <claudeDir>/projects (Claude Code's session logs, one folder per working directory).
   // adapters: source adapters (default: all). memory: project memory (default: in <hub>/registry, or memory only).
   // env: the environment the adapters read (CODEX_HOME, COPILOT_HOME, APPDATA, ...); tests pass a fake one.
+  /** @param {{ hubDir?: string | null, claudeDir?: string, homeDir?: string, projectsDir?: string, adapters?: readonly any[], memory?: any, env?: Record<string, string | undefined> }} [options] */
   constructor({ hubDir = HUB_DIR, claudeDir = CLAUDE_DIR, homeDir = HOME_DIR, projectsDir, adapters = ADAPTERS, memory, env = process.env } = {}) {
     this.hubDir = hubDir || null;
     // The SiberSentez kit folder (server/kit.mjs, roster source 'kit'): the settings' KIT_DIR for a catalog that reads
@@ -114,6 +117,12 @@ export class Catalog {
     this.active = []; // adapters whose tool is present (detect)
     this.projects = []; // registered projects
     this.adhoc = new Map(); // normPath -> project found in logs or in the project memory
+    // Moved projects linked to their new folder (relinks.mjs): the links, the ones applied (the project was there),
+    // normPath(new folder) -> the kept project, and the joins of undone links (their hours stay with the kept project)
+    this.links = [];
+    this.appliedLinks = [];
+    this.linkedPaths = new Map();
+    this.joins = [];
     this.resolveCache = new Map();
     this.roster = new Map(); // key -> roster item
     this.itemFiles = new Map(); // kind:name -> [{ source, file }] (buildRoster; server only)
@@ -276,6 +285,15 @@ export class Catalog {
         }
       }
     }
+    let linked = false;
+    for (const [ln, p] of this.linkedPaths) {
+      if ((n === ln || n.startsWith(ln + '/')) && ln.length > len) {
+        best = p;
+        len = ln.length;
+        linked = true;
+      }
+    }
+    if (linked) return this.longerAdhoc(n, len) || best;
     if (best) return best;
     for (const [pn, p] of this.adhoc) {
       if (p.tmpOnly || !p.path) continue;
@@ -462,6 +480,10 @@ export class Catalog {
     try {
       this.active = this.adapters.filter((a) => this.callAdapter(a, 'detect') === true);
       this.loadProjects();
+      // Moved projects linked to their new folder, before the folders are looked at and the memory is matched
+      this.links = this.hubDir ? readRelinks(this.hubDir) : [];
+      this.joins = this.hubDir ? readJoins(this.hubDir) : [];
+      this.applyLinks();
       // A folder can disappear (or come back) while the app runs: unregistered projects are checked again too
       // (a UNC path is never checked)
       for (const p of this.adhoc.values()) {
@@ -483,7 +505,8 @@ export class Catalog {
   // registry file is not read (tests stay off the real registry).
   loadProjects(reg) {
     const { projects: rows } = reg === undefined ? readRegistry(this.hubDir) : normalizeRegistry(reg);
-    const list = rows.map((p) => ({
+    // A project record: these fields, and more set below (exists, toolsOnly, git, installed, plan, ...)
+    const list = rows.map((p) => /** @type {Record<string, any>} */ ({
       id: p.id,
       name: p.name,
       kind: 'registered',
@@ -518,6 +541,66 @@ export class Catalog {
     this.resolveCache.clear();
   }
 
+  // A moved project linked to its new folder (relinks.mjs) keeps its id, so its history: its folder becomes the new one
+  // (its old folders stay among its paths, so its old sessions still resolve to it), and the new folder's own project
+  // is not listed (its sessions resolve to the kept project through linkedPaths). An unregistered project's id is made
+  // from its old folder, so it is made from there first; a link whose project is gone (or whose id no longer comes out
+  // of that folder) is not applied. An unregistered project unlinked since goes back to its old folder.
+  applyLinks() {
+    for (const p of this.adhoc.values()) {
+      if (!p.linked || this.links.some((l) => l.id === p.id)) continue;
+      p.path = p.linked.oldPath;
+      p._paths = [p.path];
+      p._norm = [normPath(p.path)];
+      p._slugs = [slugify(p.path).toLowerCase()];
+      p.exists = localExists(p.path);
+      delete p.linked;
+    }
+    this.linkedPaths = new Map();
+    this.appliedLinks = [];
+    for (const l of this.links) {
+      let p = this.projects.find((x) => x.id === l.id) || null;
+      if (!p) {
+        const a = this.adhocFor(l.oldPath);
+        p = a?.id === l.id ? a : null;
+      }
+      const n = normPath(l.path);
+      if (!p || !n) continue;
+      if (!p.linked) p.linked = { at: l.at, from: l.from, oldPath: l.oldPath };
+      p.path = l.path;
+      p._paths = [...new Set([l.path, ...p._paths])];
+      p._norm = p._paths.map(normPath);
+      p._slugs = [...new Set([...p._slugs, ...p._paths.map((x) => slugify(x).toLowerCase())])];
+      p.exists = p.kind === 'registered' ? exists(l.path) : localExists(l.path);
+      if (p.kind === 'registered') p.plan = p.exists ? readPlan(p.path) : null;
+      const own = this.adhoc.get(n);
+      if (own && own !== p) this.adhoc.delete(n);
+      this.linkedPaths.set(n, p);
+      this.appliedLinks.push(l);
+    }
+    this.resolveCache.clear();
+  }
+
+  // The usage ledger's joins (usage.mjs setJoins): an applied link's new folder id joins the kept project for good; an
+  // undone link's, until it was undone
+  ledgerJoins() {
+    return [...this.appliedLinks.filter((l) => l.from).map((l) => ({ from: l.from, to: l.id, until: null })), ...this.joins];
+  }
+
+  // An unregistered project whose folder lies inside a linked folder, by the longest match: a folder of its own (a
+  // project made inside the new folder) stays its own and is not taken over by the link. null: none longer than len
+  longerAdhoc(n, len) {
+    let best = null;
+    for (const [pn, p] of this.adhoc) {
+      if (p.tmpOnly || !p.path || p.linked) continue;
+      if ((pn === n || n.startsWith(pn + '/')) && pn.length > len) {
+        best = p;
+        len = pn.length;
+      }
+    }
+    return best;
+  }
+
   // cwd (and the ~/.claude/projects folder name, if any) -> project id.
   // Returns null when there is no cwd and the folder name matches no registered project: an unregistered project only
   // opens once a real working folder is known (otherwise ownerless empty projects pile up).
@@ -537,6 +620,17 @@ export class Catalog {
           }
         }
       }
+      // A moved project's new folder (applyLinks): its kept project, by the same longest match; a project of its own
+      // inside that folder stays its own
+      let linked = false;
+      for (const [ln, p] of this.linkedPaths) {
+        if ((n === ln || n.startsWith(ln + '/')) && ln.length > bestLen) {
+          best = p;
+          bestLen = ln.length;
+          linked = true;
+        }
+      }
+      if (linked) best = this.longerAdhoc(n, bestLen) || best;
     }
     const s = (slug || '').toLowerCase();
     if (!best && s) best = this.projects.find((p) => p._slugs.includes(s)) || null;
@@ -833,7 +927,7 @@ export class Catalog {
 
   // The same scan in steps (the library and the kit, each tool's global items, each project folder), giving the event
   // loop back between them, so the five-minute rescan never holds the live view and the requests for half a second
-  // (measured 2026-10-06: 0.45 s in one piece on a machine with 2,378 items, the largest step about 60 ms: a long tool read gives the loop back between its parts). Nothing is
+  // (measured 2026-10-06: 0.45 s in one piece on a machine with thousands of items, the largest step about 60 ms: a long tool read gives the loop back between its parts). Nothing is
   // seen half done: the roster, the project counts, the hub and the kit change together at the end. A full scan that
   // runs meanwhile (after an action) wins: this one then ends without changing anything. One at a time.
   // pause(): what gives the loop back (setImmediate; a test passes its own). Returns true when it changed the roster.
@@ -913,6 +1007,7 @@ export class Catalog {
         if (!files.has(k)) files.set(k, []);
         files.get(k).push({ source: it.source, file: it.path });
       }
+      /** @type {Record<string, any>} */
       const out = { kind: it.kind, name: it.name, source: it.source, category: it.category || it.source, description: truncate(it.description, DESC_MAX), global: !!it.global, tools: [tool], ...extra };
       if (it.source === 'personal') {
         const d = personalDir(it.path, it.kind, this.homeDir);

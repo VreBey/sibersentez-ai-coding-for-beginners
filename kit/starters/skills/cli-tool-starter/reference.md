@@ -1,5 +1,8 @@
 # Command line tool starter: reference
 
+Contents: Python: wordcount.py · Python: pyproject.toml for an installable command · Test file (Python):
+tests/test_wordcount.py · Node.js: wordcount.mjs · Exit codes and streams · Common problems
+
 The example tool, `wordcount`, counts the lines and words of a text file. Replace the work function with the user's.
 Checked against the documentation of Python's `argparse` (https://docs.python.org/3/library/argparse.html) and Node.js
 `util.parseArgs` (https://nodejs.org/api/util.html#utilparseargsconfig); if a call differs in the version in use,
@@ -58,14 +61,14 @@ Run: `.venv\Scripts\python wordcount.py notes.txt`. Test with `main(["notes.txt"
 
 ```toml
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "wordcount"
 version = "0.1.0"
 description = "Count the lines and words of a text file."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [project.scripts]
 wordcount = "wordcount:main"

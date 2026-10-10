@@ -85,7 +85,7 @@ installer folder the tool was found in while `PATH` lacks it), `git: { installed
 ## Setup check (`public/js/setupCheck.js`)
 
 The top of the tools panel says what stands between this computer and a working AI tool, most of it the usual
-Windows trouble of a beginner (qa/pazar-arastirma/rapor.md §3.1): each problem with a plain reason and, where one
+Windows trouble of a beginner: each problem with a plain reason and, where one
 exists, a command to copy. SiberSentez never runs these commands (the panel says so); the user runs them in PowerShell
 and presses "Check again".
 

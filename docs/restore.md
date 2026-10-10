@@ -136,7 +136,7 @@ asks the server once for the shown job (`askJobPoint`: again after 30 s, at most
 outside the app or before this version has no record) and says it next to the job. A start without an app job (an
 idea, a session resumed) records nothing. Tests: `test/restore-coverage.test.mjs`.
 
-**Present, not only past (2026-10-07, docs/development-plan-2026-10-07.md F2).** A start record is history: only the
+**Present, not only past (2026-10-07, docs/internal/development-plan-2026-10-07.md F2).** A start record is history: only the
 newest `RESTORE_KEEP` points are kept, so a newer point (a resume, going back) could push a job's start copy out while
 the job box still promised it. Now:
 
@@ -174,7 +174,11 @@ ran no test; whether the person accepted), how to open it ("How to run it" right
 and going back (the job box's sentence, never a copy that is gone). Without a start copy of its own it says so and
 points to "What changed" further down, which shows the recent changes, earlier work included. Tests:
 `test/job-changes.test.mjs`, `test/job-result.test.mjs`. Checked in a window on a job at its result (Turkish and
-English): the strip's "Open the result" opens the drawer at it.
+English): the strip's "Open the result" opens the drawer at it. Since 2026-10-10 the checks also hold what the app
+observed itself, apart from the reviewer's words: when it saw the verdict and whether the files are still those it was
+about, whether a separate reviewer agent ran, and the commands the job's AI ran with how they ended (its own record
+next to these restore points, `restore/<key>/job-results.json`: docs/kit-in-app.md, "The app's own record of a
+result").
 
 **The result first (2026-10-07, review U07, U08).** While the result waits (`finish`) it is the drawer's first section
 and carries the job's steps; the job box comes after "How to run it" and the restore points as a plain "New job"
@@ -245,3 +249,48 @@ the two refusals over the real handler, the drawer's notice).
   it; going back then says `point-damaged` for that file, as it would for one point before.
 - Tests: `test/restore-share.test.mjs` (shared and fresh copies, going back, pruning, an older copy damaged with a
   different size or the same size, the answer's disk count, the line).
+
+## 12. What the copy will hold, before the job (2026-10-09, independent review §7.3)
+
+A beginner who reads "a copy is kept before the AI starts" counts on undoing everything; a point leaves out folders
+such as `.git`, `node_modules` and `build`, and a lean one big files and logs. The job box now says it before Start,
+not only after.
+
+- `GET /api/projects/<id>/restore-scope` (read-only, no action mode; `projectRestoreScope`) passes the gate a start's
+  point passes (`takeStartPoint`: a hub folder that is there and not of the old layout, then `resolveProject`), runs
+  the scan that point runs and makes the same choice (full, lean over the full limits), and copies nothing:
+  `{ ok: true, scope, files, bytes, leftOut, leftBytes, big, skipped, moreDirs }` or `{ ok: false, problem }`.
+  `skipped` names the folders left out (at most 12, `moreDirs` the rest) with why: `history` (`.git`, `.hg`, `.svn`),
+  `packages` (package caches and virtual environments), `build` (build output and generated folders at the top,
+  Unity's generated folders), `tools` (the AI tools' set-up), `hub` (the hub inside the project). `big` is a lean
+  scan's largest left-out files (at most 5, the only ones kept while it scans). `scanProject` collects both when given
+  `seen`; points are taken exactly as before.
+- One answer per project for 5 s on the server (`SCOPE_TTL_MS`), 60 s on the page (`createScopes`; 5 s after a failed
+  look). A start and going back forget the page's answer, and an answer asked for before that is dropped. The scan
+  reads the disk synchronously, as a start's own scan does.
+- Under Start, only when the start takes a copy (actions On, or Off with the one-step turn-on): "When the job starts,
+  a copy of 41 files (2 MB) is kept first, so you can go back" (an empty project and a single file have their own
+  words), folded below it what the copy leaves out with a reason per group, the big files with their sizes, and
+  "Going back never changes or removes what the copy leaves out. Files of your own in these folders are safest in
+  git." The reasons promise nothing comes back by itself (review round 1: this repository's own `build/` holds
+  tracked files no build makes again). The fold keeps its state across redraws per project.
+- No copy possible, whatever the reason (too many files, too big, too deep, no hub, the folder refused): a warning
+  instead, and the line under Start no longer says a restore point is taken (`scopeTakesCopy`, `jobGoWithNoCopy`).
+- Tests: `test/restore-scope.test.mjs` (the answer, the same numbers as the point a start takes, full and lean, the
+  gate's refusals, a Unity subproject, the folder count, the line, the job box, the page cache and its race),
+  `test/dom-drawer.test.mjs` (the line in the drawer, the fold kept open), `test/journey.test.mjs` (the answer before
+  the job's start).
+
+## A moved project linked to its new folder
+
+A project whose folder is gone offers, in its drawer, the listed folders with its name ("Moved? Link it to its new
+folder"; `server/relinks.mjs`, `public/js/relink.js`). A preview, which writes nothing, says what stays with the
+project (its sessions, restore points and job results), how many of the folder's sessions join, and that nothing is
+moved or deleted. Linking (live mode only, with the preview's plan id) writes `registry\relinks.json`: the project keeps
+its id, so its restore points, job results and usage stay its own, and the folder's sessions and hours join it. A
+folder that holds other projects, lies inside one, has restore points or job results of its own, or whose earlier
+hours stayed with another project is refused. **Undo the link** asks first: the folder becomes a project of its own
+again, and the hours joined so far stay with the linked project (kept as a join, so they are not counted twice). One
+corner is not handled: if, while linked, a folder above the new folder is opened as a project of its own, an undo sends
+the folder's sessions to that parent project, and the hours before the undo show under both.
+Tests: `test/relink.test.mjs`.

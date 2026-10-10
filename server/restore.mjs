@@ -1,3 +1,4 @@
+// @ts-check
 // Restore points (docs/restore.md, docs/direction.md §3.4 "see, try, undo"): before an AI tool starts in a project,
 // SiberSentez keeps a copy of the project's files in the hub, and the person can put the project back to it with one
 // click. It works with or without git: a point is a plain copy under <hub>/restore/<project key>/<point id>/ with a
@@ -15,8 +16,9 @@ import { validJobId, readCurrentJob } from './job-id.mjs';
 import { FIRST_DIR } from './launch.mjs';
 import { isLocalPath, relKeyFor } from './fsutil.mjs';
 import { PLATFORM } from './platform.mjs';
-import { hasStreamColon } from './library.mjs';
+import { hasStreamColon, isLegacyHub } from './library.mjs';
 import { writeFileAtomic } from './atomic.mjs';
+import { resolveProject } from './install.mjs';
 
 const RESTORE_DIR = 'restore';
 export const RESTORE_LIMITS = Object.freeze({ files: 3000, bytes: 50 * 1024 * 1024, fileBytes: 16 * 1024 * 1024, depth: 16 });
@@ -40,6 +42,10 @@ const UNITY_SKIP = Object.freeze(new Set(['library', 'temp', 'logs', 'obj', 'use
 // folders (a folder of the same name deeper down, say assets/out, is the person's content and is kept). The other AI
 // tools' folders too (2026-10-07): SiberSentez installs their agents there, and going back must not roll a record's
 // copy back to an older text it would then take for the person's own
+// The scope preview's reasons (projectRestoreScope): version control apart from the caches, the AI tools' set-up apart
+// from build output
+const VCS_DIRS = new Set(['.git', '.hg', '.svn']);
+const TOOL_DIRS = new Set(['.claude', '.agents', '.gemini', '.qwen', '.opencode', '.codex']);
 export const RESTORE_SKIP_TOP = Object.freeze(new Set(['.claude', '.agents', '.gemini', '.qwen', '.opencode', '.codex', 'dist', 'build', 'builds', 'out', 'coverage', 'obj', 'bin', 'target', '.gradle', 'library', 'temp', 'logs', 'usersettings']));
 export const POINT_ID_RE = /^R\d{14}[0-9a-f]{4}$/;
 const POINT_REASONS = Object.freeze(['ai-start', 'before-restore', 'manual']);
@@ -107,12 +113,24 @@ function skippedRel(rel) {
   return parts.some((p) => RESTORE_SKIP.has(p)) || (parts.length > 0 && RESTORE_SKIP_TOP.has(parts[0]));
 }
 
+// The scope preview's left-out files: only the largest few are kept while the scan runs (a lean scan can leave out
+// thousands)
+const SEEN_BIG = 5;
+function keepLargest(list, f) {
+  if (list.length < SEEN_BIG) return void list.push(f);
+  let min = 0;
+  for (let i = 1; i < list.length; i++) if (list[i].size < list[min].size) min = i;
+  if (f.size > list[min].size) list[min] = f;
+}
+
 // The project's files that a point holds (pure apart from reading the disk). Links and junctions are never followed
 // (a link is neither copied nor entered), the skipped folders are left out, and names come in byte order. Returns
 // { ok: true, files: [{ rel, size, mtimeMs, mode (Linux and macOS) }], bytes } or { ok: false, problem: 'too-many-files' | 'too-large' |
 // 'file-too-large' | 'too-deep' | 'folder-missing' }. skip: absolute folders never entered (the hub, when it lies
-// inside the project, so a point never copies the points).
-export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'full') {
+// inside the project, so a point never copies the points). seen (optional, the scope preview): collects what is left
+// out, seen.dirs (a Map of lower-case folder name -> { name, why }) and seen.big (a lean scan's left-out files);
+// seen.folders, when an array, gets every folder the scan entered ('' the project folder; treeFingerprint).
+export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'full', seen = null) {
   const lean = scope === 'lean';
   const skipped = new Set(skip.filter(Boolean).map((p) => path.resolve(p).toLowerCase()));
   const top = lstat(dir);
@@ -123,6 +141,7 @@ export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'fu
   let leftBytes = 0;
   const walk = (abs, rel, depth) => {
     if (depth > limits.depth) return 'too-deep';
+    if (Array.isArray(seen?.folders)) seen.folders.push(rel);
     let list;
     try {
       list = fs.readdirSync(abs, { withFileTypes: true });
@@ -140,13 +159,18 @@ export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'fu
       if (!st || st.isSymbolicLink()) continue;
       if (st.isDirectory()) {
         const low = d.name.toLowerCase();
-        if (RESTORE_SKIP.has(low) || (depth === 0 && RESTORE_SKIP_TOP.has(low)) || (unity && UNITY_SKIP.has(low)) || skipped.has(path.resolve(child).toLowerCase())) continue;
+        const why = RESTORE_SKIP.has(low) ? (VCS_DIRS.has(low) ? 'history' : 'packages') : depth === 0 && RESTORE_SKIP_TOP.has(low) ? (TOOL_DIRS.has(low) ? 'tools' : 'build') : unity && UNITY_SKIP.has(low) ? 'build' : skipped.has(path.resolve(child).toLowerCase()) ? 'hub' : null;
+        if (why) {
+          if (seen && !seen.dirs.has(low)) seen.dirs.set(low, { name: d.name, why });
+          continue;
+        }
         const p = walk(child, childRel, depth + 1);
         if (p) return p;
       } else if (st.isFile()) {
         if (lean && (st.size > LEAN.fileBytes || LEAN.skipExt.has(path.extname(d.name).toLowerCase()))) {
           leftOut++;
           leftBytes += st.size;
+          if (seen) keepLargest(seen.big, { rel: childRel, size: st.size });
           continue;
         }
         if (st.size > limits.fileBytes) return 'file-too-large';
@@ -255,7 +279,7 @@ export function recordJobPoint({ hubDir, projectId, jobId, point, now = Date.now
 
 // The current job's start copy (its record, recordJobPoint): kept past RESTORE_KEEP while that job is the project's
 // current one (its marker), so a long job, whose resumes take points too, never loses the copy its job box names
-// (docs/development-plan-2026-10-07.md F2). One point at most; never throws.
+// (docs/internal/development-plan-2026-10-07.md F2). One point at most; never throws.
 function currentJobPoint(hubDir, projectId, dir) {
   try {
     const cur = readCurrentJob(path.join(dir, FIRST_DIR));
@@ -305,6 +329,8 @@ function prune(base, protect = []) {
       if (/^\.start-points\.json\.[0-9a-f]{8}\.tmp$/.test(n)) fs.rmSync(p, { force: true });
       // And for a restore mark that was being written
       if (/^\.restore-running\.json\.[0-9a-f]{8}\.tmp$/.test(n)) fs.rmSync(p, { force: true });
+      // And for a job's result record that was being written (jobResults.mjs)
+      if (/^\.job-results\.json\.[0-9a-f]{8}\.tmp$/.test(n)) fs.rmSync(p, { force: true });
       continue;
     }
     if (kept < RESTORE_KEEP || protect.includes(n)) {
@@ -317,6 +343,8 @@ function prune(base, protect = []) {
 
 // What a new point needs before its copy: the scan, the folder and a growing id; or the answer itself (a problem, or
 // the newest point when nothing changed). Shared by createPoint and createPointAsync.
+// { answer } (done: a problem or the newest point again) or { base, id, tmp, scan, shared, candidate } to copy
+/** @returns {any} */
 function preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope }) {
   if (!hubDir) return { answer: fail('no-hub') };
   let scan = scanProject(dir, limitsFor(scope, limits), [hubDir], scope === 'lean' ? 'lean' : 'full');
@@ -563,6 +591,7 @@ function planDigest(plan) {
 // decides, a new time alone is no change); missing: files deleted since and brought back; added: files that came
 // later and are removed. Returns { ok: true, point: { id, at, reason }, changed, missing, added, planId } or
 // { ok: false, problem }.
+/** @returns {any} */
 export function planRestore({ hubDir, projectId, dir, id, limits = RESTORE_LIMITS }) {
   const pt = readPoint(hubDir, projectId, id);
   if (!pt) return fail('point-missing');
@@ -796,6 +825,107 @@ export async function projectRestoreWithDisk({ catalog, projectId }) {
   return { ...r, body: { ...r.body, disk: await pointsDisk({ hubDir, projectId, points: r.body.points }) } };
 }
 
+// GET /api/projects/<id>/restore-scope (read-only, no action mode needed; docs/restore.md §12): what the copy a job's
+// start takes would hold now, before the job, so nobody counts on undoing something a point does not keep. The same
+// scan and the same choice as a start's point (preparePoint: full, lean over the limits); nothing is copied. Answers
+// { project, ok: true, scope, files, bytes, leftOut, leftBytes, big: [{ rel, size }] (the largest left-out files, at
+// most SCOPE_BIG), skipped: [{ name, why }] (folders left out: history, packages, build, tools, hub; at most
+// SCOPE_DIRS; moreDirs counts the rest) } or { project, ok: false, problem } (too-many-files, too-large,
+// file-too-large, too-deep, and what keeps a start from taking a point at all: no-hub, legacy-hub and the refusals of
+// resolveProject, the very gate takeStartPoint passes). The scan reads the disk synchronously, as a start's does;
+// createJobChangesCache keeps one answer per project for a few seconds.
+export const SCOPE_BIG = SEEN_BIG;
+export const SCOPE_DIRS = 12;
+export const SCOPE_TTL_MS = 5000;
+
+// The project's files as one fingerprint (docs/internal/evidence-card-plan.md E1): the files a start's point would hold
+// (the same scan, skips and limits, lean over the full ones), without the team's notes (.sibersentez/, and .orkestra/ of
+// older versions: the team writes them after a review). So "the same" means the same files a restore point would hold:
+// skipped folders (node_modules, build output at the top), a lean scan's big files and logs, links and unreadable
+// folders are not in it.
+//   quick       SHA-256 over every file's path, size, write time and change time (no file is read). The change time
+//               cannot be set back (utimes moves it), so a file rewritten with its size and write time kept still
+//               changes it (review Z1)
+//   digest      SHA-256 over every file's path and content digest, only when withDigest (reads every file,
+//               asynchronously); null when a file cannot be read now (never a wrong "same")
+//   writtenSince entries written after `after` (written, not necessarily changed): the files whose write or change time
+//               is later (a copy keeping its old write time, or a renamed file, still moves the change time), and every
+//               folder the scan entered whose time is later, an emptied one too (a file deleted or renamed away moves
+//               its folder's). Cautious: a new top-level folder such as node_modules, or a cache a test run leaves
+//               (__pycache__), moves a folder's time too: unknown, never a wrong "same". On FAT32 and exFAT there is no
+//               change time and write times have a 2 s grain.
+// Returns { ok: true, files, bytes, scope, quick, digest?, writtenSince } or { ok: false, problem }.
+export async function treeFingerprint(dir, { hubDir = null, limits = RESTORE_LIMITS, after = null, withDigest = true, readFile = fs.promises.readFile } = {}) {
+  let seen = { dirs: new Map(), big: [], folders: [] };
+  let scan = scanProject(dir, limits, [hubDir], 'full', seen);
+  if (!scan.ok && OVER.has(scan.problem)) {
+    seen = { dirs: new Map(), big: [], folders: [] };
+    scan = scanProject(dir, limitsFor('lean', limits), [hubDir], 'lean', seen);
+  }
+  if (!scan.ok) return { ok: false, problem: scan.problem };
+  const notes = new Set([FIRST_DIR, '.orkestra']);
+  const files = scan.files.filter((f) => !notes.has(f.rel.split('/')[0].toLowerCase()));
+  const quick = crypto.createHash('sha256');
+  const later = (t) => Number.isFinite(after) && t > after;
+  let writtenSince = 0;
+  for (const f of files) {
+    const ctime = Math.floor(lstat(path.join(dir, ...f.rel.split('/')))?.ctimeMs || 0);
+    quick.update(`${f.rel}\0${f.size}\0${f.mtimeMs}\0${ctime}\n`);
+    if (later(Math.max(f.mtimeMs, ctime))) writtenSince++;
+  }
+  if (Number.isFinite(after)) {
+    for (const rel of seen.folders) {
+      if (rel && notes.has(rel.split('/')[0].toLowerCase())) continue;
+      const st = lstat(rel ? path.join(dir, ...rel.split('/')) : dir);
+      // Whole milliseconds, as every other time here (REVIEW.md's too): a folder written in the very millisecond of the
+      // review is not later than it
+      if (st && later(Math.floor(Math.max(st.mtimeMs, st.ctimeMs)))) writtenSince++;
+    }
+  }
+  const out = { ok: true, files: files.length, bytes: files.reduce((n, f) => n + f.size, 0), scope: scan.scope, quick: quick.digest('hex'), writtenSince };
+  if (!withDigest) return out;
+  const digest = crypto.createHash('sha256');
+  for (const f of files) {
+    let buf;
+    try {
+      buf = await readFile(path.join(dir, ...f.rel.split('/')));
+    } catch {
+      return { ...out, digest: null };
+    }
+    digest.update(`${f.rel}\0${digestOf(buf)}\n`);
+  }
+  return { ...out, digest: digest.digest('hex') };
+}
+
+export function projectRestoreScope({ catalog, projectId, homeDir = null, claudeDir = null, limits = RESTORE_LIMITS }) {
+  if (!catalog?.getProject?.(projectId)) return { status: 404, body: { error: 'not-a-project' } };
+  const body = { project: projectId };
+  const hubDir = catalog.hubDir || null;
+  const dirOk = (d) => {
+    try {
+      return fs.statSync(d).isDirectory();
+    } catch {
+      return false;
+    }
+  };
+  if (!hubDir || !dirOk(hubDir)) return { status: 200, body: { ...body, ok: false, problem: 'no-hub' } };
+  if (isLegacyHub(hubDir)) return { status: 200, body: { ...body, ok: false, problem: 'legacy-hub' } };
+  const r = resolveProject({ catalog, projectId, hubDir, homeDir, claudeDir });
+  if (!r.ok) return r.status === 404 && r.error === 'not-a-project' ? { status: 404, body: { error: r.error } } : { status: 200, body: { ...body, ok: false, problem: r.error } };
+  const dir = r.dir;
+  const fresh = () => ({ dirs: new Map(), big: [] });
+  let seen = fresh();
+  let scan = scanProject(dir, limits, [hubDir], 'full', seen);
+  if (!scan.ok && OVER.has(scan.problem)) {
+    seen = fresh();
+    scan = scanProject(dir, limitsFor('lean', limits), [hubDir], 'lean', seen);
+  }
+  if (!scan.ok) return { status: 200, body: { ...body, ok: false, problem: scan.problem } };
+  const big = seen.big.sort((a, b) => b.size - a.size || (a.rel < b.rel ? -1 : 1)).slice(0, SCOPE_BIG);
+  const dirs = [...seen.dirs.values()];
+  return { status: 200, body: { ...body, ok: true, scope: scan.scope, files: scan.files.length, bytes: scan.bytes, leftOut: scan.leftOut, leftBytes: scan.leftBytes, big, skipped: dirs.slice(0, SCOPE_DIRS), moreDirs: Math.max(0, dirs.length - SCOPE_DIRS) } };
+}
+
 // GET /api/projects/<id>/job-changes?job=<Job-ID> (read-only, no action mode needed; docs/restore.md §9): what changed
 // in the project since that job's start copy, so a result shows this job's changes and not the last 24 hours'. The
 // basis says how far it holds:
@@ -814,10 +944,13 @@ export const JOB_CHANGES_MAX = 200;
 // project's comparison reads files (the review measured about 0.4 s on 821 files). A request while one runs waits
 // for that one.
 const JOB_CHANGES_TTL_MS = 10000;
+// run: the answer kept (projectJobChanges; the scope look, projectRestoreScope, uses the same cache with jobId '');
+// args.key, when given, names the answer instead of the project and the job
+/** @param {{ ttl?: number, now?: () => number, run?: (args: any) => any }} [opts] */
 export function createJobChangesCache({ ttl = JOB_CHANGES_TTL_MS, now = Date.now, run = projectJobChanges } = {}) {
   const cache = new Map();
   return (args) => {
-    const k = `${args.projectId}|${args.jobId}`;
+    const k = args.key ?? `${args.projectId}|${args.jobId}`;
     const e = cache.get(k);
     if (e && (e.pending || now() - e.at < ttl)) return e.promise;
     const entry = { at: now(), pending: true, promise: null };

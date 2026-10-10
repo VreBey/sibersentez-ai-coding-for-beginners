@@ -4,7 +4,8 @@ description: "Closes finished work on a git branch: runs the tests fresh, then o
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.1"
+  version: "0.1.2"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "git, release"
   sibersentez-stage: "ship"
   sibersentez-keywords-tr: "iş bitti, dalı birleştir*, dalı kapat*, pull request*, pr aç*, birleştirip, ana dala"

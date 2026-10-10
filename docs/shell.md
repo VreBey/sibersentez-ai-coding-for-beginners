@@ -73,6 +73,21 @@ count ("Page errors this run: N"). Settings → Help → "Log files · Open the 
 folder in File Explorer; the shell always opens its own folder, never a path from the page. Nothing is sent anywhere:
 the person attaches the logs to a report if they want. Tests: `test/page-errors.test.mjs`.
 
+### Support bundle
+
+Settings → Help → "Support bundle · Preview" (desktop app only: the logs are the shell's; `electron/support-bundle.mjs`,
+`public/js/supportBundle.js`) shows one text before anything leaves the computer: the diagnostic info, the hub's
+`settings.json` (the known keys `version`, `language`, `actions` and `theme` keep a short plain value, any other
+key shows "(set, value hidden)") and the last 300 lines of `main.log` and `server.log` (at most 64 KB read from
+each). Each line is cut at 500 characters and masked: keys, Bearer values and passwords in addresses, e-mail
+addresses (a package@version stays), the home folder (`~`), and every other folder path as `<path>`, whole: a quoted
+path (Node's error messages quote them) up to its closing quote, any other up to the end of the line or the logs' own
+" · " separator. Folder names hold spaces, brackets and apostrophes ("Yeni klasör (2)", "Ayşe'nin Ödevi"), so a path
+is never cut by a guess at where its name ends; what follows it on its line may be masked with it. The default hub
+`~\SiberSentez` itself stays (not a folder whose name only starts like it). **Copy** puts it on the clipboard; **Save as a file…** opens the system Save dialog
+(the page never names a path, and a hidden QA run never shows the dialog). Nothing is sent anywhere. Tests:
+`test/support-bundle.test.mjs`.
+
 ## Look
 
 The shell sets the layout only. Every colour comes from `public/css/theme.css` (docs/theme.md); the look is designed

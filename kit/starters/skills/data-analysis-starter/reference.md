@@ -1,5 +1,7 @@
 # Data analysis starter: reference
 
+Contents: requirements.txt · explore.py · analyze.py · Cleaning recipes · Common problems · Good habits
+
 Run commands from the project folder with the project's own Python (`.venv\Scripts\python`). The examples use a file
 `data/raw/sales.csv` with the columns `date`, `product` and `amount`; rename them to the user's.
 

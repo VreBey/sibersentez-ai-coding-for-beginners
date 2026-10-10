@@ -4,7 +4,8 @@ description: "Handles a leaked key, token or password step by step: find where i
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.2"
+  version: "0.1.3"
+  sibersentez-checked: "2026-09-30"
   sibersentez-tags: "security, git"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "commit ettim, yanlışlıkla şifre*, yanlışlıkla anahtar*, yanlışlıkla paylaştım, anahtarı paylaştım, github a yükledim, sızdır*, sızdı, geçmişten sil*, anahtarı iptal"

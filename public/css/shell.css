@@ -129,3 +129,8 @@
 /* "A new version is out" in Settings (roadmap F3a): its state under the switch */
 .upd-state { margin-top: 6px; max-width: 34ch; text-align: right; }
 .upd-state a { color: var(--accent); }
+
+/* The support bundle's preview in Settings (supportBundle.js): the text to read, then Copy, Save, Close */
+.sb-prev { padding: 0 0 12px; display: grid; gap: 8px; }
+.sb-text { width: 100%; min-height: 220px; max-height: 50vh; resize: vertical; font: 12px/1.5 var(--mono, ui-monospace, Consolas, monospace); background: var(--field, var(--panel-low)); color: var(--text); border: 1px solid var(--field-border, var(--line)); border-radius: 7px; padding: 8px 10px; white-space: pre; overflow: auto; }
+.sb-prev .flow-btns { display: flex; flex-wrap: wrap; gap: 8px; }

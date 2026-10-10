@@ -2,10 +2,11 @@
 name: web-app-starter
 description: "Creates a first working web app: plain HTML and JavaScript for a one-page tool (nothing installed), or Next.js or Vite with React in TypeScript for more; checks tools, runs it in the browser, sets up checks. Use when the idea is a website, web app, small browser tool, dashboard, shop or blog, or a React or Next.js project needs its first version."
 license: "MIT (see LICENSE.md)"
-compatibility: "Needs Node.js (20.19 or newer, an LTS release is best), npm and git. Commands are written for Windows PowerShell and also work on macOS and Linux."
+compatibility: "Needs Node.js 22.12 or newer (24 LTS is best; Node.js 20 no longer gets security fixes), npm and git. Commands are written for Windows PowerShell and also work on macOS and Linux."
 metadata:
   author: "SiberSentez"
-  version: "0.1.4"
+  version: "0.1.5"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "nextjs, react, typescript, web"
   sibersentez-stage: "start"
   sibersentez-keywords-tr: "web sitesi, site yap*, site kur*, sitesi, web uygulama*, internet sitesi, sayfa yap*, web sayfası, panel*, blog*, mağaza*, online mağaza, online satış, e ticaret, randevu*, rezervasyon*, portfolyo, tanıtım sayfası, tarayıcı*, next js, react"
@@ -26,8 +27,9 @@ Common problems and their fixes are in [reference.md](reference.md).
 
 ## 1. Check the tools
 
-1. `node --version`: Node.js 20.19 or newer (22 LTS or later is best). If it is missing, the user installs the LTS
-   version from nodejs.org, or you run `winget install OpenJS.NodeJS.LTS` after a yes. Then open a new terminal.
+1. `node --version`: Node.js 22.12 or newer, which Vite needs (24 LTS is best; 20 no longer gets security fixes). If
+   it is missing or older, the user installs the LTS version from nodejs.org (on Windows you may run
+   `winget install OpenJS.NodeJS.LTS` after a yes; on Linux nodejs.org lists the package manager steps). Then open a new terminal.
 2. `npm --version`. If PowerShell refuses to run `npm` because running scripts is disabled, use `npm.cmd` and
    `npx.cmd` instead; changing the execution policy is a system setting and needs the user's yes.
 3. `git --version`.

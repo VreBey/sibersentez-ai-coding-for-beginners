@@ -3,8 +3,8 @@
 Status: first version and wired into the app (§6), 2026-09-29. Owner decision of the same day: "Competing apps ship their own skills and agents"
 → SiberSentez ships **its own set, written from scratch**. No third-party content goes into the package (MIT
 included); no text, structure or phrasing is copied from other repositories (superpowers, BMAD, anthropics/skills
-and similar may inspire, never be copied). Background: `qa/rakip-arastirma/rapor.md` §2 (idea to skill), §6
-(licenses, the Agent Skills standard) and the closing recommendations.
+and similar may inspire, never be copied). Background: a review of public skill collections: idea to skill,
+licenses and the Agent Skills standard.
 
 The user scenario it serves: someone buys SiberSentez, creates a folder, types an idea, and the system finds the
 skills that fit.

@@ -18,7 +18,7 @@ import { PLATFORM, fileManager, isLocalAbsolute, normalizeDir } from './platform
 // 'new' (a new Claude Code session) stays for the server and the skill trial; the context menu offers 'terminal'
 export const LAUNCH_ACTIONS = Object.freeze(['resume', 'fork', 'new', 'terminal', 'explorer', 'vscode']);
 
-export const SKILL_ACTIONS = Object.freeze(['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply']);
+export const SKILL_ACTIONS = Object.freeze(['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'project-relink', 'project-unlink']);
 
 // An AI tool started in a terminal, with the project's idea as its first message (docs/ai-start.md)
 const AI_ACTIONS = Object.freeze(['start-ai']);
@@ -72,6 +72,10 @@ const SKILL_FIELDS = {
   // Restore points (docs/restore.md): what going back would do, and going back
   'restore-preview': { required: ['projectId', 'pointId'], optional: [] },
   'restore-apply': { required: ['projectId', 'pointId'], optional: ['planId'] },
+  // A moved project linked to its new folder (docs/internal/project-relink-plan.md): a picked folder, or the listed
+  // project whose folder it is; and the link undone
+  'project-relink': { required: ['projectId'], optional: ['folder', 'from', 'plan', 'planId'] },
+  'project-unlink': { required: ['projectId'], optional: ['plan'] },
   // GitHub import (docs/github-import.md §6)
   'github-fetch': { required: ['url'], optional: [] },
   'github-import': { required: ['fetchId', 'items'], optional: [] },
@@ -349,7 +353,16 @@ export function createValidators({ catalog, ingest, hubDir, codeExe, homeDir, cl
       }
     } else {
       if (typeof body.projectId !== 'string' || !PROJECT_ID_RE.test(body.projectId)) return reject(400, 'bad-project-id');
-      if (action === 'restore-preview' || action === 'restore-apply') {
+      if (action === 'project-relink') {
+        if (body.folder !== undefined && (typeof body.folder !== 'string' || !body.folder || body.folder.length > 1024)) return reject(400, 'bad-folder');
+        if (body.from !== undefined && (typeof body.from !== 'string' || !PROJECT_ID_RE.test(body.from))) return reject(400, 'bad-project-id');
+        if ((body.folder === undefined) === (body.from === undefined)) return reject(400, 'folder-or-from');
+        // The preview's digest: the link is written only while the plan is the one the person saw
+        if (body.planId !== undefined && (typeof body.planId !== 'string' || !/^[0-9a-f]{16}$/.test(body.planId))) return reject(400, 'bad-field');
+        ctx.relink = { projectId: body.projectId, folder: body.folder ?? null, from: body.from ?? null, planId: body.planId || null };
+      } else if (action === 'project-unlink') {
+        ctx.relink = { projectId: body.projectId };
+      } else if (action === 'restore-preview' || action === 'restore-apply') {
         if (typeof body.pointId !== 'string' || !POINT_ID_RE.test(body.pointId)) return reject(400, 'bad-point-id');
         ctx.pointId = body.pointId;
         // The preview's digest: going back refuses a plan that changed since the person saw it
@@ -395,7 +408,7 @@ export function createValidators({ catalog, ingest, hubDir, codeExe, homeDir, cl
     const github = ctx.repo ? [ctx.repo.name, ctx.repo.ref, ctx.repo.path] : ctx.fetchId || '';
     const digest = crypto
       .createHash('sha256')
-      .update(JSON.stringify([ctx.source || '', ctx.picks || ctx.items || ctx.adopt || ctx.keys || ctx.checks || [], ctx.targets || [], !!ctx.planOnly, github, ctx.pointId || '']))
+      .update(JSON.stringify([ctx.source || '', ctx.picks || ctx.items || ctx.adopt || ctx.keys || ctx.checks || [], ctx.targets || [], !!ctx.planOnly, github, ctx.pointId || '', ctx.relink || null]))
       .digest('hex')
       .slice(0, 16);
     return { ok: true, skill: true, action, ctx, key: `${action}|${body.projectId || ''}|${digest}` };

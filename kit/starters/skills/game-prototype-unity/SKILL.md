@@ -2,10 +2,11 @@
 name: game-prototype-unity
 description: "Guides a first playable Unity prototype in C#: create the project in Unity Hub, set up git for Unity, write a player controller, build a tiny test scene and reach Play mode with no Console errors. Use when the idea is a game, a 2D or 3D prototype, a platformer or a game jam entry in Unity, or a Unity project needs its first playable version."
 license: "MIT (see LICENSE.md)"
-compatibility: "Needs Unity Hub with a Unity 6 editor, installed by the user, plus git. Written for Windows; macOS works with the usual path changes."
+compatibility: "Needs Unity Hub with a Unity 6 editor, installed by the user, plus git. Written for Windows; macOS and Linux work with the usual path changes."
 metadata:
   author: "SiberSentez"
-  version: "0.2.0"
+  version: "0.2.1"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "unity, csharp, gamedev"
   sibersentez-stage: "start"
   sibersentez-keywords-tr: "oyun*, unity, platform oyunu, 2d, 3d, karakter*, düşman*, seviye*, oynanış, oyun prototipi, fps, rpg, bulmaca, game jam"
@@ -27,7 +28,8 @@ clearly which step is whose. Common errors and the full script are in [reference
 
 ## 1. Check (user)
 
-- Unity Hub is installed, with the newest Unity 6 LTS editor it recommends. The editor is several gigabytes; the
+- Unity Hub is installed, with the newest Unity 6 LTS editor it recommends (6.3 LTS or later in October 2026; 6.0 LTS
+  stops getting fixes this month, so a new project does not start on it). The editor is several gigabytes; the
   user installs it. Suggested modules: Windows Build Support, and Visual Studio or VS Code support for scripts.
 - In Unity: Edit > Preferences > External Tools > External Script Editor set to their code editor, so scripts open
   with autocomplete.

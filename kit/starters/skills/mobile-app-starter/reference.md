@@ -1,5 +1,12 @@
 # Mobile app starter: reference
 
+Contents: What the default template creates · Verification commands · Common problems · Good habits · Moving between
+screens (Expo Router) · Keeping data on the phone · Permissions · Publishing with EAS · Common problems (publishing
+and data)
+
+Checked 2026-10-09 against https://docs.expo.dev (revisit every six months): Expo SDK 57 needs Node.js 22.13 or newer;
+the App Store and Google Play versions of Expo Go follow the newest SDK a few weeks after it comes out.
+
 Run commands from the app folder (for example `mobile/`).
 
 ## What the default template creates
@@ -37,7 +44,8 @@ Some templates also write notes for AI coding tools (`AGENTS.md`). Leave them in
 | Message or symptom | Cause and fix |
 |---|---|
 | The phone cannot reach the dev server, or loads forever | Phone and computer on different networks, a VPN, or the firewall blocked Node.js. Use the same Wi-Fi, pause the VPN, allow Node.js on private networks. If it still fails: `npx expo start --tunnel` (it may offer to install a helper package: ask). |
-| "Project is incompatible with this version of Expo Go" | The project's Expo SDK and the Expo Go app do not match. Update Expo Go from the store; if the project is older, upgrade the project's SDK (a separate, careful step) or use a development build. |
+| Expo Go says a login is needed (iPhone) | Since SDK 57, Expo Go on a real iPhone opens a project only when the terminal and the app are signed in to the same Expo account. `npx expo login` (the user signs in), then sign in in Expo Go (Home tab, avatar) and scan again. The iOS simulator does not ask. |
+| "Project is incompatible with this version of Expo Go" | The project's Expo SDK and the Expo Go app do not match. Update Expo Go from the store; if the project is older, upgrade the project's SDK (a separate, careful step) or use a development build. Right after a new SDK, the store's Expo Go may lag behind for a while: on an iPhone `npx eas-cli@latest go` builds your own Expo Go through TestFlight (it needs a paid Apple developer account), or try it on Android first. |
 | `Unable to resolve module ...` | The package is not installed, or the cache is old. `npx expo install <package>`, then `npx expo start --clear`. |
 | "Text strings must be rendered within a `<Text>` component" | Plain text placed directly inside a `View`. Wrap it in `<Text>`. |
 | Changes do not show up | File not saved, or the app lost its connection. Save, press `r` in the terminal, or restart with `--clear`. |

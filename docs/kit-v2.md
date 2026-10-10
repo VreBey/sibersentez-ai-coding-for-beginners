@@ -293,7 +293,9 @@ English and Turkish words (research §4.13). Names in `public/js/strings/kit.js`
    plainly fake.
 9. **Any tool.** No tool-specific widgets; subagent calls only in the `team` category, always with the role-hat path.
 10. **Freshness.** Items that name outside services (Vercel, Expo, Docker, Stripe, GitHub Actions…) carry the
-    check date and the official link in `reference.md`; revisited every six months.
+    check date and the official link in `reference.md`; revisited every six months. Since 2026-10-09 the date is
+    also metadata (`sibersentez-checked`, equal to the newest "Checked" line; absent means never checked), and
+    `node tools/kit-freshness.mjs` lists the items that are due or unchecked before a release.
 11. **Tests per item.** Three ideas that must pick it and two that must not; no two items tie on the same idea.
 
 ## 8. The app (round 4, after wave 1)

@@ -88,7 +88,8 @@ test('"What did it do?" (C3) and a tip for the next job from the person\'s own w
     setLanguage('en');
   }
   const d = read('public/js/views/drawer.js');
-  assert.ok(d.includes("const r = askAiDraft(projectId, t('jrExplainDraft'));") && d.includes("return fillJob(projectId, t('jrExplainDraft'));"));
+  // The explain draft (and the new-review one, evidence card E2) goes to the AI tab, else into the job box
+  assert.ok(d.includes("const text = t(act === 'explain' ? 'jrExplainDraft' : 'jrReReviewDraft');") && d.includes('const r = askAiDraft(projectId, text);') && d.includes('return fillJob(projectId, text);'));
   assert.ok(d.includes('const tips = jobTips(label);'));
   assert.doesNotMatch(STRINGS.tr.jrExplainDraft + STRINGS.en.jrExplainDraft, /[\r\n]/);
 });

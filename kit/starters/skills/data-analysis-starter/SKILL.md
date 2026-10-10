@@ -2,10 +2,11 @@
 name: data-analysis-starter
 description: "Sets up a first data analysis in Python: load a CSV or Excel file, look at it, clean it, answer one question, draw one chart and save the result, checking every number a second way. Use when the user has a data file, a spreadsheet or a CSV and wants to count, compare, find a trend or make a chart from it."
 license: "MIT (see LICENSE.md)"
-compatibility: "Needs Python 3.10 or newer and git. Commands are written for Windows; on macOS and Linux use .venv/bin/python."
+compatibility: "Needs Python 3.11 or newer (3.14 is best) and git. Commands are written for Windows; on macOS and Linux use .venv/bin/python."
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "python, data"
   sibersentez-stage: "start"
   sibersentez-keywords-tr: "veri analiz*, analiz et*, veri seti*, csv, excel*, pandas, grafik çiz*, veri temizle*, istatistik*, tablo verisi, satış verisi"
@@ -27,9 +28,10 @@ The code, the cleaning recipes and the common problems are in [reference.md](ref
 
 ## 1. Check the tools
 
-`py --version` (or `python --version`): 3.10 or newer. If `python` opens the Microsoft Store, Python is not really
-installed: the user installs it from python.org (ticking "Add python.exe to PATH"), or you run
-`winget install Python.Python.3.13` after a yes. Open a new terminal afterwards. `git --version` too.
+`py --version` (or `python --version`): 3.11 or newer (3.14 is best; 3.10 no longer gets security fixes). If
+`python` opens the Microsoft Store, Python is not really installed: the user installs it from python.org (the Python
+install manager it offers for Windows, or the classic installer with "Add python.exe to PATH" ticked), or you run
+`winget install Python.Python.3.14` after a yes. Open a new terminal afterwards. `git --version` too.
 
 ## 2. The file and the question
 

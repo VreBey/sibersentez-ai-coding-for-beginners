@@ -1,5 +1,8 @@
 # Browser extension starter: reference
 
+Contents: extension/manifest.json · extension/content.js · extension/popup.html · extension/popup.js · Common problems
+· Good habits
+
 Checked against Chrome's extension documentation (https://developer.chrome.com/docs/extensions) on 2026-10-01; revisit
 every six months. Firefox accepts most of the same code but differs in details (its own `browser_specific_settings`
 and background setup): read its documentation before promising a Firefox version.

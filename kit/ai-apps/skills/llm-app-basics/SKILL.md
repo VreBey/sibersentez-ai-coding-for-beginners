@@ -4,7 +4,8 @@ description: "Adds a call to an AI language model to an app: key kept in .env, a
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "ai, backend"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "yapay zekâ modeli, yapay zekâ ekle*, yapay zekâ özelliği, yapay zekâ entegre*, yapay zekâ uygulama*, yapay zekâ çağır*, dil modeli, llm, prompt*, chatgpt, openai, claude api"

@@ -629,6 +629,8 @@ test('the drawer turns actions on only through the header switch (one bridge cal
   const drawer = fs.readFileSync(new URL('../public/js/views/drawer.js', import.meta.url), 'utf8');
   assert.ok(drawer.includes('reply = await turnActionsOn();'));
   assert.doesNotMatch(drawer, /setActionsMode/);
+  // Nor the part moved out of it (views/drawerFit.js)
+  assert.doesNotMatch(fs.readFileSync(new URL('../public/js/views/drawerFit.js', import.meta.url), 'utf8'), /setActionsMode/);
   const main = fs.readFileSync(new URL('../public/js/main.js', import.meta.url), 'utf8');
   assert.ok(main.includes("turnActionsOn: !QA && shellBridge(window) ? () => actSwitch.turnOn() : null,"));
 });

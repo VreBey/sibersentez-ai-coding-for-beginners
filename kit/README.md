@@ -4,7 +4,7 @@ SiberSentez's own set of skills and agents, written for SiberSentez from scratch
 empty folder to a running, tested, documented and released project, with any AI coding tool that reads the
 [Agent Skills](https://agentskills.io/specification) format.
 
-- 59 skills and 16 agents, each a plain Markdown file.
+- 60 skills and 16 agents, each a plain Markdown file.
 - Written for beginners: every step is explained, and the AI asks before deleting or overwriting files, installing
   anything, changing system settings or pushing to a remote.
 - The files are in English; every skill tells the AI to talk to the user in the user's own language.
@@ -18,7 +18,7 @@ empty folder to a running, tested, documented and released project, with any AI 
 | Starters (`starters`) | `api-service-starter`, `browser-extension-starter`, `cli-tool-starter`, `data-analysis-starter`, `desktop-app-starter`, `game-prototype-godot`, `game-prototype-unity`, `landing-page-starter`, `mobile-app-starter`, `project-setup`, `python-bot-starter`, `web-app-starter` | – |
 | Quality and testing (`quality`) | `debug-helper`, `dependency-update`, `fix-build-errors`, `performance-check`, `refactor-safely`, `review-changes`, `test-first`, `try-it-in-browser`, `verify-before-done` | `debugger`, `qa-explorer`, `reviewer`, `tester` |
 | Security (`security`) | `secrets-cleanup`, `security-check` | `security-auditor` |
-| Docs (`docs`) | `agent-rules`, `api-docs`, `architecture-notes`, `docs-writer`, `explain-codebase` | `doc-builder` |
+| Docs (`docs`) | `agent-rules`, `api-docs`, `architecture-notes`, `docs-writer`, `explain-codebase`, `skill-writer` | `doc-builder` |
 | Release (`release`) | `deploy-web`, `docker-basics`, `domain-email`, `env-and-secrets`, `finish-branch`, `git-basics`, `github-actions-setup`, `launch-checklist`, `move-to-new-host`, `release-prep` | `devops-helper`, `launch-checker` |
 | Design and UI (`design`) | `ui-check`, `ui-polish`, `multi-language` | `frontend-builder` |
 | Backend and data (`backend`) | `auth-flow`, `contact-form`, `database-schema` | `backend-builder`, `data-analyst` |
@@ -54,14 +54,22 @@ has no item for them; when an idea needs one, `idea-to-plan` and `tech-stack-cho
 **With SiberSentez**: open a project, pick the suggested SiberSentez Kit items and install them; SiberSentez copies them into
 the project's tool folders.
 
-**By hand**: copy a skill folder into the project:
+**By hand**: copy a skill folder (`<category>/skills/<name>/`) or an agent file into the project. Where each tool
+looks (checked 2026-10-09 in each tool's documentation or its installed package):
 
-- Claude Code: `<project>/.claude/skills/<name>/`
-- Other tools that read Agent Skills (for example Codex CLI, Gemini CLI, GitHub Copilot, Cursor): usually
-  `<project>/.agents/skills/<name>/`; check your tool's documentation.
+| Tool | Skills | Agents |
+|---|---|---|
+| Claude Code | `.claude/skills/<name>/` | `.claude/agents/<name>.md` as it is |
+| GitHub Copilot (CLI, VS Code) | `.github/skills/`, `.claude/skills/` or `.agents/skills/` | `.claude/agents/` as it is |
+| Cursor | `.agents/skills/`, `.cursor/skills/` or `.claude/skills/` | `.claude/agents/` as it is |
+| Codex CLI | `.agents/skills/` | `.codex/agents/<name>.toml` (its own format; read-only sandbox for an agent that only reads) |
+| Gemini CLI, Antigravity | `.agents/skills/` | Gemini CLI: `.gemini/agents/<name>.md` (`name`, `description` and `tools` in Gemini names) |
+| Qwen Code | `.qwen/skills/` or `.agents/skills/` | `.qwen/agents/<name>.md` (`name`, `description` and `tools` in Qwen names) |
+| OpenCode | `.agents/skills/`, `.opencode/skills/` or `.claude/skills/` | `.opencode/agents/<name>.md` (`description`, `mode: subagent`, edit and shell denied when the tools leave them out) |
 
-Agents are Claude Code subagent files: copy them to `<project>/.claude/agents/`. GitHub Copilot and Cursor can read
-that folder too.
+So `.claude/` serves Claude Code, Copilot and Cursor, and `.agents/skills/` serves every other tool. An agent copied by
+hand for Codex, Gemini CLI, Qwen Code or OpenCode needs its frontmatter rewritten in that tool's format; SiberSentez
+writes those files itself when it installs an agent for a job run with one of them.
 
 ## License
 

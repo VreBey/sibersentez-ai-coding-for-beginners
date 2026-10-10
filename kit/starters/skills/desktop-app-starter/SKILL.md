@@ -2,10 +2,11 @@
 name: desktop-app-starter
 description: "Creates a first working Windows desktop app with Electron and TypeScript using Electron Forge: generates it in a subfolder, opens its window, adds a safe bridge to the computer and builds an installer. Use when the idea is a desktop app, a Windows program or a tray tool, or an Electron project needs its first version."
 license: "MIT (see LICENSE.md)"
-compatibility: "Needs Node.js (20.19 or newer, an LTS release is best), npm and git. Written for Windows; Electron Forge also builds for macOS and Linux on those systems."
+compatibility: "Needs Node.js 22.12 or newer (24 LTS is best; Node.js 20 no longer gets security fixes), npm and git. Written for Windows; Electron Forge also builds for macOS and Linux on those systems."
 metadata:
   author: "SiberSentez"
-  version: "0.1.1"
+  version: "0.1.2"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "electron, typescript, desktop"
   sibersentez-stage: "start"
   sibersentez-keywords-tr: "masaüstü*, bilgisayar*, program, programı, windows uygulama*, windows program*, pencere*, exe, kurulum dosyası, sistem tepsi*, tepsi*, çevrimdışı, electron"
@@ -27,9 +28,10 @@ through a small bridge, and an installer can be built. Code for the bridge and c
 
 ## 1. Check the tools
 
-1. `node --version` (20.19 or newer; 22 LTS or later is best) and `npm --version`. If Node.js is missing, the user
-   installs the LTS version from nodejs.org, or you run `winget install OpenJS.NodeJS.LTS` after a yes. Open a new
-   terminal afterwards.
+1. `node --version` (22.12 or newer, which the Vite template needs; 24 LTS is best, 20 no longer gets security fixes)
+   and `npm --version`. If Node.js is missing or older, the user installs the LTS version from nodejs.org (on Windows
+   you may run `winget install OpenJS.NodeJS.LTS` after a yes; on Linux nodejs.org lists the package manager steps).
+   Open a new terminal afterwards.
 2. `git --version`.
 3. In one sentence, why Electron: the window is a web page (HTML, CSS, TypeScript) with safe access to the computer.
    Alternatives if the plan says so: Tauri (smaller apps, needs Rust) or WPF/WinUI (C#).

@@ -1,3 +1,4 @@
+// @ts-check
 // The header's "waiting for you" counter (docs/attention.md): how many open sessions finished their turn and wait for
 // the person. One waiting session opens at once; several open a short list under the counter, the latest first.
 import { store } from '../store.js';
@@ -34,7 +35,7 @@ function rowsHtml(waiting) {
 
 // todayEl (optional): Today's "Waiting for you" block, shown only while someone waits (docs/shell.md). showTab(tabId):
 // brings an asking terminal tab forward (main.js: terminalDock showTab)
-export function createWaitingMenu({ chipEl, menuEl, open, todayEl = null, showTab = () => false }) {
+export function createWaitingMenu({ chipEl, menuEl, open = undefined, todayEl = null, showTab = (_tab) => false }) {
   let lastChip = '';
   let lastReport = '';
   let lastCount = null;

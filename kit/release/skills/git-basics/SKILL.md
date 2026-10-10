@@ -4,7 +4,8 @@ description: "Explains and runs everyday git steps one at a time: see what chang
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.2.0"
+  version: "0.2.1"
+  sibersentez-checked: "2026-09-30"
   sibersentez-tags: "git"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "git nedir, github nedir, github a nasıl yükle*, github hesabı, commit*, branch*, dal aç*, geri al*, değişiklikleri kaydet*, sürüm kontrol*, git kullan*"

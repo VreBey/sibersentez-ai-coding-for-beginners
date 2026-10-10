@@ -2,10 +2,11 @@
 name: python-bot-starter
 description: "Builds a first working Python bot or automation script: a virtual environment, a Telegram or Discord bot or a scheduled job, the token kept in a .env file, then run, test and stop it safely. Use when the idea is a chat bot, a Telegram bot, a Discord bot, a reminder or notification bot, a scraper, or a script that automates a task on a schedule."
 license: "MIT (see LICENSE.md)"
-compatibility: "Needs Python 3.10 or newer and git; a Telegram or Discord account for chat bots. Commands are written for Windows; on macOS and Linux use .venv/bin/python."
+compatibility: "Needs Python 3.11 or newer (3.14 is best) and git; a Telegram or Discord account for chat bots. Commands are written for Windows; on macOS and Linux use .venv/bin/python."
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "python, bot, automation, scraping"
   sibersentez-stage: "start"
   sibersentez-keywords-tr: "bot*, telegram, discord, otomasyon*, otomatik*, hatırlat*, bildirim*, zamanlanmış, her gün, her sabah, veri çek*, betik, script, python"
@@ -27,9 +28,10 @@ token safely outside the code and a first commit. Code and common errors are in 
 
 ## 1. Check the tools
 
-1. `py --version` (the Python launcher) or `python --version`: 3.10 or newer. If `python` opens the Microsoft Store,
-   Python is not really installed. The user installs it from python.org (ticking "Add python.exe to PATH"), or you
-   run `winget install Python.Python.3.13` after a yes. Open a new terminal afterwards.
+1. `py --version` (the Python launcher) or `python --version`: 3.11 or newer (3.14 is best; 3.10 no longer gets
+   security fixes). If `python` opens the Microsoft Store, Python is not really installed. The user installs it from
+   python.org (the Python install manager it offers for Windows, or the classic installer with "Add python.exe to
+   PATH" ticked), or you run `winget install Python.Python.3.14` after a yes. Open a new terminal afterwards.
 2. `git --version`.
 
 ## 2. Choose the kind of bot

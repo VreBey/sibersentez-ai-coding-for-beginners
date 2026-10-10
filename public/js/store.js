@@ -28,6 +28,9 @@ class Store {
     // The terminal dock's sessions that wait for the person (main.js sets it when the dock is there)
     /** @type {(() => string[]) | null} */
     this.dockAsking = null;
+    // The dock's running AI tabs, [{ projectId, tool, jobId }] (main.js sets it when the dock is there)
+    /** @type {(() => any[]) | null} */
+    this.dockRunning = null;
     this.projects = new Map();
     this.sessions = new Map();
     this.agents = new Map();

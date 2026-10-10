@@ -1,5 +1,11 @@
 # Orchestrate: file templates
 
+Contents: Status words · Verdict line · PLAN.md · In scope · Out of scope · Approach · Risks · Done when · Approval ·
+TASKS.md · T1: Write a failing test for <behavior> · T2: Implement <behavior> · T3: Run the tests again after T2 · T1:
+Reject an empty title in the note form · REPORT-<id>.md · What was done · Files changed · Commands run · Red and green
+(a small job's builder report only) · Concerns · REVIEW.md · Review T1 · Findings · Acceptance · Checks run ·
+LEDGER.md
+
 All files live in `.sibersentez/` at the project root. Write them in the user's language. The key words in capitals or
 in code style stay English so that every step can find them.
 

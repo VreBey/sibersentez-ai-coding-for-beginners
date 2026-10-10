@@ -7,10 +7,11 @@ import { icon } from '../icons.js';
 import { t, modeName, language, tOs } from '../i18n.js';
 import { actionsState, onActionsChange } from '../actions.js';
 import { costShown, setCostShown, advancedShown, setAdvancedShown, onPrefs, terminalReaderOn, setTerminalReader } from '../usage.js';
-import { installedTools, toolsState, onToolsChange, needTools } from './tools.js';
+import { installedTools, toolsState, onToolsChange, needTools, capsLine } from './tools.js';
 import { preferredTool, readTool, saveTool } from './job.js';
 import { updatesOn, setUpdatesOn, updatesState, updateRowHtml, onUpdates } from '../updates.js';
 import { THEME_CHOICES, themeChoice, setThemeChoice } from '../theme.js';
+import { supportPreviewHtml } from '../supportBundle.js';
 
 const LANG_NAMES = { tr: 'Türkçe', en: 'English' };
 
@@ -49,14 +50,19 @@ export const SPONSOR_URL = 'https://sibersentez.com/destek';
 // s: { mode, lang, cost, advanced, canSwitch, langChoice ('auto'|'en'|'tr'), canLang, theme ('dark'|'light'|'system') } -> HTML
 // The tool jobs start with (docs/simplify.md): a choice among the installed tools
 // looking: the tools are still being looked for (not "none found": opening Settings first said so, 2026-10-02)
+// Under the choice, what SiberSentez does with the chosen tool (tools.js capsLine: plan mode, resume, live state, usage,
+// sign-in check, what the result observes), so the difference shows where the tool is chosen (ui-states-plan U2)
 function toolRow(tools, tool, looking = false) {
   if (!tools.length) return row(t('setToolTitle'), t(looking ? 'aiLoading' : 'setToolNone'));
   const opts = tools.map((x) => `<option value="${esc(x.id)}"${x.id === tool ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
-  return row(t('setToolTitle'), t('setToolText'), `<select data-set-tool data-fk="set:tool" aria-label="${esc(t('setToolLabel'))}">${opts}</select>`);
+  const chosen = tools.find((x) => x.id === tool) || tools[0];
+  const select = `<select data-set-tool data-fk="set:tool" aria-label="${esc(t('setToolLabel'))}">${opts}</select>`;
+  return `<div class="set-row"><div class="set-text"><b>${esc(t('setToolTitle'))}</b><p class="small muted">${esc(t('setToolText'))}</p>${capsLine(chosen?.caps)}</div><div class="set-ctl">${select}</div></div>`;
 }
 
-// canLogs: the desktop app can open its log folder (review A4); a browser has none
-export function settingsHtml({ mode = 'off', lang = 'en', cost = false, advanced = false, canSwitch = false, langChoice = 'auto', canLang = false, tools = [], tool = '', toolsLooking = false, updates = updatesState(), updatesChecked = updatesOn(), canLogs = false, theme = themeChoice() } = {}) {
+// canLogs: the desktop app can open its log folder (review A4); a browser has none. canBundle: the desktop app can put
+// the support bundle together (supportBundle.js); bundle: its preview's state, or null
+export function settingsHtml({ canBundle = false, bundle = null, mode = 'off', lang = 'en', cost = false, advanced = false, canSwitch = false, langChoice = 'auto', canLang = false, tools = [], tool = '', toolsLooking = false, updates = updatesState(), updatesChecked = updatesOn(), canLogs = false, theme = themeChoice() } = {}) {
   const modeText = t(`setMode_${['off', 'dry', 'live'].includes(mode) ? mode : 'off'}`);
   return [
     group('actions', 'action', t('setActions'), [
@@ -67,11 +73,11 @@ export function settingsHtml({ mode = 'off', lang = 'en', cost = false, advanced
       row(t('setCostTitle'), t('setCostText'), toggle('data-set-cost', 'set:cost', cost, t('setCostTitle'))),
     ]),
     group('general', 'globe', t('setGeneral'), [languageRow(lang, langChoice, canLang), themeRow(theme), row(t('setAdvancedTitle'), t('setAdvancedText'), toggle('data-set-advanced', 'set:advanced', advanced, t('setAdvancedTitle'))), row(t('setReaderTitle'), t('setReaderText'), toggle('data-set-reader', 'set:reader', terminalReaderOn(), t('setReaderTitle'))), row(t('updTitle'), t('updText'), `${toggle('data-set-updates', 'set:updates', updatesChecked, t('updTitle'))}<div class="upd-state" aria-live="polite">${updateRowHtml(updates)}</div>`)]),
-    group('help', 'prompt', t('setHelp'), [row(t('setGuideTitle'), t('setGuideText'), btn('guide', t('setGuideOpen'))), row(t('setDiagTitle'), tOs('setDiagText'), btn('diag', t('setDiagCopy'))), ...(canLogs ? [row(t('setLogsTitle'), t('setLogsText'), btn('logs', t('setLogsOpen')))] : []), row(t('setLicenseTitle'), tOs('setLicenseText', { url: SOURCE_URL })), row(t('setSupportTitle'), t('setSupportText'), `<a class="act-btn" href="${SPONSOR_URL}" target="_blank" rel="noopener noreferrer" data-fk="set:support">${icon('heart')}<span>${esc(t('setSupportOpen'))}</span></a>`)]),
+    group('help', 'prompt', t('setHelp'), [row(t('setGuideTitle'), t('setGuideText'), btn('guide', t('setGuideOpen'))), row(t('setDiagTitle'), tOs('setDiagText'), btn('diag', t('setDiagCopy'))), ...(canLogs ? [row(t('setLogsTitle'), t('setLogsText'), btn('logs', t('setLogsOpen')))] : []), ...(canBundle ? [row(t('setBundleTitle'), t('setBundleText'), btn('bundle', t('setBundleOpen'))) + supportPreviewHtml(bundle)] : []), row(t('setLicenseTitle'), tOs('setLicenseText', { url: SOURCE_URL })), row(t('setSupportTitle'), t('setSupportText'), `<a class="act-btn" href="${SPONSOR_URL}" target="_blank" rel="noopener noreferrer" data-fk="set:support">${icon('heart')}<span>${esc(t('setSupportOpen'))}</span></a>`)]),
   ].join('');
 }
 
-export function createSettingsView(root, { openTools = () => {}, openGuide = () => {}, openActions = null, copyDiagnostics = () => {}, openLogs = null } = {}) {
+export function createSettingsView(root, { openTools = () => {}, openGuide = () => {}, openActions = null, copyDiagnostics = () => {}, openLogs = null, supportBundle = null } = {}) {
   // The language the desktop app passed (?lang=) is the one chosen; none means "follow Windows"
   const bridge = () => (typeof globalThis.sibersentezShell?.setLanguage === 'function' ? globalThis.sibersentezShell : null);
   let langChoice = 'auto';
@@ -81,11 +87,13 @@ export function createSettingsView(root, { openTools = () => {}, openGuide = () 
   } catch {
     /* no address */
   }
+  // The support bundle's preview (supportBundle.js): null, or { step: 'loading' | 'ready' | 'failed', text }
+  let bundle = null;
   function render() {
     // The tools are looked for once, on the first screen that needs them (Settings can be the first one)
     needTools();
     const st = toolsState();
-    const html = settingsHtml({ toolsLooking: st.status === 'idle' || st.status === 'loading', mode: actionsState().mode, lang: language(), cost: costShown(), advanced: advancedShown(), canSwitch: typeof openActions === 'function', langChoice, canLang: !!bridge(), tools: installedTools(toolsState()).map((x) => ({ id: x.id, name: x.name })), tool: preferredTool(installedTools(toolsState()), readTool())?.id || '', canLogs: typeof openLogs === 'function' });
+    const html = settingsHtml({ toolsLooking: st.status === 'idle' || st.status === 'loading', mode: actionsState().mode, lang: language(), cost: costShown(), advanced: advancedShown(), canSwitch: typeof openActions === 'function', langChoice, canLang: !!bridge(), tools: installedTools(toolsState()).map((x) => ({ id: x.id, name: x.name, caps: x.caps })), tool: preferredTool(installedTools(toolsState()), readTool())?.id || '', canLogs: typeof openLogs === 'function', canBundle: !!supportBundle, bundle });
     if (root._html === html) return;
     const fk = root.contains(document.activeElement) ? /** @type {HTMLElement} */ (document.activeElement).dataset?.fk : null;
     root._html = html;
@@ -99,7 +107,33 @@ export function createSettingsView(root, { openTools = () => {}, openGuide = () 
     else if (act === 'actions') openActions?.();
     else if (act === 'diag') copyDiagnostics();
     else if (act === 'logs') openLogs?.();
+    else if (act && act.startsWith('bundle')) bundleAct(act);
   });
+  // Preview: the shell's parts and the diagnostic info, put together; Copy and Save hand the same text on (main.js
+  // says how it went); Close gives the focus back to Preview
+  async function bundleAct(act) {
+    if (!supportBundle) return;
+    if (act === 'bundle') {
+      if (bundle?.step === 'loading') return;
+      bundle = { step: 'loading', text: '' };
+      render();
+      let text = '';
+      try {
+        text = await supportBundle.build();
+      } catch {
+        text = '';
+      }
+      bundle = text ? { step: 'ready', text } : { step: 'failed', text: '' };
+      render();
+      root.querySelector(bundle.step === 'ready' ? '[data-fk="set:bundle-text"]' : '[data-fk="set:bundle-close"]')?.focus();
+    } else if (act === 'bundle-copy' && bundle?.text) supportBundle.copy(bundle.text);
+    else if (act === 'bundle-save' && bundle?.text) supportBundle.save(bundle.text);
+    else if (act === 'bundle-close') {
+      bundle = null;
+      render();
+      root.querySelector('[data-fk="set:bundle"]')?.focus({ preventScroll: true });
+    }
+  }
   root.addEventListener('change', (e) => {
     if (e.target.matches?.('[data-set-cost]')) setCostShown(e.target.checked);
     if (e.target.matches?.('[data-set-advanced]')) setAdvancedShown(e.target.checked);

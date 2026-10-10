@@ -1,3 +1,4 @@
+// @ts-check
 // In-app actions switch (docs/actions-toggle.md §3b). The header indicator opens a small panel right under itself: the
 // three modes, each with one line that says what it means, the stored one marked. Off and Preview apply at once; On
 // asks inside the same panel first (a short warning with Turn on / Cancel). No native dialog, no second window.
@@ -235,7 +236,7 @@ function cleanTarget(d) {
 }
 
 // The record to store: JSON of { tab, drawer }, or null when there is nothing worth keeping
-export function resumeRecord({ tab, drawer } = {}, tabs = []) {
+export function resumeRecord({ tab = undefined, drawer = undefined } = {}, tabs = []) {
   const rec = { tab: tabs.includes(tab) ? tab : null, drawer: cleanTarget(drawer) };
   return rec.tab || rec.drawer ? JSON.stringify(rec) : null;
 }
@@ -289,7 +290,7 @@ export function createActionsSwitch({ button, panel, bridge = null, getMode = ()
     panel.hidden = !state.open;
     if (!state.open) return;
     const active = doc.activeElement;
-    const key = active && panel.contains(active) ? active.dataset?.aswKey : null;
+    const key = active && panel.contains(active) ? /** @type {HTMLElement} */ (active).dataset?.aswKey : null;
     const html = switchHtml(state);
     if (panel._html !== html) {
       panel._html = html;

@@ -1,5 +1,8 @@
 # Python bot starter: reference
 
+Contents: Telegram bot (python-telegram-bot 21 or newer) · Discord bot (discord.py 2) · Scheduled job · A first test ·
+Common errors
+
 Commands assume Windows and a virtual environment in `.venv`. On macOS and Linux use `.venv/bin/python`.
 
 ## Telegram bot (python-telegram-bot 21 or newer)

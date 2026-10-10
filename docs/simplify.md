@@ -44,7 +44,7 @@ approval at the plan and the result instead of each step, notify when done, and 
 - A job starts the tool in its own plan mode when it has one (`server/tools.mjs` `plan`, `server/launch.mjs jobArgs`:
   Claude Code `--permission-mode plan`; Gemini CLI `--approval-mode plan`, whose exit_plan_mode asks "Ready to start
   implementation?", added 2026-10-07; only for a job, never a resume; tools without a known plan mode start as usual). The job's first message says the plan is approved in the tool's own prompt.
-- The plan Claude shows for approval (its ExitPlanMode call) is kept on the session (`ingest.mjs`, at most `PLAN_MAX`
+- The plan Claude shows for approval (its ExitPlanMode call) is kept on the session (`ingest.mjs`, at most `PLAN_MAX` from `ingestText.mjs`
   characters, the newest one, a lead's only) and sent with it (`plan`). It waits while the session waits and its last
   action is that call (`hq-live.js` `planPending`).
 - The job's step comes from the team's hand-off files (`/api/projects/<id>/team`, `TeamCache`), asked again every 8

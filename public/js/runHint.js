@@ -1,3 +1,4 @@
+// @ts-check
 // "How to run it" in the project drawer (docs/run-hint.md): the steps GET /api/projects/<id>/run found, each command
 // with a copy button. SiberSentez runs none of them: the person pastes them into a terminal. runSectionHtml is pure
 // (tested in node); createRunHint keeps the answers (asked again after 20 s, so what the AI just built shows up).
@@ -87,7 +88,7 @@ export function runSectionHtml(p, data, { canType = false, canOpen = false, aiRu
 }
 
 // Answers per project. onData(projectId): an answer arrived (the drawer redraws when that project is open).
-export function createRunHint({ fetchJson = fetchRun, onData = () => {}, now = () => Date.now(), ttl = 20000 } = {}) {
+export function createRunHint({ fetchJson = fetchRun, onData = (_projectId) => {}, now = () => Date.now(), ttl = 20000 } = {}) {
   const cache = new Map();
   function get(projectId) {
     const e = cache.get(projectId);
@@ -115,7 +116,7 @@ export function createRunHint({ fetchJson = fetchRun, onData = () => {}, now = (
 // Buttons of the section (the drawer body): the command beside the button goes to the clipboard, or into the project's
 // terminal (never with Enter). projectOf(el): the open project's id. asJob(projectId, text): the question goes into
 // the project's job box (the drawer's own, Start stays the person's)
-export function bindRunHint(bodyEl, { projectOf = () => null, asJob = () => {} } = {}) {
+export function bindRunHint(bodyEl, { projectOf = (_el) => null, asJob = (_projectId, _text) => {} } = {}) {
   bodyEl.addEventListener('click', (e) => {
     const ab = e.target.closest?.('[data-run-ask], [data-run-job]');
     if (ab) {

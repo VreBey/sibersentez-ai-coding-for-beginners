@@ -1061,3 +1061,13 @@ test('a writing project (a novel, a webtoon, a script) is tagged content from it
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("readProjectItems: an agent the person put in a project under a display name is read under the library's name for it (server/library.mjs agentName, 2026-10-09)", () => {
+  const d = path.join(ROOT, 'display-named');
+  write(path.join(d, '.claude', 'agents', 'engineering-minimal-change-engineer.md'), '---\nname: Minimal Change Engineer\ndescription: Smallest diff\ncolor: slate\n---\n\nBody\n');
+  write(path.join(d, '.claude', 'skills', 'spaced', 'SKILL.md'), '---\nname: Spaced Skill\ndescription: d\n---\n\nBody\n');
+  const items = readProjectItems(d);
+  // The same name the library gives the imported copy, so the suggestion sees it is there and offers no second copy
+  assert.equal(items.find((i) => i.kind === 'agent')?.name, 'minimal-change-engineer');
+  assert.equal(items.find((i) => i.kind === 'skill')?.name, 'Spaced Skill', 'a skill keeps its name as written');
+});

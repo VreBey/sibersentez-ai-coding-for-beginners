@@ -1,4 +1,4 @@
-// Which session may go on with a job (docs/development-plan-2026-10-07.md F1): the Building, its next step and the
+// Which session may go on with a job (docs/internal/development-plan-2026-10-07.md F1): the Building, its next step and the
 // drawer share job.js resumeCandidate; an open tool in SiberSentez's terminal, the job's own tool and the job named
 // in a session's first prompt decide before the time window. Run: node --test test/resume.test.mjs
 import { test } from 'node:test';

@@ -13,7 +13,7 @@ Checked 2026-09-30 (revisit every six months). Official pages:
 
 | Project | How the code reads `NAME` | How the file is loaded |
 |---|---|---|
-| Node.js (20.6 or newer) | `process.env.NAME` | start with `node --env-file=.env server.js` |
+| Node.js (22 LTS or newer) | `process.env.NAME` | start with `node --env-file=.env server.js` |
 | Node.js, older | `process.env.NAME` | a loader package such as `dotenv` (installing needs a yes) |
 | Vite | `import.meta.env.VITE_NAME` (only names starting with `VITE_` reach the browser code) | Vite reads `.env` by itself |
 | Next.js | `process.env.NAME` on the server; `NEXT_PUBLIC_NAME` for the browser | Next.js reads `.env` by itself |

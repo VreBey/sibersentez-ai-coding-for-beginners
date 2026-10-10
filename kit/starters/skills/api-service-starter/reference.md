@@ -1,6 +1,9 @@
 # API service starter: reference
 
-Checked 2026-09-30 against the official documentation (revisit every six months): Node.js
+Contents: package.json · .env.example · store.js · app.js · server.js · test/api.test.js · .gitignore lines · Calling
+the API by hand · Common problems
+
+Checked 2026-10-09 against the official documentation (revisit every six months): Node.js
 (https://nodejs.org/docs/latest/api/cli.html for `--env-file`, https://nodejs.org/docs/latest/api/test.html for
 the test runner) and Express (https://expressjs.com/). If a command below fails, check those pages first: the code
 was run on Node.js 24 with Express 5 and its three tests passed.

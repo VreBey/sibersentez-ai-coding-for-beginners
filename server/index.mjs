@@ -1,3 +1,4 @@
+// @ts-check
 // SiberSentez panel server. No dependencies; it binds to 127.0.0.1 only.
 // Usage: node server/index.mjs [--open]
 import http from 'node:http';
@@ -31,6 +32,8 @@ const ingest = new Ingest(catalog);
 const ledger = new UsageLedger({ hubDir: HUB_DIR, apiKeyEnv: envFlags(process.env).anthropicKey });
 ingest.ledger = ledger;
 process.on('exit', () => ledger.flush());
+// Hours a linked project's new folder was booked under its own id join the kept project from the start (relinks.mjs)
+ledger.setJoins(catalog.ledgerJoins());
 const gitWatcher = new GitWatcher(catalog, ingest);
 const clients = new Set();
 
@@ -45,7 +48,7 @@ function guarded(label, fn) {
     }
   };
 }
-process.on('unhandledRejection', (e) => console.error('unhandled rejection:', e?.stack || e?.message || e));
+process.on('unhandledRejection', (/** @type {any} */ e) => console.error('unhandled rejection:', e?.stack || e?.message || e));
 
 // A client that stopped reading (a frozen page) is dropped once this much waits for it; a reconnecting page takes
 // a fresh snapshot, so nothing is lost by dropping it, while its buffer would otherwise grow without end
@@ -73,7 +76,19 @@ const ROSTER_EVERY = 5;
 let lastRoster = '';
 function reloadCatalog({ roster = true } = {}) {
   catalog.load({ roster });
+  followLinks();
   publishCatalog();
+}
+// A moved project linked to its new folder (server/relinks.mjs): when the links change, the sessions in memory take the
+// project their folder resolves to now, and the usage ledger books the new folder's own hours under the kept project
+let linksSeen = '';
+function followLinks() {
+  const joins = catalog.ledgerJoins();
+  const sig = JSON.stringify([catalog.appliedLinks, joins]);
+  if (sig === linksSeen) return;
+  linksSeen = sig;
+  ledger.setJoins(joins);
+  ingest.reresolveProjects();
 }
 function publishCatalog() {
   const data = JSON.stringify({ hub: hubView(catalog), tools: toolsView(catalog), roster: rosterView(ingest, catalog), projects: catalog.allProjects().map((p) => projectView(ingest, p, catalog)) });
@@ -168,7 +183,7 @@ if (process.parentPort && typeof process.parentPort.on === 'function') {
   process.on('message', (msg) => answerShell(msg, (reply) => process.send(reply)));
 }
 
-const server = http.createServer(createHandler({ ingest, catalog, clients, port: PORT, publicDir: PUBLIC_DIR, actions, instance: INSTANCE, sessionKey: SESSION_KEY, fit, usage: ledger }));
+const server = http.createServer(createHandler({ ingest, catalog, clients, port: PORT, publicDir: PUBLIC_DIR, actions, instance: INSTANCE, sessionKey: SESSION_KEY, fit, usage: ledger, homeDir: HOME_DIR, claudeDir: CLAUDE_DIR }));
 
 function openBrowser(url) {
   try {
@@ -185,7 +200,7 @@ function openBrowser(url) {
   }
 }
 
-server.on('error', (e) => {
+server.on('error', (/** @type {NodeJS.ErrnoException} */ e) => {
   if (e.code === 'EADDRINUSE') {
     console.log(`SiberSentez is already running: http://${HOST}:${PORT}/`);
     if (process.argv.includes('--open')) openBrowser(`http://${HOST}:${PORT}/`);
@@ -198,8 +213,10 @@ server.listen(PORT, HOST, async () => {
   const url = `http://${HOST}:${PORT}/`;
   console.log(`SiberSentez: ${url}`);
   console.log(`Actions: ${ACTION_MODE_TEXT[actions.mode]}`);
-  // The hub path is not logged (it holds the user name); only found/none and counts
-  console.log(catalog.hub ? `Hub: found (${catalog.hub.projects} registered projects, ${catalog.hub.library} library items)` : 'Hub: none (registry and library empty)');
+  // The hub path is not logged (it holds the user name); only found/none and the registered projects. catalog.hub
+  // (with the library count) is set by the first skills scan, which runs after this line: it said "none" for a hub
+  // that was there (found in a real main log, 2026-10-10)
+  console.log(catalog.hubDir ? `Hub: found (${catalog.projects.length} registered projects)` : 'Hub: none (registry and library empty)');
   if (process.argv.includes('--open')) openBrowser(url);
 
   // Live sessions at once, the logs in the background

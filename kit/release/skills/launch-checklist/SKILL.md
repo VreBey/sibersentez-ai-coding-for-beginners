@@ -4,7 +4,8 @@ description: "Checks a website before and right after it goes public: one addres
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
+  sibersentez-checked: "2026-10-05"
   sibersentez-tags: "web, devops, security"
   sibersentez-stage: "ship"
   sibersentez-keywords-tr: "yayın öncesi kontrol*, canlıya almadan önce, canlı site kontrol*, site kontrol listesi, yayına hazır mı, seo kontrol*, güvenlik başlık*, yasal sayfa*, kvkk sayfa*, site harita*"

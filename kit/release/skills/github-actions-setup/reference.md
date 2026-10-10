@@ -1,6 +1,10 @@
 # GitHub Actions setup: reference
 
-Checked 2026-10-01 (revisit every six months). Official pages:
+Contents: Placeholders · Node.js recipe · Python recipe · Python recipe with a package cache and several versions ·
+Unity recipe (tests in the editor, run by a ready-made action) · Reading the parts · When the run fails · Secrets in a
+workflow
+
+Checked 2026-10-09 (revisit every six months). Official pages:
 
 - Workflow syntax and quickstart: https://docs.github.com/en/actions
 - Node.js recipe: https://docs.github.com/en/actions/use-cases-and-examples/building-and-testing/building-and-testing-nodejs

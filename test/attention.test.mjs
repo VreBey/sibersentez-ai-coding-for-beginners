@@ -2,7 +2,7 @@
 // order, and the strings of the four states.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sessionState, waitingSessions, sessionCounts, projectState, groupSessions, attentionRank, holdOrder, STATES, WAIT_FRESH_MS } from '../public/js/attention.js';
+import { sessionState, waitingSessions, sessionCounts, projectState, groupSessions, attentionRank, holdOrder, liveKnown, STATES, WAIT_FRESH_MS } from '../public/js/attention.js';
 import { STRINGS, LANGUAGES } from '../public/js/i18n.js';
 
 const NOW = Date.parse('2026-09-29T15:00:00Z');
@@ -81,4 +81,22 @@ test('the taskbar: the shell checks the report, plans the dot, the tooltip and t
   assert.equal(bmp.length, 16 * 16 * 4);
   assert.equal(bmp[(0 * 16 + 0) * 4 + 3], 0, 'a transparent corner');
   assert.deepEqual([...bmp.subarray((8 * 16 + 8) * 4, (8 * 16 + 8) * 4 + 4)], [0x6b, 0x8f, 0xff, 255], 'a coral middle (BGRA)');
+});
+
+test('a tool whose live state is not read: its session is not known, and the page never calls it closed (ui-states U1)', async () => {
+  assert.equal(liveKnown({ tool: 'claude' }), true);
+  assert.equal(liveKnown({}), true, 'a session without a tool is Claude Code\'s');
+  for (const tool of ['codex', 'gemini', 'qwen', 'copilot', 'opencode', 'cursor']) assert.equal(liveKnown({ tool }), false, tool);
+  const { STATUS } = await import('../public/js/format.js');
+  const { setLanguage } = await import('../public/js/i18n.js');
+  assert.equal(STATUS.unknown.l, 'Live state not known');
+  setLanguage('tr');
+  try {
+    assert.equal(STATUS.unknown.l, 'Canlı durumu bilinmiyor');
+  } finally {
+    setLanguage('en');
+  }
+  const fs = await import('node:fs');
+  const drawer = fs.readFileSync(new URL('../public/js/views/drawer.js', import.meta.url), 'utf8');
+  assert.ok(drawer.includes("const st = d.live ? d.live.status : liveKnown(d) ? 'closed' : 'unknown';"), 'the session\'s badge');
 });

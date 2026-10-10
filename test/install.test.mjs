@@ -717,7 +717,7 @@ test('trial cleanup: only real trial folders with the marker and older than 7 da
 
 // ---------------- action surface ----------------
 test('actions: the skill actions (skills-apply from docs/auto-skills.md, then the restore points of docs/restore.md) are listed with the launch actions; off -> 404 for every one, no file written', async () => {
-  assert.deepEqual([...SKILL_ACTIONS], ['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply']);
+  assert.deepEqual([...SKILL_ACTIONS], ['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'project-relink', 'project-unlink']);
   // start-ai (docs/ai-start.md) follows the skill actions; the GitHub import's actions come last (docs/github-import.md)
   assert.deepEqual([...ACTION_NAMES], [...LAUNCH_ACTIONS, ...SKILL_ACTIONS, 'start-ai', 'github-fetch', 'github-import', 'github-discard', 'github-check-update']);
   const w = world();

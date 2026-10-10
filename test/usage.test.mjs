@@ -591,7 +591,7 @@ test('the strip starts closed: one line with the processed tokens and the dollar
 test('project card line, sort by spend and the drawer section', async () => {
   setLanguage('tr');
   const u = { usd: 2231.4, output: 20.2e6, processed: 1, cacheRead: 1, messages: 5 };
-  assert.match(cardLineHtml(u, true), /30 gün ~\$2\.231 · 20,2 M çıktı/);
+  assert.match(cardLineHtml(u, true), /30 gün ~\$2\.231 API karşılığı · 20,2 M çıktı/, 'every dollar figure says what it is (review §7.7)');
   assert.match(cardLineHtml(u, false), /30 gün · 20,2 M çıktı/);
   assert.doesNotMatch(cardLineHtml(u, false), /\$/);
   assert.equal(cardLineHtml(null, true), '');

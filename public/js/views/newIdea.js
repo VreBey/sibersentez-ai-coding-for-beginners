@@ -1,3 +1,4 @@
+// @ts-check
 // "New project" from an idea (review U05, 2026-10-07): a small window asks for the project's name and what to build,
 // shows where its folder goes (Documents › SiberSentez › <name>, the owner's choice) and answers with what the person
 // chose. The folder itself is made by the desktop shell (window.sibersentezShell.createIdeaProject, electron/helpers.mjs
@@ -6,6 +7,7 @@ import { t } from '../i18n.js';
 import { esc } from '../format.js';
 import { icon } from '../icons.js';
 import { focusableVisible } from '../contextmenu.js';
+import { q, qAll, field as fieldOf, activeEl, el } from '../dom.js';
 
 // Same limit as PROJECT_NAME_MAX in electron/helpers.mjs. The idea: as much as the server keeps with the project
 // (IDEA_MAX in server/memory.mjs), so what is typed here is what is kept
@@ -65,14 +67,14 @@ export function createIdeaDialog(doc = document) {
   let back = null;
   let inerted = [];
 
-  const part = (k) => root.querySelector(`[data-np="${k}"]`);
-  const field = (n) => root.querySelector(`[name="${n}"]`);
-  const focusables = () => [...root.querySelectorAll('input, textarea, button')].filter((el) => !el.disabled && el.getClientRects().length);
+  const part = (k) => q(root, `[data-np="${k}"]`);
+  const field = (n) => fieldOf(root, `[name="${n}"]`);
+  const focusables = () => /** @type {HTMLInputElement[]} */ (qAll(root, 'input, textarea, button')).filter((x) => !x.disabled && x.getClientRects().length);
 
   // The page behind: inert while the window is open, as it was before once it closes
   function setPageInert(on) {
     if (on) {
-      inerted = [...doc.body.children].filter((el) => el !== root && !el.inert);
+      inerted = /** @type {HTMLElement[]} */ ([...doc.body.children]).filter((x) => x !== root && !x.inert);
       for (const el of inerted) el.inert = true;
     } else {
       for (const el of inerted) el.inert = false;
@@ -123,7 +125,7 @@ export function createIdeaDialog(doc = document) {
       }
     });
     // Enter in the name goes on to the idea (the project is not made before the idea could be written)
-    name.addEventListener('keydown', (e) => {
+    name.addEventListener('keydown', (/** @type {KeyboardEvent} */ e) => {
       if (e.key !== 'Enter' || e.isComposing) return;
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) chosen('create');
@@ -134,7 +136,7 @@ export function createIdeaDialog(doc = document) {
       chosen('create');
     });
     // Ctrl+Enter in the idea creates it, as the job boxes start with it
-    field('idea').addEventListener('keydown', (e) => {
+    field('idea').addEventListener('keydown', (/** @type {KeyboardEvent} */ e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         chosen('create');
@@ -150,7 +152,7 @@ export function createIdeaDialog(doc = document) {
     });
   }
 
-  root.addEventListener('keydown', (e) => {
+  root.addEventListener('keydown', (/** @type {KeyboardEvent} */ e) => {
     if (root.hidden) return;
     e.stopPropagation();
     if (e.key === 'Escape') {
@@ -159,7 +161,7 @@ export function createIdeaDialog(doc = document) {
     } else if (e.key === 'Tab') {
       const list = focusables();
       if (!list.length) return;
-      const i = list.indexOf(doc.activeElement);
+      const i = list.indexOf(/** @type {HTMLInputElement} */ (activeEl(doc)));
       const next = e.shiftKey ? (i <= 0 ? list.length - 1 : i - 1) : i < 0 || i === list.length - 1 ? 0 : i + 1;
       e.preventDefault();
       list[next].focus();
@@ -167,7 +169,7 @@ export function createIdeaDialog(doc = document) {
   });
   // Focus that leaves it some other way comes back to the name
   root.addEventListener('focusout', (e) => {
-    if (!root.hidden && e.relatedTarget && !root.contains(e.relatedTarget)) field('name')?.focus();
+    if (!root.hidden && e.relatedTarget && !root.contains(el(e.relatedTarget))) field('name')?.focus();
   });
   root.addEventListener('mousedown', (e) => {
     if (e.target === root) finish({ action: 'cancel' });

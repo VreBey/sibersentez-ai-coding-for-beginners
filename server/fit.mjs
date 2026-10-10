@@ -1,3 +1,4 @@
+// @ts-check
 // Automatic skill fit (docs/auto-skills.md §1–§3). For one project: every skill and agent on this computer that
 // could be installed into it (the candidate pool), scored against the project's tags, with a confidence band, a
 // ready automatic selection and the already active items that fit. Also plans skills-apply (import, then install).
@@ -15,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { normPath, readFrontmatter, truncate } from './util.mjs';
 import { isLocalPath } from './fsutil.mjs';
-import { listLibrary, isLegacyHub, lstat, isRealDir, validName, hasStreamColon, proposeCategory, planImport, within, realPath, LIMITS } from './library.mjs';
+import { listLibrary, isLegacyHub, lstat, isRealDir, validName, hasStreamColon, proposeCategory, planImport, within, realPath, agentName, LIMITS } from './library.mjs';
 import { readInstalls, isBroadFolder, resolveProject } from './install.mjs';
 import { projectSignals, registrySignals, signalRoot } from './suggest.mjs';
 import { readKit, kitWords, keywordHits, KIT_SOURCE } from './kit.mjs';
@@ -344,7 +345,9 @@ export function readProjectItems(dir, { claudeDir = null, frontmatter = readFron
         if (!d.isFile() || !/\.md$/i.test(d.name) || /^readme\.md$/i.test(d.name)) continue;
         const file = path.join(g, d.name);
         const meta = frontmatter(file) || {};
-        item = { kind, name: pickName(meta.name, d.name.replace(/\.md$/i, '')), description: truncate(meta.description, DESC_MAX), path: file, target };
+        // The library's rule for an agent's name (a display name becomes a slug), so a copy the person put here under
+        // a display name is seen as the library item it is
+        item = { kind, name: agentName(meta.name, d.name.replace(/\.md$/i, '')), description: truncate(meta.description, DESC_MAX), path: file, target };
       }
       const k = itemKey(item.kind, item.name);
       if (seen.has(k)) continue;
@@ -494,7 +497,7 @@ function scoreParts(tags, profile, { installedIn = [], usedIn = [], words: itemW
 //   - A folder with code: a start item (a step of a new project) is never selected by itself: at most medium when
 //     the idea's keywords asked for it, else at most low (a starter is no news in a project that already runs).
 // Returns scoreItem's shape.
-export function scoreKitItem(kit, profile, { ws = [], wordOf = () => null, fresh = false, code = false, installedIn = [], usedIn = [] } = {}) {
+export function scoreKitItem(kit, profile, { ws = [], wordOf = (_reason) => null, fresh = false, code = false, installedIn = [], usedIn = [] } = {}) {
   const all = sortTags(withImplied(kit.tags || []));
   const tags = profile.stacks.size ? all : all.filter((t) => !isStack(t));
   const p = scoreParts(tags, profile, { installedIn, usedIn });
@@ -606,11 +609,11 @@ const placeOf = (o) => (o.source === 'project' ? `project:${o.projectId}` : o.so
 // catalog: the catalog (getProject, allProjects, roster, isBroad, frontmatter, version). ingest: usage from the logs
 // (ingest.usage.skills / agents: name -> { projects: Set }). hubDir, homeDir, claudeDir and kitDir (the SiberSentez kit
 // folder, server/kit.mjs) default to the catalog's; a catalog without kitDir has no kit.
-// How long the library's signature is trusted (docs/backlog.md "Long-running load": every /fit used to lstat the
+// How long the library's signature is trusted (docs/internal/backlog.md "Long-running load": every /fit used to lstat the
 // whole library); an install or an import calls invalidate(), which forgets it at once
 export const LIBRARY_SIG_MS = 5000;
 
-/** @param {{ catalog: any, ingest?: any, hubDir?: string, homeDir?: string, claudeDir?: string, kitDir?: string, limits?: any, now?: () => number }} options */
+/** @param {{ catalog?: any, ingest?: any, hubDir?: string, homeDir?: string, claudeDir?: string, kitDir?: string, limits?: any, now?: () => number }} [options] */
 export function createFit({ catalog, ingest = null, hubDir, homeDir, claudeDir, kitDir, limits = LIMITS, now = Date.now } = {}) {
   const hub = hubDir !== undefined ? hubDir : catalog?.hubDir ?? null;
   const home = homeDir !== undefined ? homeDir : catalog?.homeDir ?? null;
@@ -900,6 +903,7 @@ export function createFit({ catalog, ingest = null, hubDir, homeDir, claudeDir, 
   // is a new key. The pool is kept per project; the fit without an idea sits with it, the fits of ideas in a small
   // shared cache (MAX_IDEA_FITS, least recently used first out) whose entries hold only while their pool is the
   // current one. Returns { status, fit } or { status: 404, error }.
+  /** @param {string} projectId @param {{ idea?: string }} [options] */
   function fitOf(projectId, { idea } = {}) {
     const p = catalog?.getProject?.(projectId) || null;
     if (!p) return { status: 404, error: 'not-a-project' };
@@ -933,6 +937,7 @@ export function createFit({ catalog, ingest = null, hubDir, homeDir, claudeDir, 
 
   // GET /api/projects/<id>/fit[?idea=...] -> { status, body }: the fit without internal fields. idea as in fitOf: not
   // given, the project's saved idea; '' (an explicit empty ?idea=), no idea.
+  /** @param {string} projectId @param {{ idea?: string }} [options] */
   function get(projectId, { idea } = {}) {
     const r = fitOf(projectId, { idea });
     if (r.status !== 200) return { status: r.status, body: { error: r.error } };

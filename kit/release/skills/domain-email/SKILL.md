@@ -4,7 +4,8 @@ description: "Sets up email at the project's own domain: a few chosen addresses,
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
+  sibersentez-checked: "2026-10-05"
   sibersentez-tags: "devops, web"
   sibersentez-stage: "ship"
   sibersentez-keywords-tr: "kurumsal eposta, kurumsal mail, kurumsal posta, posta kur*, mail kur*, posta adresi aç*, spf, dkim, dmarc, spama düş*, webmail"

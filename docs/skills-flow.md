@@ -31,7 +31,12 @@ the project and removes them again.
 3. **Import** (`library-scan`, then `library-import`):
    - `library-scan {source}`: `source` is an absolute local folder (drive letter; no UNC, not a drive root, not the
      home folder itself, not inside the hub). Finds skills (folders with `SKILL.md`, at any depth up to 6) and agents
-     (`*.md` inside a folder named `agents`, at any depth up to 6), follows no junction or symlink, and returns each
+     (`*.md` inside a folder named `agents`, at any depth up to 6; since 2026-10-09 also in a topic folder such as
+     `engineering/`, when a file's frontmatter has a name, a description and an agent key such as `tools`, `model`
+     or `color`, which notes and slash commands do not carry; README-like files and the `commands`, `rules`
+     and `prompts` folders never count). An agent's display name ("Minimal Change Engineer") becomes a slug
+     (`minimal-change-engineer`) in the scan and in the library alike; a skill's name stays its identity. It follows
+     no junction or symlink, and returns each
      candidate with name, kind, description (first 400 chars), size, file count, a proposed category with its
      reason, and a status: `new`, `same` (identical content already in the library), `conflict` (same kind and
      name, different content). Reads `SKILL.md`/agent frontmatter and file sizes; to tell `same` from `conflict` it

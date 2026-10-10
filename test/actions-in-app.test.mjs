@@ -54,7 +54,8 @@ const textOf = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8').
 const bodyOf = (src, name) => {
   const start = src.indexOf(`function ${name}(`);
   assert.ok(start >= 0, `missing function ${name}`);
-  const end = src.indexOf('\n}\n', start);
+  // Up to the "}" at the function's own indentation (functions inside createQaRun are indented)
+  const end = src.indexOf(`\n${(src.slice(src.lastIndexOf('\n', start) + 1, start).match(/^\s*/) || [''])[0]}}\n`, start);
   assert.ok(end > start, `end of function ${name}`);
   return src.slice(start, end);
 };
@@ -100,7 +101,7 @@ describe('preload: the page gets exactly the bridge functions', () => {
     const p = loadPreload();
     assert.deepEqual(p.required, ['electron']);
     assert.deepEqual(Object.keys(p.exposed), ['sibersentezTerminal', 'sibersentezShell'], 'the terminal bridge is checked in test/terminal.test.mjs');
-    assert.deepEqual(Object.keys(p.exposed.sibersentezShell), ['setActionsMode', 'pickProjectFolder', 'createIdeaProject', 'pickLibraryFolder', 'setLanguage', 'setTheme', 'saveProjectIdea', 'setAttention', 'reportError', 'openLogs']);
+    assert.deepEqual(Object.keys(p.exposed.sibersentezShell), ['setActionsMode', 'pickProjectFolder', 'createIdeaProject', 'pickLibraryFolder', 'setLanguage', 'setTheme', 'saveProjectIdea', 'setAttention', 'reportError', 'openLogs', 'supportParts', 'saveSupport']);
     // The look: its own channel with one of the three choices; anything else never reaches the shell
     for (const theme of ['dark', 'light', 'system']) await p.exposed.sibersentezShell.setTheme(theme);
     assert.deepEqual(p.invokes.splice(0), [['sibersentez:set-theme', 'dark'], ['sibersentez:set-theme', 'light'], ['sibersentez:set-theme', 'system']]);
@@ -349,7 +350,8 @@ describe('shell: how turning actions On is confirmed, by where the request comes
   });
 
   test('main.mjs: the hand-over shows the window and runs the fixed script with a time limit; only a window on the server origin qualifies', () => {
-    const src = textOf('electron', 'main.mjs');
+    // The shell's main module and its QA run (electron/qa-run.mjs): every executeJavaScript of the shell
+    const src = textOf('electron', 'main.mjs') + textOf('electron', 'qa-run.mjs');
     const hand = bodyOf(src, 'handOverToPanel');
     assert.ok(hand.includes('if (!panelWindowReady()) return false;'));
     assert.ok(hand.includes('showWindow();'));

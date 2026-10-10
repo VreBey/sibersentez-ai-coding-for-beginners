@@ -2,12 +2,24 @@
 // The embedded terminal's decisions, apart from its screen (terminalDock.js keeps the tabs and draws them): which tab
 // still runs an AI, which one a "show the terminal" brings forward, what a tool-ended event does to a tab that is not
 // there yet, and which Claude session a tab whose tool ended may go on with. Pure, so the tests run it without a
-// window (docs/development-plan-2026-10-07.md, the roadmap's Y1 and Y2).
+// window (docs/internal/development-plan-2026-10-07.md, the roadmap's Y1 and Y2).
 import { sessionJobId } from './jobId.js';
 import { detectPrompt } from './promptHelp.js';
 
 // An AI tab whose tool still runs: not ended (its shell closed) and not toolEnded (the launcher's mark, its shell open)
 export const isRunningAi = (x) => !!x && x.ai === true && !x.ended && !x.toolEnded;
+
+// A tab's state in one word (its dot's color and opacity say it to the eye only; docs/internal/ui-states-plan.md U3):
+// 'ended' (the terminal ended), 'toolEnded' (the AI tool ended, its shell stays), 'asks' (the AI asks the person
+// something, or a plain shell's screen asks), 'ai' (an AI tool is open: whether it works or waits the tab cannot tell) or 'shell' (a plain terminal)
+export function tabState(x) {
+  if (!x) return 'shell';
+  if (x.ended) return 'ended';
+  if (x.ai === true && x.toolEnded) return 'toolEnded';
+  // A plain shell's screen may ask too (its dot says so): the words follow it
+  if (x.asks) return 'asks';
+  return x.ai === true ? 'ai' : 'shell';
+}
 
 // A draft typed into an AI tool's input for the person to read and send (review U09): one line of at most 300
 // characters, any language, no control character (no Enter, no escape sequence)
@@ -63,6 +75,7 @@ export function takeEarlyToolEnd({ tabs, early }, id) {
 // it would open a running session twice). null when none.
 export const RECENT_MS = 2 * 60000;
 /** @param {any[]} sessions @param {{ projectId?: string | null, jobId?: string | null, busyJobs?: Set<string>, tool?: string }} [options] @param {number} [now] */
+/** @param {Iterable<any>} sessions @param {{ projectId?: string, jobId?: string | null, busyJobs?: Set<string>, tool?: string }} [options] @param {number} [now] */
 export function tabResumeSession(sessions, { projectId, jobId = null, busyJobs = new Set(), tool = 'claude' } = {}, now = Date.now()) {
   let named = null;
   let loose = null;

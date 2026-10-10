@@ -1,5 +1,5 @@
 // @ts-check
-// The person's next step (docs/development-review-2026-10-06.md §3): one sentence and at most one button above the
+// The person's next step (docs/internal/development-review-2026-10-06.md §3): one sentence and at most one button above the
 // building, so the next required action comes before every secondary control. The sign reads the same answer, so
 // the two never disagree. Pure: what is known about the shown project in, { key, act } out; strings/workshop.js
 // holds the words (wsNext_<key>, wsNextGo_<key>), views/workshop.js the buttons.

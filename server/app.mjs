@@ -10,7 +10,8 @@ import { projectSuggestions } from './suggest.mjs';
 import { projectRun } from './runhint.mjs';
 import { createChangesCache } from './changes.mjs';
 import { projectTeam } from './team.mjs';
-import { projectRestoreWithDisk, createJobChangesCache } from './restore.mjs';
+import { observeTeamAnswer, projectJobResult, listJobResults, JOB_RESULT_TTL_MS } from './jobResults.mjs';
+import { projectRestoreWithDisk, createJobChangesCache, projectRestoreScope, SCOPE_TTL_MS } from './restore.mjs';
 import { projectPublishCheck } from './publishCheck.mjs';
 import { createFit } from './fit.mjs';
 import { PERIODS } from './usage.mjs';
@@ -173,13 +174,19 @@ function actionRoute(url) {
 // usage (optional): the usage ledger (server/usage.mjs) behind GET /api/usage; without it the route answers 404.
 // tools (optional): the AI tool detector (server/tools.mjs); default the one the start-ai action shares.
 // sessionKey (optional): when set, every /api route answers 401 without it (sessionKeyAllowed, SIBERSENTEZ_SESSION_KEY).
-export function createHandler({ ingest, catalog, clients, port, publicDir, actions = null, instance = null, fit = null, usage = null, tools = null, updates = null, sessionKey = null }) {
+// homeDir, claudeDir: for the restore scope's gate, the one a start's point passes (install.mjs resolveProject).
+export function createHandler({ ingest, catalog, clients, port, publicDir, actions = null, instance = null, fit = null, usage = null, tools = null, updates = null, sessionKey = null, homeDir = null, claudeDir = null, jobResultTtl = JOB_RESULT_TTL_MS }) {
   // "A new version is out" (server/update.mjs): asked by the page only when the person turned it on in Settings
   let updateChecker = updates;
   // "What changed" answers, kept a few seconds per project (server/changes.mjs createChangesCache)
   const changesCache = createChangesCache();
   // "This job's result": one comparison per project and job for a few seconds (restore.mjs createJobChangesCache)
   const jobChangesCache = createJobChangesCache();
+  // What a job's start copy would hold, before the job: one scan per project for a few seconds (docs/restore.md §12)
+  const restoreScopeCache = createJobChangesCache({ run: projectRestoreScope, ttl: SCOPE_TTL_MS });
+  // The app's record of a job's result and whether its files are still those of the verdict (server/jobResults.mjs):
+  // every file is read, so one answer per job and record for a while (jobResultTtl: the journey test looks again at once)
+  const jobResultCache = createJobChangesCache({ run: projectJobResult, ttl: jobResultTtl });
   let fitService = fit;
   // Action endpoints apply their own, stricter rules (404 when off -> Origin -> Sec-Fetch-Site -> ...),
   // so they are split off before the general Sec-Fetch-Site and method checks. The Host check (421) still comes first.
@@ -254,6 +261,10 @@ export function createHandler({ ingest, catalog, clients, port, publicDir, actio
     m = projectRoute(p, 'team');
     if (m) {
       const r = projectTeam({ catalog, projectId: m[1] });
+      // What the app sees of the job (its verdict with the reviewer agents seen then, its acceptance) is kept in the hub
+      // the first time (jobResults.mjs, jobReviewers.mjs); the look starts after this answer is sent and reads nothing
+      // unless the team's files changed
+      if (r.status === 200) observeTeamAnswer({ catalog, projectId: m[1], team: r.body, homeDir, claudeDir, reviewers: (jobId, opts) => ingest?.jobReviewers?.(jobId, opts) ?? null, logsReady: ingest?.scan?.state === 'ready' });
       return sendJson(res, r.status, r.body);
     }
     // Restore points of the project (docs/restore.md): read-only, no action mode needed
@@ -262,6 +273,38 @@ export function createHandler({ ingest, catalog, clients, port, publicDir, actio
       projectRestoreWithDisk({ catalog, projectId: m[1] }).then(
         (r) => sendJson(res, r.status, r.body),
         () => sendJson(res, 500, { error: 'restore-failed' }),
+      );
+      return;
+    }
+    // What a job's start copy would hold now (docs/restore.md §12): read-only, no action mode needed
+    m = projectRoute(p, 'restore-scope');
+    if (m) {
+      restoreScopeCache({ catalog, projectId: m[1], jobId: '', homeDir, claudeDir }).then(
+        (r) => sendJson(res, r.status, r.body),
+        () => sendJson(res, 500, { error: 'restore-scope-failed' }),
+      );
+      return;
+    }
+    // The app's record of a job's result (docs/internal/evidence-card-plan.md E1): read-only, no action mode needed
+    m = projectRoute(p, 'job-result');
+    if (m) {
+      const projectId = m[1];
+      const jobId = url.searchParams.get('job') || '';
+      // The comparison is kept per record (a new verdict or fingerprint asks again); the record itself is read fresh
+      // for every answer, so an acceptance seen meanwhile shows at once
+      const recordNow = () => (catalog?.hubDir && catalog.getProject?.(projectId) ? listJobResults({ hubDir: catalog.hubDir, projectId }).find((r) => r.jobId === jobId) || null : null);
+      const rec = recordNow();
+      const key = `${projectId}|${jobId}|${rec?.verdict?.seenAt || 0}|${rec?.tree?.at || 0}`;
+      jobResultCache({ catalog, projectId, jobId, homeDir, claudeDir, key }).then(
+        // The commands the job's AI ran, as its log shows them (server/jobCommands.mjs, plan E3), and its reviewer agents
+        // (jobReviewers.mjs, plan E4; an answer said after REVIEW.md was written is a later round's): from memory, every answer
+        (r) => {
+          if (r.status !== 200) return sendJson(res, r.status, r.body);
+          const record = r.body.record ? recordNow() || r.body.record : r.body.record;
+          const before = record?.verdict?.reviewAt ?? null;
+          sendJson(res, 200, { ...r.body, record, commands: ingest?.jobCommands?.(jobId) ?? null, reviewers: ingest?.jobReviewers?.(jobId, { before }) ?? null });
+        },
+        () => sendJson(res, 500, { error: 'job-result-failed' }),
       );
       return;
     }
@@ -307,7 +350,7 @@ export function createHandler({ ingest, catalog, clients, port, publicDir, actio
     if (p === '/api/usage/jobs') {
       const pid = url.searchParams.get('project');
       if (pid !== null && !PROJECT_ID_RE.test(pid)) return sendJson(res, 400, { error: 'bad-project' });
-      const r = jobCostsRoute({ ledger: usage, catalog, projectId: pid });
+      const r = jobCostsRoute({ ledger: usage, catalog, projectId: pid, othersIn: (id, from, to, jobId) => ingest?.otherSessionsIn?.(id, from, to, jobId) ?? null });
       return sendJson(res, r.status, r.body);
     }
     if (p === '/api/usage') {

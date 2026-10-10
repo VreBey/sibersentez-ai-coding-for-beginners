@@ -33,7 +33,7 @@ in `store.tools`.
 ## Sessions of every tool (2026-10-07)
 
 Before, only Claude Code's sessions were read (`~/.claude/projects`); the adapters saw the other tools' projects and
-items but, by their contract, never a session's content. `server/toolLogs.mjs` (pure) and `server/ingest.mjs` now read
+items but, by their contract, never a session's content. `server/toolLogs.mjs` (pure) and `server/ingestForeign.mjs` (the readers `server/ingest.mjs` extends) now read
 Codex CLI's and Gemini CLI's own session logs with the same session model:
 
 - **Codex:** `<CODEX_HOME or ~/.codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`. The project from `session_meta.cwd`; the
@@ -72,7 +72,7 @@ Codex CLI's and Gemini CLI's own session logs with the same session model:
   option joined to a UUID only).
 - **OpenCode** (1.18.35, checked on a session run here): one SQLite database `<XDG_DATA_HOME or ~/.local/share>/
   opencode/opencode.db`, read read-only with `node:sqlite` on the start and each rescan when it changed, only the rows
-  updated since (`ingest.mjs scanOpenCode`). Its session ids (`ses_...`) are not UUIDs, so its sessions are shown but
+  updated since (`ingestForeign.mjs scanOpenCode`). Its session ids (`ses_...`) are not UUIDs, so its sessions are shown but
   not continued from SiberSentez (`jobId.js canContinueTool`). Its tool part's fields are OpenCode's documented shape,
   not yet seen in a local session.
 - **Cursor CLI** (2026.10.01, checked on a session run here): `~/.cursor/projects/<folder>/agent-transcripts/<uuid>/
@@ -98,12 +98,16 @@ shape; `server/agentFormats.mjs` converts a Claude Code agent for each, checked 
 
 | Tool | File | Shape |
 |---|---|---|
-| Gemini CLI 0.61 | `.gemini/agents/<name>.md` | name (a slug), description; its schema is strict, so license, metadata and Claude's tool names are left out |
-| Qwen Code 0.25 | `.qwen/agents/<name>.md` | name, description |
-| OpenCode 1.18 | `.opencode/agents/<name>.md` | description, `mode: subagent` (its `tools` is a map, not Claude's list) |
-| Codex 0.160 | `.codex/agents/<name>.toml` | name, description, `developer_instructions` (Codex says it must define it) |
+| Gemini CLI 0.63 | `.gemini/agents/<name>.md` | name (a slug), description, `tools` in Gemini names; its schema is strict, so license and metadata are left out |
+| Qwen Code 0.25 | `.qwen/agents/<name>.md` | name, description, `tools` in Qwen names (`read_file`, `run_shell_command`, ...) |
+| OpenCode 1.18 | `.opencode/agents/<name>.md` | description, `mode: subagent`, `permission: edit/bash: deny` for what the tools leave out (its `tools` is a map, not Claude's list) |
+| Codex 0.160 | `.codex/agents/<name>.toml` | name, description, `developer_instructions` (Codex says it must define it), `sandbox_mode = "read-only"` for an agent that neither changes files nor runs commands |
 
-Tools are left out everywhere (each tool names its own; a wrong name stops the agent from loading); the comment lines
+A Claude Code agent's tool limit is kept in each tool's own terms (2026-10-09, independent review §7.2), checked in
+the installed tool: Gemini CLI's own loader, `opencode agent list`, Codex's subagent page, Qwen Code's `ToolNames` and
+its loader, which matches a subagent's tools by a tool's name or display name only (`Read`, `Write` and `Bash` are
+names of no tool there). An agent naming a tool with no name in Gemini or Qwen (an MCP tool) gets no list: the tool's
+defaults apply rather than a wrong limit. The comment lines
 of the frontmatter (the kit's license notice) are kept; the body is the agent's prompt. `server/install.mjs` has the
 four as agent-only targets: an agent goes to `.claude` always and to the converted target asked for; the converted
 text is written under a staging name in the tool folder and placed like any copy; the record keeps the source's hash

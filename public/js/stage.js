@@ -100,7 +100,7 @@ export class Stage {
     this.capEffects();
   }
 
-  // While the scene is hidden nothing ages its effects, but events keep adding them (docs/backlog.md "Long-running
+  // While the scene is hidden nothing ages its effects, but events keep adding them (docs/internal/backlog.md "Long-running
   // load"): the newest few are kept, which is all a returning eye can see anyway
   capEffects() {
     const cap = (list, max) => (list.length > max ? list.splice(0, list.length - max) : null);

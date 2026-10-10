@@ -4,7 +4,8 @@ description: "Adds a contact, booking or order form that really reaches someone:
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "web, backend, security"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "iletişim formu, rezervasyon formu, sipariş formu, bize ulaşın, form gönder*, form eposta*, formdan mail, mesaj formu, başvuru formu"
@@ -33,7 +34,7 @@ booking, order). Then pick the way that fits what the project already is:
 
 | The project | Use | Why |
 |---|---|---|
-| Plain pages (HTML/CSS, no server), any host | a form service (Formspree, Web3Forms, Getform or the like) | the form posts to the service, it mails the user; nothing to run |
+| Plain pages (HTML/CSS, no server), any host | a form service (Formspree, Web3Forms, Forminit (formerly Getform) or the like) | the form posts to the service, it mails the user; nothing to run |
 | Netlify or a host with its own form feature | the host's forms | no extra account |
 | A shared host with PHP and mail (cPanel and the like) | a short PHP handler on the same host | mail leaves from the domain; set up `domain-email` first |
 | An app with its own server | a route in that server that validates and sends | the key stays on the server |

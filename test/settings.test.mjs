@@ -451,7 +451,7 @@ test('Explorer is Windows’ word: Linux and macOS read the file manager (tried 
   assert.doesNotMatch(tOs('shCmExplorer', {}, 'linux'), /Explorer|Gezgin/);
   assert.match(tOs('shCmExplorer', {}, 'win32'), /Explorer|Gezgin/);
   // The page reads them through tOs, never the Windows text directly
-  for (const [f, key] of [['public/js/contextmenu.js', 'shCmExplorer'], ['public/js/actionsSwitch.js', 'actionsSwitchConfirmBody'], ['public/js/views/drawer.js', 'actionsSwitchConfirmBody']]) {
+  for (const [f, key] of [['public/js/contextmenu.js', 'shCmExplorer'], ['public/js/actionsSwitch.js', 'actionsSwitchConfirmBody'], ['public/js/views/drawerFit.js', 'actionsSwitchConfirmBody']]) {
     const js = fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
     assert.ok(js.includes(`tOs('${key}')`), `${f}: tOs`);
     assert.ok(!js.includes(`t('${key}')`), `${f}: no t('${key}')`);

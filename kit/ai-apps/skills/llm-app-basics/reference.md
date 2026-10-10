@@ -1,5 +1,8 @@
 # AI model in an app: reference
 
+Contents: The shape of one call (any provider) · Errors to handle · Prompt templates · The text of the person is data,
+not orders · Cost arithmetic · Sample inputs file · Test with a fake · Common problems
+
 Provider names, model names, prices and limits change. Read the provider's official documentation for the current
 values; this file only shows the shape of the work.
 

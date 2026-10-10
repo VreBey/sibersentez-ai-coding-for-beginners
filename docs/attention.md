@@ -63,9 +63,9 @@ they show when the window is hidden, minimized or simply not focused. In a brows
 ## When the AI stops on an error (2026-10-02)
 
 Claude Code writes some failures in place of an answer: an assistant record with `isApiErrorMessage: true`, an
-`error` code and, for a limit, `quotaLimits { rateLimitType, resetsAt }`. The owner's logs held 185 of them: the
-session limit (150), the connection (18), "Prompt is too long" (6), the weekly limit (6), not signed in (3) and an
-organization that turned subscription use off (2). Until now SiberSentez showed such a session as simply quiet.
+`error` code and, for a limit, `quotaLimits { rateLimitType, resetsAt }`. Kinds seen in real logs: the session limit
+(by far the most common), a dropped connection, "Prompt is too long", the weekly limit, not signed in and an
+organization that turned subscription use off. Until now SiberSentez showed such a session as simply quiet.
 
 - **Server** (`server/apierror.mjs`, ingest `assistant`): the kind (`limit-session`, `limit-week`, `login`, `org`,
   `connection`, `too-long`, `other`), the time, a limit's reset time and, for `other` only, Claude Code's text (short,
@@ -82,8 +82,8 @@ organization that turned subscription use off (2). Until now SiberSentez showed 
 ## How freely the AI acts (2026-10-02)
 
 Claude Code Desktop shows its permission mode beside the send button; Cursor and Devin show theirs on the command
-card. Claude Code writes the mode on every line the person writes (`permissionMode`; the owner's logs: `auto` 7,742,
-`default` 44, `plan` 34, `acceptEdits` 33). The newest one is kept on the lead session (ingest `user`, an older line
+card. Claude Code writes the mode on every line the person writes (`permissionMode`: `auto`,
+`default`, `plan`, `acceptEdits` and others). The newest one is kept on the lead session (ingest `user`, an older line
 never replaces it, only a plain word is taken) and `public/js/permMode.js` says it in plain words with what it lets
 the AI do: Plan only / Asks every step / Only what is allowed (calm), Edits files itself / Automatic (gold), Asks
 nothing (`bypassPermissions`, the stop colour). Shown as a chip on the lead's card in the Building and in a session's

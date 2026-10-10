@@ -8,6 +8,11 @@ import { isHiddenProject } from './hiddenProjects.js';
 // longer was left open (a terminal nobody is looking at): 'left', not waiting.
 export const WAIT_FRESH_MS = 6 * 3600 * 1000;
 
+// Whether a session's tool writes a live state the app reads (server/tools.mjs LIVE_TOOLS: Claude Code's
+// ~/.claude/sessions). Any other tool's session has none: its "closed" below means "not known", and what the page
+// says of it must say so (docs/internal/ui-states-plan.md U1), never "Closed".
+export const liveKnown = (s) => (s?.tool || 'claude') === 'claude';
+
 // The four states, most urgent first. Each has one word in the UI (attnState_<state>) and one color class (s-<state>).
 export const STATES = Object.freeze(['waiting', 'busy', 'left', 'closed']);
 

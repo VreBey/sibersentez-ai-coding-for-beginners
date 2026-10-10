@@ -1,4 +1,4 @@
-// Startup speed (measured 2026-10-02 on the owner's machine: 30 projects, 2,450 skills and agents, 700 log files).
+// Startup speed (measured 2026-10-02 on a large real setup: tens of projects, thousands of skills and agents).
 // The first answer waited for a skill scan that the scan after the logs repeats anyway (1.6-2.6 s -> about 0.5 s),
 // and every roster build ran a disk check per item to decide whether "Add to the library" is offered (about a second
 // in the first snapshot -> 0.2 s). The list now asks a string-only question; the action still checks the disk.

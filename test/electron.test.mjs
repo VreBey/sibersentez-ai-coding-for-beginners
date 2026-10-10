@@ -725,7 +725,8 @@ describe('logging', () => {
 
 // ------------------------------------------------------------------ main.mjs wiring (text checks)
 describe('main.mjs wiring', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'electron', 'main.mjs'), 'utf8');
+  // The shell's main module and its QA run (electron/qa-run.mjs, moved out of it: module-split-plan M1)
+  const src = fs.readFileSync(path.join(ROOT, 'electron', 'main.mjs'), 'utf8') + fs.readFileSync(path.join(ROOT, 'electron', 'qa-run.mjs'), 'utf8');
 
   test('sandboxed window, no Node; one preload whose three functions reach one IPC handler each; DevTools only in development', () => {
     // The window's options are the tested windowOptions (test/electron.test.mjs, "the hidden QA run"); main.mjs passes
@@ -746,7 +747,7 @@ describe('main.mjs wiring', () => {
     assert.equal((src.match(/preload\s*:/g) || []).length, 1, 'one preload, on the main window');
     assert.ok(src.includes('preload: PRELOAD_PATH,'));
     assert.ok(src.includes("const PRELOAD_PATH = path.join(here, 'preload.cjs');"));
-    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'ten bridge handlers (the theme’s, two for the page’s errors and the log folder, test/page-errors.test.mjs) and five for the terminal (test/terminal.test.mjs), nothing else');
+    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'twelve bridge handlers (the theme’s, two for the page’s errors and the log folder, test/page-errors.test.mjs; two for the support bundle, test/support-bundle.test.mjs) and five for the terminal (test/terminal.test.mjs), nothing else');
     assert.ok(src.includes('ipcMain.handle(LIBRARY_PICK_IPC_CHANNEL, onPickLibraryFolderRequest);'));
     const lib = src.slice(src.indexOf('async function onPickLibraryFolderRequest'), src.indexOf('// window.sibersentezShell.saveProjectIdea'));
     assert.ok(lib.indexOf('bridgeSender(senderFacts(event))') < lib.indexOf('showOpenDialog'), 'the library picker checks the sender first');
@@ -1971,11 +1972,13 @@ import {
 describe('the hidden QA run', () => {
   const qaOn = readQaOptions({ env: { SIBERSENTEZ_QA_QUIT_MS: '1000' }, isPackaged: false });
   const qaOff = readQaOptions({ env: {}, isPackaged: false });
-  const mainText = () => fs.readFileSync(path.join(ROOT, 'electron', 'main.mjs'), 'utf8').replace(/\r\n/g, '\n');
+  // The shell's main module and its QA run (electron/qa-run.mjs, moved out of it: module-split-plan M1)
+  const mainText = () => (fs.readFileSync(path.join(ROOT, 'electron', 'main.mjs'), 'utf8') + fs.readFileSync(path.join(ROOT, 'electron', 'qa-run.mjs'), 'utf8')).replace(/\r\n/g, '\n');
   const bodyOf = (src, name) => {
     const start = src.indexOf(`function ${name}(`);
     assert.ok(start >= 0, `missing function ${name}`);
-    return src.slice(start, src.indexOf('\n}\n', start));
+    // Up to the "}" at the function's own indentation (functions inside createQaRun are indented)
+    return src.slice(start, src.indexOf(`\n${(src.slice(src.lastIndexOf('\n', start) + 1, start).match(/^\s*/) || [''])[0]}}\n`, start));
   };
 
   test('SIBERSENTEZ_QA_HIDDEN=1, SIBERSENTEZ_QA_PROBES=1 and SIBERSENTEZ_QA_PROJECT_DIR only in QA mode; the project folder only in a hidden run', WIN, () => {
@@ -2045,9 +2048,10 @@ describe('the hidden QA run', () => {
     assert.deepEqual(await hidden.showMessageBox({ message: 'm', buttons: ['Cancel', 'On'], cancelId: 0 }), { response: 0, checkboxChecked: false });
     assert.deepEqual(await hidden.showMessageBox({}, { message: 'm', buttons: ['On', 'Cancel'], cancelId: 1 }), { response: 1, checkboxChecked: false }, 'with a parent window: its cancel button');
     assert.deepEqual(await hidden.showOpenDialog({}, { properties: ['openDirectory'] }), { canceled: true, filePaths: [] });
+    assert.deepEqual(await hidden.showSaveDialog({}, { title: 'Save' }), { canceled: true, filePath: '' }, 'the support bundle is never saved in a hidden run');
     assert.equal(hidden.showErrorBox('t', 'b'), undefined);
     assert.deepEqual(calls, [], 'Electron was never asked');
-    assert.equal(logs.length, 4);
+    assert.equal(logs.length, 5);
     for (const m of logs) assert.match(m, /^QA hidden: native .* skipped$/);
     const normal = guardDialogs(electron, { hidden: false });
     assert.deepEqual(await normal.showMessageBox({}, {}), { response: 1 });

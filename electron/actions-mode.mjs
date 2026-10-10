@@ -1,3 +1,4 @@
+// @ts-check
 // The actions mode: the tray's switch, its menus, the in-app panel's request and the confirmation for On
 // (docs/actions-toggle.md; plan D8: from helpers.mjs, which re-exports it). Pure, no Electron.
 import { randomBytes } from 'node:crypto';
@@ -91,7 +92,7 @@ export function writeHubLanguageSetting(hubPath, lang, { fsImpl = fs, suffix = t
 // that cannot be parsed is not overwritten: when the person changes a setting it is kept aside, byte for byte, as
 // settings.json.broken (settings.json.broken-2 ... when that name is taken, like the hub's other broken files), then a
 // new settings.json is written from nothing. Returns keptAside (the new name) when that happened.
-function writeHubSetting(hubPath, update, { fsImpl = fs, suffix = tempSuffix, wait } = {}) {
+function writeHubSetting(hubPath, update, { fsImpl = fs, suffix = tempSuffix, wait = undefined } = {}) {
   let cur = readHubSettings(hubPath, fsImpl);
   let keptAside = null;
   if (!cur.ok && cur.code === 'SETTINGS_INVALID') {
@@ -133,7 +134,7 @@ function brokenName(file, fsImpl = fs) {
 // mode it now runs in. Only an answer naming the saved mode counts; anything else (no server or one still starting, an
 // older server that does not know the request, a timeout, another mode) falls back to restart(), the requested
 // restart that reads settings.json at start. Returns 'live' or 'restart'.
-export async function applyActionsModeLive({ requested, serverReady = false, call, restart, log = () => {} }) {
+export async function applyActionsModeLive({ requested, serverReady = false, call, restart, log = (_line) => {} }) {
   if (serverReady) {
     let r;
     try {
@@ -181,7 +182,7 @@ export async function changeActionsMode({ current, requested, confirm, write, ap
 // hub's writer. writable: false (the hub overlaps the program folder) refuses every write with NO_HUB.
 // remember(mode) runs after a successful write and before apply: the shell notes which mode it set itself.
 // read and write are injectable for tests. Returns changeActionsMode's result plus from (the stored mode before).
-export async function switchActionsMode({ hubPath, writable = true, requested, confirm, apply, remember = () => {}, read = readHubActionsSetting, write = writeHubActionsSetting }) {
+export async function switchActionsMode({ hubPath, writable = true, requested, confirm, apply, remember = (_mode) => {}, read = readHubActionsSetting, write = writeHubActionsSetting }) {
   const from = read(hubPath);
   let keptAside = null;
   const result = await changeActionsMode({
@@ -189,6 +190,7 @@ export async function switchActionsMode({ hubPath, writable = true, requested, c
     requested,
     confirm,
     write: (mode) => {
+      /** @type {any} */
       const w = writable ? write(hubPath, mode) : { ok: false, code: 'NO_HUB' };
       if (w?.keptAside) keptAside = w.keptAside;
       if (w?.ok === true) remember(mode);
@@ -244,7 +246,7 @@ export function actionsMenuItems(S, mode) {
 // radio item calls choose(mode, source). main.mjs passes chooseActionsMode, the one path that changes the mode, so
 // both menus switch (and confirm On) the same way; source only names the menu in the log.
 export function actionsSubmenuTemplate(S, mode, choose, source) {
-  return actionsMenuItems(S, mode).map((it) => ({ label: it.label, type: 'radio', checked: it.checked, click: () => choose(it.mode, source) }));
+  return actionsMenuItems(S, mode).map((it) => ({ label: it.label, type: /** @type {const} */ ('radio'), checked: it.checked, click: () => choose(it.mode, source) }));
 }
 
 // ---------------------------------------------------------------- the in-app switch (docs/actions-toggle.md §3b)
@@ -272,7 +274,7 @@ export function bridgeSender({ mainWindow = false, frame = null, origin = null }
 // is exactly 'off' | 'dry' | 'live' (no other spelling, no other type).
 // Returns { ok: true, mode } or { ok: false, reason }. The confirmation for On happened in the page (§3b); this is not a
 // security boundary against code running in our own page, see actions-toggle.md §2.
-export function panelRequest({ mode, mainWindow = false, frame = null, origin = null } = {}) {
+export function panelRequest({ mode = undefined, mainWindow = false, frame = null, origin = null } = {}) {
   const sender = bridgeSender({ mainWindow, frame, origin });
   if (!sender.ok) return sender;
   if (typeof mode !== 'string' || !ACTION_MODES.includes(mode)) return { ok: false, reason: 'invalid-mode' };
@@ -301,7 +303,7 @@ export function panelReply(result) {
 //   'panel'   the tray or the window menu while the window shows the panel (windowReady): the shell brings the window
 //             up and hands the question to the panel; if the page does not take it, the native dialog asks instead
 //   'native'  otherwise (no window that can ask): the native confirmation dialog
-export function liveConfirmation({ requested, current, source, qa = false, windowReady = false } = {}) {
+export function liveConfirmation({ requested = undefined, current = undefined, source = undefined, qa = false, windowReady = false } = {}) {
   if (requested !== 'live' || normalizeActionsMode(current) === 'live') return 'none';
   if (qa) return 'refuse';
   if (source === 'panel') return 'page';

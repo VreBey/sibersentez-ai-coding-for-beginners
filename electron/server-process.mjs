@@ -1,3 +1,4 @@
+// @ts-check
 // The server process: its environment, readiness, the restart supervisor, requests over its message channel and
 // stopping it on purpose (plan D8: from helpers.mjs, which re-exports it). Pure, no Electron.
 import http from 'node:http';
@@ -36,7 +37,7 @@ export function buildServerEnv(baseEnv, { port, hubPath, instance, sessionKey })
 // (Host = 127.0.0.1:<port>, Sec-Fetch-Site = same-origin) and checks the instance header:
 //   'ready'   200 and our instance id    'foreign' any answer without our instance id (another server)
 //   'down'    no answer yet, or our instance but not 200 yet
-export function probeServer(port, { instance, timeoutMs = 1500, host = HOST } = {}) {
+export function probeServer(port, { instance = undefined, timeoutMs = 1500, host = HOST } = {}) {
   if (typeof instance !== 'string' || !instance) throw new TypeError('probeServer needs the instance id');
   return new Promise((resolve) => {
     let done = false;
@@ -63,7 +64,7 @@ export function probeServer(port, { instance, timeoutMs = 1500, host = HOST } = 
 }
 
 // Polls until: 'ready' | 'foreign' (another server owns the port; never load it) | 'timeout' | 'stopped'
-export async function waitForServer(port, { instance, timeoutMs = 30000, intervalMs = 250, shouldStop = () => false, host = HOST } = {}) {
+export async function waitForServer(port, { instance = undefined, timeoutMs = 30000, intervalMs = 250, shouldStop = () => /** @type {boolean} */ (false), host = HOST } = {}) {
   const until = Date.now() + timeoutMs;
   while (Date.now() < until) {
     if (shouldStop()) return 'stopped';
@@ -207,7 +208,7 @@ export const NEW_PROJECT_HANDOVER_MS = 5000;
 //   notify()     a short tray balloon: SiberSentez is getting ready, try again in a few seconds (S.newProjectNotReady*)
 // Never silent: a window that cannot take the request yet gets the balloon instead (and is not brought up), a page
 // that does not take it within the time limit is logged. Returns 'handed-over' | 'not-taken' | 'not-ready'.
-export async function newProjectFromTray({ windowReady = false, show, handOver, notify, log = () => {} }) {
+export async function newProjectFromTray({ windowReady = false, show, handOver, notify, log = (_line) => {} }) {
   if (windowReady !== true) {
     log('new project: the window is not ready (server starting or an error page); the tray says so');
     notify();

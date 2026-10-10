@@ -4,7 +4,7 @@ description: "Reviews the current changes (uncommitted work, a branch or a pull 
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.1"
+  version: "0.1.2"
   sibersentez-tags: "code-review"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "incele*, kod inceleme, gözden geçir*, değişiklik*, ikinci göz, birleştirmeden önce, kontrol et*"
@@ -48,6 +48,9 @@ ask one question before reviewing. A change can only be judged against its goal.
 - **Data**: can this lose or corrupt user data? Is a data or schema change reversible? Are deletes intended?
 - **Readability**: clear names, no dead or commented-out code, no function doing five jobs, no copy-pasted blocks.
 - **Consistency**: follows the project's existing style, structure and patterns.
+- **Scope**: every changed line serves the intent of step 2. Working code rewritten in another style, options
+  added "for later" or checks for cases that cannot happen are a should fix, and a blocker when they hide the real
+  change or put it at risk.
 - **User side**: error messages a person can understand, texts translated if the app is multilingual, keyboard
   and screen reader basics for UI.
 - **Performance**, only when obvious: network or database calls inside loops, loading everything into memory,
@@ -76,7 +79,9 @@ Checks run: <command> -> <result>
 - **Should fix**: likely bug in an edge case, missing test for new behavior, confusing code others will trip over.
 - **Nice to have**: naming, small cleanups, style.
 
-If nothing is wrong, say so plainly. Do not invent findings to fill the list.
+If nothing is wrong, say so plainly, and say what you checked (the checklist areas and the commands with their
+result): "nothing found" is only worth something next to what was looked at. Do not invent findings to fill the
+list.
 
 ## 5. After the review
 

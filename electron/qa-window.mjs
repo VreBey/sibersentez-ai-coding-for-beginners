@@ -1,3 +1,4 @@
+// @ts-check
 // QA mode, the hidden QA run and the window's options (plan D8: from helpers.mjs, which re-exports it). Pure, no
 // Electron.
 import path from 'node:path';
@@ -31,6 +32,7 @@ export function readQaOptions({ env = {}, argv = [], isPackaged = false } = {}) 
 // SIBERSENTEZ_QA_ACTIONS=off|dry: in QA mode only (qa = readQaOptions(...)), the shell switches the actions mode through
 // the tray's own code path after the first page load. 'live' is refused: QA never runs real actions.
 // Returns { mode: 'off' | 'dry' | null, rejected: null | reason }.
+/** @param {{ env?: Record<string, string | undefined>, qa?: any }} [options] */
 export function readQaActionsMode({ env = {}, qa = null } = {}) {
   const v = typeof env.SIBERSENTEZ_QA_ACTIONS === 'string' ? env.SIBERSENTEZ_QA_ACTIONS.trim().toLowerCase() : '';
   if (!v || !qa?.enabled) return { mode: null, rejected: null };
@@ -79,7 +81,7 @@ export const WINDOW_BACKGROUND = Object.freeze({ dark: '#0c0e14', light: '#F2F5F
 // The main window's options. A hidden QA run: never shown (show: false), no taskbar button, placed off screen; it still
 // paints while hidden (paintWhenInitiallyHidden) and is not throttled in the background, so the page runs its timers
 // and capturePage works.
-export function windowOptions({ qaHidden = false, preload, icon, devTools = false } = {}) {
+export function windowOptions({ qaHidden = false, preload = undefined, icon = undefined, devTools = false } = {}) {
   const options = {
     width: 1440,
     height: 900,
@@ -133,11 +135,12 @@ export function createsTray({ qaHidden = false } = {}) {
 // Electron's dialog module as main.mjs uses it. A hidden QA run opens no native dialog at all: each call is logged and
 // answered as if cancelled (showMessageBox: the cancel button, or 0; showOpenDialog: canceled; showErrorBox: nothing).
 // Otherwise the calls go to Electron unchanged.
-export function guardDialogs(dialog, { hidden = false, log = () => {} } = {}) {
+export function guardDialogs(dialog, { hidden = false, log = (_line) => {} } = {}) {
   if (hidden !== true) {
     return {
       showMessageBox: (...args) => dialog.showMessageBox(...args),
       showOpenDialog: (...args) => dialog.showOpenDialog(...args),
+      showSaveDialog: (...args) => dialog.showSaveDialog(...args),
       showErrorBox: (...args) => dialog.showErrorBox(...args),
     };
   }
@@ -151,6 +154,10 @@ export function guardDialogs(dialog, { hidden = false, log = () => {} } = {}) {
     showOpenDialog: async () => {
       log('QA hidden: native folder picker skipped');
       return { canceled: true, filePaths: [] };
+    },
+    showSaveDialog: async () => {
+      log('QA hidden: native save dialog skipped');
+      return { canceled: true, filePath: '' };
     },
     showErrorBox: () => {
       log('QA hidden: native error box skipped');
@@ -184,7 +191,7 @@ export const QA_SERVED_MODE_SCRIPT =
   "fetch('/api/actions', { cache: 'no-store' }).then(async (r) => JSON.stringify({ status: r.status, mode: r.ok ? (await r.json()).mode : 'off' }), () => 'error')";
 // The page the panel probe loads: the panel's own QA hook (public/js/main.js, ?qa=1&actpanel=choose)
 export const QA_PANEL_PATH = '/?qa=1&actpanel=choose';
-// The next step on a laptop screen (docs/development-review-2026-10-06.md §3): the window is set to 1366 x 768 and the
+// The next step on a laptop screen (docs/internal/development-review-2026-10-06.md §3): the window is set to 1366 x 768 and the
 // building page loaded. The strip is shown, in the first screen, as wide as it can be without a sideways scroll, says
 // something, and comes first for the keyboard: its button (when it has one) before every other control of the
 // building, and it takes the focus; no control of the building jumps the order with a positive tabindex. '{"shown":true,...}' or 'missing' (no strip yet).

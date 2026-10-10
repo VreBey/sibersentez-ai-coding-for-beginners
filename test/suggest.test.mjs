@@ -203,13 +203,14 @@ const junction = (target, at) => {
   fs.symlinkSync(target, at, 'junction');
 };
 
-test('suggestions: a library item whose name fails the name rule is never offered (an install request with it would be refused as a whole)', () => {
+test('suggestions: a library skill whose name fails the name rule is never offered (an install request with it would be refused as a whole); an agent is offered under the name the library gives it', () => {
   const w = hubWorld();
   write(path.join(w.hub, 'library', 'web', 'skills', 'bad-folder', 'SKILL.md'), fm('React Helper', 'react'));
+  // An agent's frontmatter name the hub refuses becomes a slug, else the file name (server/library.mjs agentName)
   write(path.join(w.hub, 'library', 'web', 'agents', 'dotted.md'), fm('react-agent.', 'react'));
   write(path.join(w.hub, 'library', 'web', 'agents', 'device.md'), fm('con', 'react'));
   const r = projectSuggestions({ catalog: w.catalog, projectId: 'web' });
-  assert.deepEqual(r.body.items.map((i) => i.name), ['react-patterns', 'writing', 'frontend-dev']);
+  assert.deepEqual(r.body.items.map((i) => i.name), ['react-patterns', 'react-agent', 'writing', 'device', 'frontend-dev']);
   assert.deepEqual(rankItems([{ kind: 'skill', name: 'bad name', category: 'web', description: 'react' }, { kind: 'skill', name: 'ok', category: 'web', description: '' }], projectSignals(project({ 'package.json': pkg({ react: '19' }) }))).map((i) => i.name), ['ok']);
 });
 

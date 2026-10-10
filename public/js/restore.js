@@ -1,8 +1,9 @@
+// @ts-check
 // "Restore points" in the project drawer (docs/restore.md, docs/direction.md §3.4): the copies SiberSentez keeps before
 // an AI tool starts, and going back to one. restoreSectionHtml is pure (tested in node); createRestore keeps the
 // answers of GET /api/projects/<id>/restore (asked again after 15 s) and each project's step: the preview of one
 // point (restore-preview, writes nothing), then the question, then the result of restore-apply.
-import { esc, locale } from './format.js';
+import { esc, locale, num } from './format.js';
 import { icon } from './icons.js';
 import { t } from './i18n.js';
 
@@ -11,7 +12,7 @@ import { t } from './i18n.js';
 // began (its Job-ID): another job of the project never shows it.
 // After a reload, or for a job started in another window, the server's record of the job's start (the /restore
 // answer's jobs) is asked for; startPointsVersion() changes when an answer changes what the box says.
-// A record is history, not a promise (docs/development-plan-2026-10-07.md F2): whether the copy is still there is read
+// A record is history, not a promise (docs/internal/development-plan-2026-10-07.md F2): whether the copy is still there is read
 // from the project's points as last listed (here, or by the drawer's restore section), checked again every 30 s while
 // the box shows it, and at once after something that changes the points (a start, going back).
 const startPoints = new Map();
@@ -99,6 +100,85 @@ export function startPointText(point) {
   return point.scope === 'lean' && left > 0 ? t('rstStartLean', { count: left }) : t('rstStartFull');
 }
 
+// What a job's start copy would hold, before the job (GET /api/projects/<id>/restore-scope, docs/restore.md §12):
+// per project, asked again after ttl ms. onData(projectId): an answer arrived (the drawer redraws that project)
+async function fetchScope(projectId) {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/restore-scope`, { cache: 'no-store', credentials: 'same-origin' });
+  if (!res.ok) throw new Error(String(res.status));
+  return res.json();
+}
+// A failed look is asked again after failTtl ms (the server may be back); an answer asked for before forget() (still on
+// its way when a start or going back changed the files) is dropped
+export function createScopes({ fetchJson = fetchScope, onData = (_projectId) => {}, now = () => Date.now(), ttl = 60000, failTtl = 5000 } = {}) {
+  const cache = new Map();
+  const gens = new Map();
+  return {
+    get(projectId) {
+      if (typeof projectId !== 'string' || !projectId) return null;
+      const e = cache.get(projectId);
+      if (e && (e.pending || now() - e.at < e.ttl)) return e.data;
+      const gen = gens.get(projectId) || 0;
+      cache.set(projectId, { at: e?.at || 0, ttl, data: e?.data || null, pending: true });
+      const keep = (entry) => {
+        if ((gens.get(projectId) || 0) === gen) cache.set(projectId, entry);
+      };
+      Promise.resolve()
+        .then(() => fetchJson(projectId))
+        .then(
+          (data) => keep({ at: now(), ttl, data, pending: false }),
+          () => keep({ at: now(), ttl: failTtl, data: e?.data || null, pending: false }),
+        )
+        .then(() => {
+          try {
+            onData(projectId);
+          } catch (err) {
+            console.error(err);
+          }
+        });
+      return e?.data || null;
+    },
+    // A start took a copy, or going back changed the files: the next look asks again
+    forget: (projectId) => {
+      cache.delete(projectId);
+      gens.set(projectId, (gens.get(projectId) || 0) + 1);
+    },
+  };
+}
+
+const SCOPE_WHYS = ['history', 'packages', 'build', 'tools', 'hub'];
+const SCOPE_TOO_BIG = new Set(['too-many-files', 'too-large', 'file-too-large', 'too-deep']);
+// Whether the start will take a copy, as far as the look knows (pure): false only when it said no copy can be taken
+export const scopeTakesCopy = (scope) => !(scope && typeof scope === 'object' && scope.ok === false);
+// The line under Start (pure): what the copy taken at the start would hold, and, folded, what it leaves out and why.
+// scope: the /restore-scope answer or null; open: the fold is open (kept across redraws by the drawer). '' when nothing
+// is known yet. No copy possible says so, whatever the reason (too big for one, no hub, the folder refused).
+export function scopeHtml(scope, { open = false } = {}) {
+  if (!scope || typeof scope !== 'object') return '';
+  if (scope.ok !== true) {
+    if (scope.ok !== false) return '';
+    const key = SCOPE_TOO_BIG.has(scope.problem) ? `rstScopeTooBig_${scope.problem === 'file-too-large' ? 'too-large' : scope.problem}` : 'rstScopeNone';
+    return `<p class="small job-scope warn">${esc(t(key))}</p>`;
+  }
+  const files = Number.isInteger(scope.files) ? scope.files : 0;
+  const left = Number.isInteger(scope.leftOut) ? scope.leftOut : 0;
+  const lean = scope.scope === 'lean' && left > 0;
+  const size = sizeText(scope.bytes || 0);
+  const line = lean ? t('rstScopeLean', { count: num(files), size, left: num(left) }) : files === 0 ? t('rstScopeEmpty') : files === 1 ? t('rstScopeOne', { size }) : t('rstScopeFull', { count: num(files), size });
+  const skipped = (Array.isArray(scope.skipped) ? scope.skipped : []).filter((d) => d && typeof d.name === 'string' && SCOPE_WHYS.includes(d.why));
+  const big = lean ? (Array.isArray(scope.big) ? scope.big : []).filter((b) => b && typeof b.rel === 'string') : [];
+  const moreDirs = Number.isInteger(scope.moreDirs) && scope.moreDirs > 0 ? `<li class="muted">${esc(t('rstScopeMoreDirs', { count: num(scope.moreDirs) }))}</li>` : '';
+  if (!skipped.length && !big.length) return `<p class="small muted job-scope">${esc(line)}</p>`;
+  const code = (n) => `<code translate="no" title="${esc(n)}">${esc(n)}</code>`;
+  const rows = SCOPE_WHYS.map((why) => {
+    const names = skipped.filter((d) => d.why === why).map((d) => d.name);
+    return names.length ? `<li>${names.map(code).join(', ')} <span class="muted">${esc(t(`rstScopeWhy_${why}`))}</span></li>` : '';
+  }).join('');
+  const bigRow = big.length
+    ? `<li>${esc(t('rstScopeBig', { count: num(left), size: sizeText(scope.leftBytes || 0) }))}<ul class="job-scope-big">${big.map((b) => `<li>${code(b.rel)} <span class="muted">${esc(sizeText(b.size))}</span></li>`).join('')}${left > big.length ? `<li class="muted">${esc(t('rstMore', { count: left - big.length }))}</li>` : ''}</ul></li>`
+    : '';
+  return `<details class="job-scope"${open ? ' open' : ''}><summary class="small muted">${esc(line)} <span class="job-scope-more">${esc(t('rstScopeMore'))}</span></summary><ul class="small job-scope-list">${rows}${moreDirs}${bigRow}</ul><p class="small muted">${esc(t('rstScopeNever'))}</p></details>`;
+}
+
 const REASONS = new Set(['ai-start', 'before-restore', 'manual']);
 const STEPS = new Set(['', 'loading', 'confirm', 'busy', 'done', 'failed']);
 const NAMES_SHOWN = 8;
@@ -159,13 +239,13 @@ export function diskHtml(disk) {
   return `<p class="small muted rst-disk">${esc(text)}</p>`;
 }
 
-export function restoreSectionHtml(p, data, { mode = 'off', ui = {} } = {}) {
+export function restoreSectionHtml(p, data, { mode = 'off', ui = /** @type {Record<string, any>} */ ({}) } = {}) {
   if (!p?.path || p.exists === false || p.broad || p.tmpOnly || p.kind === 'hub') return '';
   const head = `<h3 id="rstH">${icon('replay')} ${esc(t('rstTitle'))}</h3>`;
   const wrap = (inner) => `<section class="dr-sec rst" data-sec="restore" aria-labelledby="rstH">${head}${inner}</section>`;
   if (!data) return wrap(`<p class="muted small">${esc(t('rstLoading'))}</p>`);
   const points = (Array.isArray(data.points) ? data.points : []).filter((x) => x && typeof x.id === 'string');
-  // Short, and what a copy never holds said in plain sight (it was on hover only, docs/development-review-2026-10-06.md §4)
+  // Short, and what a copy never holds said in plain sight (it was on hover only, docs/internal/development-review-2026-10-06.md §4)
   const intro = `<p class="muted small">${esc(t('rstIntro'))}</p><p class="muted small rst-never">${esc(t('rstIntroMore'))}</p>`;
   if (!points.length) return wrap(`${intro}<p class="small">${esc(t('rstNone'))}</p>`);
   const on = mode === 'dry' || mode === 'live';
@@ -217,7 +297,7 @@ export function restoreSectionHtml(p, data, { mode = 'off', ui = {} } = {}) {
 }
 
 // Answers and steps per project. onData(projectId): an answer arrived (the drawer redraws when that project is open)
-export function createRestore({ fetchJson = fetchPoints, onData = () => {}, now = () => Date.now(), ttl = 15000 } = {}) {
+export function createRestore({ fetchJson = fetchPoints, onData = (_projectId) => {}, now = () => Date.now(), ttl = 15000 } = {}) {
   const cache = new Map();
   const uis = new Map();
   function get(projectId) {

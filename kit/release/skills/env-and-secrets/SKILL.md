@@ -4,7 +4,8 @@ description: "Keeps API keys and settings out of the code: a .env file for the r
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.1"
+  version: "0.1.2"
+  sibersentez-checked: "2026-09-30"
   sibersentez-tags: "security, devops"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "env, env dosyası, api anahtar*, api key, ortam değişken*, anahtarı nereye, nereye koy*, gizli ayar*"

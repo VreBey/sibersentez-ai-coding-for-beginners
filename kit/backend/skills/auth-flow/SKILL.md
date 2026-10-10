@@ -4,7 +4,8 @@ description: "Adds sign-up, sign-in, sessions, password reset and access control
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.1"
+  version: "0.1.2"
+  sibersentez-checked: "2026-10-01"
   sibersentez-tags: "backend, security, database"
   sibersentez-stage: "build"
   sibersentez-keywords-tr: "kayıt ol*, giriş yap*, üye ol*, üyelik*, oturum aç*, şifre sıfırla*, parola sıfırla*, kullanıcı girişi, login, kimlik doğrula*, yetkilendirme"

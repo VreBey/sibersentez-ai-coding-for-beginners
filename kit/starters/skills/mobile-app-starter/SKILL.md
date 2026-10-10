@@ -2,10 +2,11 @@
 name: mobile-app-starter
 description: "Creates a first working phone app with Expo and React Native in TypeScript: checks tools, generates the app in a subfolder, opens it on a real phone with Expo Go, sets up type and health checks. Use when the idea is a mobile app, an Android or iPhone app, or an Expo or React Native project needs its first version."
 license: "MIT (see LICENSE.md)"
-compatibility: "Needs Node.js (20.19 or newer, an LTS release is best), npm, git and a phone with the Expo Go app on the same Wi-Fi. iPhone simulators need a Mac; on Windows use a real iPhone or an Android emulator."
+compatibility: "Needs Node.js 22.13 or newer (24 LTS is best), npm, git, a free Expo account and a phone with the Expo Go app on the same Wi-Fi. iPhone simulators need a Mac; on Windows use a real iPhone or an Android emulator."
 metadata:
   author: "SiberSentez"
-  version: "0.2.1"
+  version: "0.3.0"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "expo, react-native, typescript, mobile"
   sibersentez-stage: "start"
   sibersentez-keywords-tr: "mobil*, telefon*, cep telefonu, akıllı telefon, android, ios, iphone, uygulama mağazası, play store, app store, expo, react native"
@@ -26,12 +27,14 @@ the work is committed. Common problems are in [reference.md](reference.md).
 
 ## 1. Check the tools
 
-1. `node --version` (20.19 or newer; 22 LTS or later is best) and `npm --version`. If Node.js is missing, the user
-   installs the LTS version from nodejs.org, or you run `winget install OpenJS.NodeJS.LTS` after a yes. Open a new
+1. `node --version` (22.13 or newer, which the current Expo SDK needs; 24 LTS is best) and `npm --version`. If
+   Node.js is missing or older, the user installs the LTS version from nodejs.org (on Windows you may run
+   `winget install OpenJS.NodeJS.LTS` after a yes; on Linux nodejs.org lists the package manager steps). Open a new
    terminal afterwards.
 2. `git --version`.
 3. The phone: install **Expo Go** from Google Play or the App Store. The phone and the computer must be on the same
-   Wi-Fi network.
+   Wi-Fi network. The user makes a free Expo account (they type their own password): Expo Go on an iPhone opens a
+   project only when the terminal and the app are signed in to the same account.
 4. Tell the user early: building an iPhone app for the App Store needs an Apple developer account (paid yearly), and
    Google Play needs a one-time fee. Neither is needed to try the app with Expo Go.
 
@@ -54,6 +57,8 @@ cd mobile
 npx expo start
 ```
 
+- First, on an iPhone: `npx expo login` in the terminal (the user signs in in the browser it opens) and the same
+  account in Expo Go (Home tab, the avatar at the top right). Android does not ask for this yet, but it does no harm.
 - A QR code appears in the terminal. Android: scan it in Expo Go. iPhone: scan it with the Camera app.
 - Windows may ask whether Node.js may use the network: allow it for **private** networks.
 - In the terminal: `r` reloads the app, Ctrl+C stops the server.

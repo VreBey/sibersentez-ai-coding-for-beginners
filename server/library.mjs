@@ -16,6 +16,7 @@ import { normPath, readFrontmatter, truncate } from './util.mjs';
 import { libraryFile, registryFile, readLibrary } from './hub.mjs';
 import { writeFileAtomic } from './atomic.mjs';
 import { PLATFORM, isFsRoot, isLocalAbsolute, normalizeDir } from './platform.mjs';
+import { slugOf } from './agentFormats.mjs';
 
 export const CATEGORIES = Object.freeze(['web', 'mobile', 'desktop', 'game', 'data', 'ai', 'devops', 'testing', 'security', 'design', 'docs', 'general']);
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -195,7 +196,12 @@ export function listItemsIn(root, relRoot, { frontmatter = readFrontmatter } = {
       for (const f of dirents(agentsDir).filter((d) => d.isFile() && /\.md$/i.test(d.name) && !/^readme\.md$/i.test(d.name)).sort(byName)) {
         const file = path.join(agentsDir, f.name);
         const meta = frontmatter(file) || {};
-        add({ kind: 'agent', name: pickName(meta.name, f.name.replace(/\.md$/i, '')), category: cat, description: truncate(meta.description, DESC_MAX), path: file, rel: `${relRoot}/${cat}/agents/${f.name}` });
+        const stem = f.name.replace(/\.md$/i, '');
+        let name = agentName(meta.name, stem);
+        // Two agents that come to the same name: the first in byte order keeps it, the other is listed under its file
+        // name rather than left out unseen
+        if (seen.has(itemKey('agent', name)) && validName(stem)) name = stem;
+        add({ kind: 'agent', name, category: cat, description: truncate(meta.description, DESC_MAX), path: file, rel: `${relRoot}/${cat}/agents/${f.name}` });
       }
     }
   }
@@ -205,6 +211,41 @@ export function listItemsIn(root, relRoot, { frontmatter = readFrontmatter } = {
 function pickName(fmName, fallback) {
   const n = typeof fmName === 'string' ? fmName.trim() : '';
   return n || fallback;
+}
+
+// An agent's name: its frontmatter name when the hub takes it, else that name as a slug (large public collections
+// give agents display names such as "Minimal Change Engineer"; Claude Code still finds the agent by the name inside
+// the file), else the file name. A skill keeps pickName: by the Agent Skills specification its name is its identity.
+export function agentName(fmName, fileStem) {
+  const n = pickName(fmName, fileStem);
+  if (validName(n)) return n;
+  const slug = slugOf(n);
+  return slug && validName(slug) ? slug : fileStem;
+}
+
+// Files in a folder that are a project's own documents, never an agent; and folders whose Markdown files are commands
+// or editor rules, not agents (Claude Code commands, Cursor rules)
+const NOT_AGENT_FILE_RE = /^(readme|changelog|contributing|license|licence|security|code_of_conduct|notice|authors)(\.[a-z-]+)?\.md$/i;
+const NOT_AGENT_DIRS = new Set(['commands', 'rules', 'prompts']);
+// Frontmatter keys of a subagent file (Claude Code, Copilot, Cursor, Gemini CLI, Qwen Code, OpenCode, the large public
+// collections) that a note or a page does not carry
+const AGENT_KEY_RE = /^(tools|model|color|emoji|permissionMode|disallowedTools|mcpServers|maxTurns|readonly):/m;
+function hasAgentKey(file) {
+  let head = '';
+  try {
+    const fd = fs.openSync(file, 'r');
+    try {
+      // As much as readFrontmatter reads, so a file it takes a name from is judged on the same frontmatter
+      const b = Buffer.alloc(6000);
+      head = b.toString('utf8', 0, fs.readSync(fd, b, 0, b.length, 0));
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---/.exec(head);
+  return !!m && AGENT_KEY_RE.test(m[1]);
 }
 
 // Everything the roster lists as library items: the folders first, then catalog.json rows without a folder (a
@@ -303,6 +344,8 @@ function hashDir(h, dir, rel, mark, count, depth, L, skipVendored) {
 // right under the item are level 1). The folder is read entry by entry and counting stops as soon as a limit is
 // passed, so a tree over the limits is never read whole (the caller only needs to know it is over).
 // vendored: 'skip' leaves the vendored folders out (neither counted nor entered), as an import copies the tree.
+/** @typedef {{ maxBytes: number, maxFiles: number, maxItemDirs: number, maxItemDepth: number }} TreeLimits */
+/** @param {string} p @param {TreeLimits} [limits] @param {{ vendored?: string }} [options] */
 export function measureTree(p, limits = LIMITS, { vendored = 'keep' } = {}) {
   const L = itemLimits(limits);
   const skipVendored = vendored === 'skip';
@@ -352,6 +395,7 @@ export function measureTree(p, limits = LIMITS, { vendored = 'keep' } = {}) {
 }
 
 // The first limit a measured tree passes, as a code: too-many-files, too-large, too-many-folders, too-deep; or null
+/** @param {any} m @param {TreeLimits} [limits] */
 export function sizeProblem(m, limits = LIMITS) {
   const L = itemLimits(limits);
   if (m.files > L.maxFiles || (m.links || 0) > L.maxFiles) return 'too-many-files';
@@ -650,12 +694,29 @@ export function scanDir(dir, { hubDir = null, library = null, limits = LIMITS, f
       add({ abs: dir, rel: rel || '.', kind: 'skill', name: pickName(meta.name, path.basename(dir)), description: truncate(meta.description, DESC_MAX) });
       return;
     }
-    if (path.basename(dir).toLowerCase() === 'agents') {
+    const base = path.basename(dir).toLowerCase();
+    if (base === 'agents') {
       for (const f of ents) {
+        if (truncated) break;
         if (!f.isFile() || !/\.md$/i.test(f.name) || /^readme\.md$/i.test(f.name)) continue;
         const file = path.join(dir, f.name);
         const meta = frontmatter(file) || {};
-        add({ abs: file, rel: rel ? `${rel}/${f.name}` : f.name, kind: 'agent', name: pickName(meta.name, f.name.replace(/\.md$/i, '')), description: truncate(meta.description, DESC_MAX) });
+        add({ abs: file, rel: rel ? `${rel}/${f.name}` : f.name, kind: 'agent', name: agentName(meta.name, f.name.replace(/\.md$/i, '')), description: truncate(meta.description, DESC_MAX) });
+      }
+    } else if (!NOT_AGENT_DIRS.has(base)) {
+      // Outside an agents folder (one folder per topic, as large public collections keep them) a Markdown file is an
+      // agent only when its frontmatter has a name, a description and a key only agents use (tools, model, color...):
+      // a note or a slash command kept outside a commands folder has a name and a description too, but none of those
+      // (checked 2026-10-09 on agency-agents, VoltAgent, contains-studio, wshobson, anthropics/skills, BMAD)
+      for (const f of ents) {
+        // Past the candidate limit nothing more is read
+        if (truncated) break;
+        if (!f.isFile() || !/\.md$/i.test(f.name) || NOT_AGENT_FILE_RE.test(f.name)) continue;
+        const file = path.join(dir, f.name);
+        const meta = frontmatter(file) || {};
+        if (typeof meta.name !== 'string' || !meta.name.trim() || typeof meta.description !== 'string' || !meta.description.trim()) continue;
+        if (!hasAgentKey(file)) continue;
+        add({ abs: file, rel: rel ? `${rel}/${f.name}` : f.name, kind: 'agent', name: agentName(meta.name, f.name.replace(/\.md$/i, '')), description: truncate(meta.description, DESC_MAX) });
       }
     }
     if (depth >= limits.maxDepth) return;
@@ -732,7 +793,7 @@ function validCategory(cat, hubDir) {
 // Plan entries: { op: copy|update|skip, kind, name, category, from, path?, reason } plus internal _src, _expect.
 // scan: a scan result made by the caller (scanDir of a GitHub download, docs/github-import.md) in place of scanning
 // `source` again; its items carry the same fields (_abs, _existing).
-export function planImport({ hubDir, homeDir = null, source, picks, limits = LIMITS, scan: given = null }) {
+export function planImport({ hubDir, homeDir = null, source = undefined, picks, limits = LIMITS, scan: given = null }) {
   const scan = given || scanSource(source, { hubDir, homeDir, limits });
   if (!scan.ok) return scan;
   const byRel = new Map(scan.items.map((it) => [it.path, it]));

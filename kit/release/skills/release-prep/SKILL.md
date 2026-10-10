@@ -4,7 +4,8 @@ description: "Prepares a release step by step: finds what changed, proposes the 
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.1"
+  version: "0.1.2"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "release, docs"
   sibersentez-stage: "ship"
   sibersentez-keywords-tr: "sürüm*, yayınla*, yayın*, yeni versiyon, değişiklik günlüğü, sürüm notu, mağazaya yükle*, kurulum dosyası hazırla*, dağıt*"

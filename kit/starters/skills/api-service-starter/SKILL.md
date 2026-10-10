@@ -2,10 +2,11 @@
 name: api-service-starter
 description: "Creates a first working API service with Node.js and Express, or Python with FastAPI: list, add and read routes, a health check, SQLite or a data file, tests and a .env file, then runs and calls it. Use when the user wants an API, a server or a backend, or needs to save data for an app, bot or website."
 license: "MIT (see LICENSE.md)"
-compatibility: "Needs Node.js 22.9 or newer (an LTS release is best), npm and git; for the Python route Python 3.10 or newer instead of Node.js. Commands are written for Windows PowerShell and also work on macOS and Linux."
+compatibility: "Needs Node.js 22.9 or newer (24 LTS is best), npm and git; for the Python route Python 3.11 or newer (3.14 is best) instead of Node.js. Commands are written for Windows PowerShell and also work on macOS and Linux."
 metadata:
   author: "SiberSentez"
-  version: "0.2.0"
+  version: "0.2.1"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "node-server, fastapi, javascript, python, backend"
   sibersentez-stage: "start"
   sibersentez-keywords-tr: "rest api, api servisi, api yaz*, arka uç, sunucu yaz*, uç nokta*, servis yaz*, veri kaydet*, fastapi, python api"
@@ -37,7 +38,7 @@ Choose the language first, following `PLAN.md`: **Node.js with Express** (this f
 the project is JavaScript or the user has no preference; **Python with FastAPI** when the rest is Python, the API sits
 next to a bot or a data script, or the user knows Python (then follow fastapi-and-sqlite.md for steps 2 to 6).
 
-1. `node --version`: 22.9 or newer. If it is missing or older, the user installs the LTS version from nodejs.org, or
+1. `node --version`: 22.9 or newer (24 LTS is best). If it is missing or older, the user installs the LTS version from nodejs.org, or
    you run the installer after a yes. Then open a new terminal.
 2. `npm --version` and `git --version`. If PowerShell refuses to run `npm`, use `npm.cmd` instead; changing the
    execution policy is a system setting and needs a yes.

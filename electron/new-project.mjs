@@ -1,3 +1,4 @@
+// @ts-check
 // A new project from the shell: the folder picker, the folder rules and the idea (docs/start-flow.md; plan D8: from
 // helpers.mjs, which re-exports it). Pure, no Electron.
 import fs from 'node:fs';
@@ -29,7 +30,7 @@ export const ATTENTION_TEXT_MAX = 80;
 
 // Checks a page's attention report: from the main window's top frame on the app origin, count an integer 0..999, text
 // a short printable string. Returns { ok, count, text } or { ok: false, reason }.
-export function attentionRequest({ count, text, mainWindow = false, frame = null, origin = null } = {}) {
+export function attentionRequest({ count = undefined, text = undefined, mainWindow = false, frame = null, origin = null } = {}) {
   const sender = bridgeSender({ mainWindow, frame, origin });
   if (!sender.ok) return sender;
   if (!Number.isInteger(count) || count < 0 || count > 999) return { ok: false, reason: 'invalid' };
@@ -44,7 +45,7 @@ export const PAGE_ERROR_IPC_CHANNEL = 'sibersentez:page-error';
 export const LOGS_OPEN_IPC_CHANNEL = 'sibersentez:open-logs';
 export const PAGE_ERROR_MAX = 1000;
 export const PAGE_ERRORS_PER_RUN = 50;
-export function pageErrorLine({ text, logged = 0, mainWindow = false, frame = null, origin = null } = {}) {
+export function pageErrorLine({ text = undefined, logged = 0, mainWindow = false, frame = null, origin = null } = {}) {
   if (!bridgeSender({ mainWindow, frame, origin }).ok) return null;
   if (typeof text !== 'string' || text.length > PAGE_ERROR_MAX || logged >= PAGE_ERRORS_PER_RUN) return null;
   // Masked like every text the app shows (keys, Bearer values, passwords in addresses): an error's message can quote
@@ -97,7 +98,7 @@ export const IDEA_TEXT_MAX = 1200;
 // Whether a saveProjectIdea call may reach the server: the bridge's sender rule, a project id and a string of at most
 // IDEA_TEXT_MAX characters ('' clears the idea). The text is cleaned by the server, not here.
 // Returns { ok: true, projectId, text } or { ok: false, reason: <bridgeSender's> | 'invalid' }.
-export function projectIdeaRequest({ projectId, text, mainWindow = false, frame = null, origin = null } = {}) {
+export function projectIdeaRequest({ projectId = undefined, text = undefined, mainWindow = false, frame = null, origin = null } = {}) {
   const sender = bridgeSender({ mainWindow, frame, origin });
   if (!sender.ok) return sender;
   if (typeof projectId !== 'string' || !PROJECT_ID_RE.test(projectId)) return { ok: false, reason: 'invalid' };
@@ -134,7 +135,7 @@ export function projectFolderName(name) {
 
 // Checks the page's request: the bridge's sender rule, a name that makes a folder name, an idea of at most
 // IDEA_TEXT_MAX characters, choose a boolean (true: pick where). Returns { ok, name, idea, choose } or { ok: false, reason }.
-export function ideaProjectRequest({ name, idea = '', choose = false, mainWindow = false, frame = null, origin = null } = {}) {
+export function ideaProjectRequest({ name = undefined, idea = '', choose = false, mainWindow = false, frame = null, origin = null } = {}) {
   const sender = bridgeSender({ mainWindow, frame, origin });
   if (!sender.ok) return sender;
   if (typeof name !== 'string' || name.length > 200 || typeof idea !== 'string' || idea.length > IDEA_TEXT_MAX || typeof choose !== 'boolean') return { ok: false, reason: 'invalid' };
@@ -166,7 +167,7 @@ export function ideaParentDialogOptions(S) {
 // removeEmpty(p) (only an empty folder), precheck(folder) (plannedFolderRefusal: a reason or null), check(folder)
 // (checkProjectFolder), add(folder) ('project-add' with fresh), saveIdea(projectId, idea) ('project-idea').
 // Returns the server's reply with created: true, or { ok: false, reason }.
-export async function createIdeaProject({ S, base, name, idea = '', choose = false, showOpenDialog, exists, mkdir, removeEmpty, precheck = () => null, check, add, saveIdea }) {
+export async function createIdeaProject({ S, base, name, idea = '', choose = false, showOpenDialog, exists, mkdir, removeEmpty, precheck = (_folder) => null, check, add, saveIdea }) {
   let root = base;
   if (choose) {
     let r;

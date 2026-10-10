@@ -8,7 +8,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TOOLS, createToolDetector, runArgv, envValue, killTree } from '../server/tools.mjs';
+import { TOOLS, createToolDetector, runArgv, envValue, killTree, toolTested } from '../server/tools.mjs';
 
 // The words a tool's --help must still name (pure): its prompt option (not for a plain argument), its plan options and
 // values, its resume option or subcommand (Copilot's "--resume=" as "--resume"), the first word of its sign-in check
@@ -73,7 +73,9 @@ async function main() {
     }
     const missing = missingIn(help, expectedTokens(tool));
     if (missing.length) bad++;
-    console.log(`${tool.name.padEnd(20)} ${String(r.version || '?').padEnd(22)} ${missing.length ? `MISSING: ${missing.join(', ')}` : 'ok'}`);
+    // A version past the checked range that passes: TOOL_CHECKED in server/tools.mjs moves its "to" and date to it
+    const past = !missing.length && toolTested(tool.id, r.version)?.fit === 'newer' ? ` (newer than checked: set TOOL_CHECKED.${tool.id}.to to it)` : '';
+    console.log(`${tool.name.padEnd(20)} ${String(r.version || '?').padEnd(22)} ${missing.length ? `MISSING: ${missing.join(', ')}` : 'ok'}${past}`);
   }
   if (bad) {
     console.log(`\n${bad} tool(s) no longer name an option SiberSentez starts them with: check server/tools.mjs against their --help.`);

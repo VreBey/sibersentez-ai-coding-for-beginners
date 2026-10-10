@@ -1,3 +1,4 @@
+// @ts-check
 // The workshop building drawn on a canvas (docs/hq.md): the approved drawing, the furniture drawn in code over it, the
 // actors from the sprite sheets, the links, cards, tool icons and the waiting rings of a scene (hq-scene.js
 // sceneFrom). It only reads the scene and the view; the screens (views/workshop.js, hq-today.js) own the input.
@@ -45,7 +46,7 @@ const JOB_CARD_MS = 2600;
 
 export class HqRenderer {
   // word(key, vars): a ws* string (strings/workshop.js); onChange: an image came in (draw again)
-  constructor(canvas, { word, onChange } = {}) {
+  constructor(canvas, { word = undefined, onChange = undefined } = {}) {
     this.cv = canvas;
     this.ctx = canvas.getContext('2d');
     this.word = word;
@@ -58,7 +59,7 @@ export class HqRenderer {
     this.ready = Promise.all(
       Object.entries(IMAGES).map(
         ([name, file]) =>
-          new Promise((resolve) => {
+          new Promise((/** @type {(value?: void) => void} */ resolve) => {
             const img = new Image();
             img.onload = () => {
               if (this.dead) return resolve();
@@ -68,6 +69,7 @@ export class HqRenderer {
               resolve();
             };
             img.onerror = () => resolve();
+            // @ts-expect-error TS1470: the page loads this file as a module; the checker takes .js under public/ for CommonJS
             img.src = new URL(`../img/building/${file}.png`, import.meta.url).href;
           }),
       ),

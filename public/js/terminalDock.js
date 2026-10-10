@@ -1,3 +1,4 @@
+// @ts-check
 // The terminal dock (docs/embedded-terminal.md): terminals inside the SiberSentez window, one tab per terminal, at the
 // bottom of the page. Only in the SiberSentez window: its preload gives window.sibersentezTerminal (ids, keystrokes, sizes);
 // a plain browser has none, and the menus keep opening Windows Terminal there. The screen is xterm.js, served by our
@@ -9,7 +10,8 @@ import { stripAnsi, detectPrompt, detectError, detectCodeError, codeFixText, pro
 import { canContinueTool } from './jobId.js';
 import { terminalKeyHandler } from './terminalKeys.js';
 import { terminalReaderOn, onPrefs } from './usage.js';
-import { isRunningAi, pickRunningTab, toolEndedEvent, takeEarlyToolEnd, aiDraftOk, aiDraftCheck } from './dockState.js';
+import { isRunningAi, tabState, pickRunningTab, toolEndedEvent, takeEarlyToolEnd, aiDraftOk, aiDraftCheck } from './dockState.js';
+import { q } from './dom.js';
 
 // How long the second click that stops a running AI is waited for (askClose)
 const CLOSE_CONFIRM_MS = 4000;
@@ -24,7 +26,7 @@ const THEME = { background: '#0b0d14', foreground: '#dfe3ec', cursor: '#8ab4ff',
 // ask: text printed after the welcome (?qa=1&dock=ask: a Claude Code command question, for the prompt helper);
 // ai: the terminal plays an AI tool's (no plain-shell label)
 export function qaTerminalBridge(ask = '', { ai = false } = {}) {
-  let onData = () => {};
+  let onData = (_id, _data) => {};
   let n = 0;
   const prompt = 'PS C:\\Projects\\demo> ';
   return {
@@ -79,7 +81,9 @@ function openFailText(reason) {
 let xtermLib = null;
 async function loadXterm() {
   if (!xtermLib) {
-    xtermLib = Promise.all([import('/vendor/xterm/xterm.mjs'), import('/vendor/xterm/addon-fit.mjs')]).then(([x, f]) => ({ Terminal: x.Terminal, FitAddon: f.FitAddon }));
+    // The vendored library by its served path (public/vendor): a URL the browser loads, not a module the checker reads
+    const lib = ['/vendor/xterm/xterm.mjs', '/vendor/xterm/addon-fit.mjs'];
+    xtermLib = Promise.all([import(lib[0]), import(lib[1])]).then(([x, f]) => ({ Terminal: x.Terminal, FitAddon: f.FitAddon }));
     if (!document.querySelector('link[data-xterm]')) {
       const l = document.createElement('link');
       l.rel = 'stylesheet';
@@ -101,7 +105,7 @@ async function loadXterm() {
 // so a tab never offers another tool's session);
 // onResume(session): it goes on where it stopped (the session menu's own resume)
 // onAsk(): an AI tab started or stopped asking the person something (asking() changed: the waiting list redraws)
-export function createTerminalDock({ toast = () => {}, root = document.body, onSetupDone = () => {}, resumeFor = () => null, onResume = () => {}, onAsk = () => {}, onFix = null } = {}) {
+export function createTerminalDock({ toast = (_msg) => {}, root = document.body, onSetupDone = () => {}, resumeFor = (_projectId, _jobId, _tool) => null, onResume = (_session) => {}, onAsk = () => {}, onFix = null } = {}) {
   const api = globalThis.sibersentezTerminal;
   if (!api) return { available: false, open: async () => ({ ok: false, reason: 'no-bridge' }), showProject: () => false, askAi: () => ({ ok: false, reason: 'no-bridge' }), asking: () => [], showTab: () => false, count: () => 0 };
   const tabs = new Map(); // id -> { term, fit, el, tabEl, title, projectId, ended, unread }
@@ -119,7 +123,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     <div class="td-body"></div>`;
   root.append(dock);
   const tabsEl = dock.querySelector('.td-tabs');
-  const kindEl = dock.querySelector('.td-kind');
+  const kindEl = q(dock, '.td-kind');
   const body = dock.querySelector('.td-body');
   let height = MIN_H * 2;
   try {
@@ -207,7 +211,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     helpEl.hidden = true;
     helpEl.setAttribute('role', 'note');
     helpEl.setAttribute('aria-label', t('phLabel'));
-    helpEl.addEventListener('click', (e) => {
+    helpEl.addEventListener('click', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
       // A fix command of a known error: copied, never typed into the terminal
       const cp = e.target.closest('[data-ai-copy]');
       if (cp) {
@@ -250,12 +254,13 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     tabEl.setAttribute('role', 'tab');
     tabEl.dataset.term = info.id;
     tabEl.style.setProperty('--c', info.projectId ? projectColor(info.projectId) : '#8a93a6');
-    tabEl.innerHTML = `<i class="td-dot"></i><span class="td-name">${esc(info.title || t('dockTerminal'))}</span><span class="td-x" data-td="close" role="button" aria-label="${esc(t('dockClose'))}" title="${esc(t('dockClose'))}">${icon('close')}</span>`;
+    tabEl.innerHTML = `<i class="td-dot" aria-hidden="true"></i><span class="td-name">${esc(info.title || t('dockTerminal'))}</span><span class="sr-only td-state"></span><span class="td-x" data-td="close" role="button" aria-label="${esc(t('dockClose'))}" title="${esc(t('dockClose'))}">${icon('close')}</span>`;
     tabsEl.append(tabEl);
     const x = { term, fit, el, tabEl, title: info.title, projectId: info.projectId, ai: info.ai === true, tool: info.ai === true && typeof info.tool === 'string' ? info.tool : null, jobId: info.ai === true && typeof info.jobId === 'string' ? info.jobId : null, ended: false, toolEnded: info.ai === true && info.toolEnded === true, unread: false, helpEl, previewEl, preview: null, plain: stripAnsi(buffer).slice(-4000), help: null, answered: '', helpTimer: 0 };
     tabs.set(info.id, x);
     if (x.toolEnded) tabEl.classList.add('tool-ended');
     if (x.toolEnded) showToolNote(x);
+    paintState(x);
     // A list() snapshot already holds what was said before it; for a new terminal the early output goes in now
     if (early.has(info.id)) {
       if (!buffer) {
@@ -318,17 +323,28 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     x.help = hit;
     // The tab says the tool asks, so a question in a tab behind (or a folded dock) is not missed
     const asks = !!hit && hit.id !== 'error' && hit.id !== 'code';
+    x.asks = asks;
     x.tabEl.classList.toggle('asks', asks);
-    x.tabEl.title = asks ? t('dockAsks', { name: x.title || t('dockTerminal') }) : '';
+    paintState(x);
     x.helpEl.hidden = !hit;
     x.helpEl.innerHTML = promptHelpHtml(hit);
   }
 
+  // The tab's state in words (dockState.js tabState): read by a screen reader with its name, and its tooltip
+  function paintState(x) {
+    const st = tabState(x);
+    const name = x.title || t('dockTerminal');
+    const words = t(`dockSt_${st}`);
+    const stateEl = x.tabEl.querySelector('.td-state');
+    if (stateEl) stateEl.textContent = ` · ${words}`;
+    x.tabEl.title = st === 'asks' ? t('dockAsks', { name }) : `${name} · ${words}`;
+  }
   function ended(id, code) {
     const x = tabs.get(id);
     if (!x || x.ended) return;
     x.ended = true;
     x.tabEl.classList.add('ended');
+    paintState(x);
     // A question of the tool that ended is gone; a known error it printed stays explained
     checkHelp(x);
     x.term.write(`\r\n\x1b[90m${t('dockEnded', { code: code == null ? '—' : code })}\x1b[0m\r\n`);
@@ -465,13 +481,14 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
   function afterToolEnd(x) {
     setAsk(x, null);
     x.tabEl.classList.add('tool-ended');
+    paintState(x);
     showToolNote(x);
     const s = x.ai && canContinueTool(x.tool) ? resumeFor(x.projectId, x.jobId, x.tool) : null;
     if (s) showResume(x, s);
   }
 
-  tabsEl.addEventListener('click', (e) => {
-    const tab = e.target.closest('.td-tab');
+  tabsEl.addEventListener('click', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
+    const tab = /** @type {HTMLElement | null} */ (e.target.closest('.td-tab'));
     if (!tab) return;
     // While it asks "press again to stop", a press anywhere on the tab is that second press: its longer name moves the
     // close button away from under the pointer (seen when using the app, 2026-10-08: the second press hit the name)
@@ -480,7 +497,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     select(tab.dataset.term);
   });
   // Tabs by keyboard: arrows move, Delete closes
-  tabsEl.addEventListener('keydown', (e) => {
+  tabsEl.addEventListener('keydown', (/** @type {KeyboardEvent} */ e) => {
     const ids = [...tabs.keys()];
     const i = ids.indexOf(active);
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
@@ -501,7 +518,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
 
   // Resizing: drag the grip, or arrows on it
   const grip = dock.querySelector('.td-grip');
-  grip.addEventListener('pointerdown', (e) => {
+  grip.addEventListener('pointerdown', (/** @type {PointerEvent} */ e) => {
     grip.setPointerCapture(e.pointerId);
     const move = (ev) => {
       height = innerHeight - ev.clientY;
@@ -519,7 +536,7 @@ export function createTerminalDock({ toast = () => {}, root = document.body, onS
     grip.addEventListener('pointermove', move);
     grip.addEventListener('pointerup', up, { once: true });
   });
-  grip.addEventListener('keydown', (e) => {
+  grip.addEventListener('keydown', (/** @type {KeyboardEvent} */ e) => {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     e.preventDefault();
     height += e.key === 'ArrowUp' ? 40 : -40;

@@ -1,3 +1,4 @@
+// @ts-check
 // Bringing skills and agents from a GitHub repository into the hub library (docs/github-import.md).
 //
 // One of the two places SiberSentez sends a request to the internet (the other: the optional new-version look,
@@ -710,7 +711,7 @@ function defaultRequest(url, { headers = {}, timeoutMs = TIMEOUTS.apiMs } = {}) 
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers, timeout: timeoutMs }, (res) => resolve({ status: res.statusCode, headers: res.headers, stream: res }));
     req.on('timeout', () => req.destroy(codeError('timeout')));
-    req.on('error', (e) => reject(e?.code === 'timeout' ? e : codeError('network')));
+    req.on('error', (/** @type {any} */ e) => reject(e?.code === 'timeout' ? e : codeError('network')));
   });
 }
 
@@ -747,6 +748,7 @@ const drain = (res) => {
 // hubDir: the hub. spawn and request are injected (tests never start git or reach the network). gitExe: the git
 // program (undefined: found with findGit; null: no git, the archive is used). env: the environment git is started
 // with (its GIT_* values are dropped) and PATH is read from.
+/** @param {{ hubDir?: string | null, spawn?: any, request?: any, env?: Record<string, string | undefined>, gitExe?: string | null, now?: () => number, limits?: any, timeouts?: any }} [options] */
 export function createGitHub({ hubDir, spawn = nodeSpawn, request = defaultRequest, env = process.env, gitExe, now = Date.now, limits = REPO_LIMITS, timeouts = TIMEOUTS } = {}) {
   const L = limits === REPO_LIMITS ? REPO_LIMITS : { ...REPO_LIMITS, ...limits };
   const T = timeouts === TIMEOUTS ? TIMEOUTS : { ...TIMEOUTS, ...timeouts };
@@ -770,7 +772,7 @@ export function createGitHub({ hubDir, spawn = nodeSpawn, request = defaultReque
 
   // How a repository is downloaded: always the archive first ('tar'). fallbackOf: 'git' when git is here and the ref is
   // not a commit id (a shallow clone takes a branch or a tag), else null
-  const methodOf = () => 'tar';
+  const methodOf = (_parsed) => 'tar';
   const fallbackOf = (parsed) => (git() && !FULL_SHA_RE.test(parsed.ref || '') ? 'git' : null);
 
   // What a fetch would do, without any request (the Preview mode): repository, ref, folder, method, the fallback,
@@ -1059,7 +1061,7 @@ export function selectable(it) {
 // library (listLibrary). kit: the SiberSentez kit (kit.mjs readKit). roster: the catalog's roster (items other projects
 // hold). projectsFor(items): the fit service's projectsFor. Returns { ok, items, truncated, license, counts } or
 // { ok: false, status, error }.
-export function describeDownload({ hubDir, repoDir, sub = null, library = null, kit = null, roster = null, projectsFor = () => [], limits = LIMITS }) {
+export function describeDownload({ hubDir, repoDir, sub = null, library = null, kit = null, roster = null, projectsFor = (_items) => [], limits = LIMITS }) {
   const scanRoot = sub ? path.join(repoDir, ...sub.split('/')) : repoDir;
   if (!isRealDir(scanRoot) || !withinReal(scanRoot, repoDir)) return { ok: false, status: 404, error: 'path-not-found' };
   const lib = library || listLibrary(hubDir);
@@ -1111,7 +1113,8 @@ export function planDownloadImport({ hubDir, repoDir, picks, limits = LIMITS }) 
     if (st.isDirectory()) {
       scan = scanDir(abs, { hubDir, library, limits });
       want = '.';
-    } else if (st.isFile() && /\.md$/i.test(abs) && path.basename(path.dirname(abs)).toLowerCase() === 'agents') {
+    } else if (st.isFile() && /\.md$/i.test(abs)) {
+      // One agent file: its folder is scanned by the same rules (an agents folder, or a topic folder of agents)
       scan = scanDir(path.dirname(abs), { hubDir, library, limits });
       want = path.basename(abs);
     }

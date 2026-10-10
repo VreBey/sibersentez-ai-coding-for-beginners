@@ -8,6 +8,7 @@ export default {
     // Short summaries of the kit items for people (the SKILL.md description is written for the AI): kitSum_<kind>_<name>
     'kitSum_skill_docs-writer': 'Writes a plain README and user docs, with every command tried.',
     'kitSum_skill_explain-codebase': 'Explains a codebase you did not write: folders, entry point, how to run it and where to change things.',
+    'kitSum_skill_skill-writer': 'Turns a job you keep explaining to the AI into your own skill or agent, then checks the tool really picks it.',
     'kitSum_skill_idea-to-plan': 'Turns a rough idea into a short plan (PLAN.md), asking one question at a time.',
     'kitSum_skill_task-breakdown': 'Splits a plan into small tasks of an hour or two, each with a check (TASKS.md).',
     'kitSum_agent_planner': 'Turns a goal into a short plan with scope, risks and a done-when list, and asks only what it cannot decide itself.',
@@ -110,6 +111,7 @@ export default {
     // Short summaries of the kit items for people (the SKILL.md description is written for the AI): kitSum_<kind>_<name>
     'kitSum_skill_docs-writer': 'Sade bir README ve kullanım belgesi yazar; her komutu dener.',
     'kitSum_skill_explain-codebase': 'Yazmadığın bir kodu anlatır: klasörler, başlangıç noktası, nasıl çalıştırılır, neresi nasıl değiştirilir.',
+    'kitSum_skill_skill-writer': 'Yapay zekâya tekrar tekrar anlattığın bir işi kendi skill ya da ajan dosyana çevirir, aracın onu gerçekten seçtiğini dener.',
     'kitSum_skill_idea-to-plan': 'Belirsiz bir fikri, her seferinde tek soru sorarak kısa bir plana (PLAN.md) çevirir.',
     'kitSum_skill_task-breakdown': 'Planı bir iki saatlik küçük işlere böler, her birine bir kontrol ekler (TASKS.md).',
     'kitSum_agent_planner': 'Hedefi kapsamı, riskleri ve bitti sayılır listesi olan kısa bir plana çevirir; yalnız kendi karar veremeyeceğini sana sorar.',

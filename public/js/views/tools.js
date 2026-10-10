@@ -1,3 +1,4 @@
+// @ts-check
 // "Start with AI" on the page (docs/ai-start.md): the AI tools this computer has (GET /api/tools), the project drawer's
 // "Then: start with AI" section and the context menu's items (both pure), the result notice (pure) and the tools panel
 // (a dialog: what is installed, and how to install the rest).
@@ -13,6 +14,7 @@ import { store } from '../store.js';
 import { setupCheckHtml, errorBoxHtml, matchError } from '../setupCheck.js';
 import { wizardState, wizardHtml } from './setupWizard.js';
 import { everyVisible } from '../whileVisible.js';
+import { q, qAll, field, activeEl, up } from '../dom.js';
 
 // What the page knows about each tool: how to install it (the official commands; SiberSentez never runs them: the
 // person runs them, typed into the setup terminal or copied; the setup wizard, views/setupWizard.js, walks through them), what
@@ -73,8 +75,9 @@ const RETRY_MS = 30 * 1000;
 // ---------------- state: GET /api/tools ----------------
 
 // status: 'idle' (never asked), 'loading' (first answer pending), 'ready', 'error'; checking: a request is running
+/** @type {Readonly<{ status: 'idle' | 'loading' | 'ready' | 'error', tools: any[], node: any, at: number, checking: boolean, failedAt: number, [key: string]: any }>} */
 let state = Object.freeze({ status: 'idle', tools: [], node: null, at: 0, checking: false, failedAt: 0 });
-let fetchImpl = (...a) => globalThis.fetch(...a);
+let fetchImpl = (input, init) => globalThis.fetch(input, init);
 let inflight = null;
 let auto = false;
 const listeners = new Set();
@@ -99,6 +102,23 @@ function setState(next) {
   }
 }
 
+// A tool's capabilities from the server (server/tools.mjs capabilities), known keys and words only; null when absent
+function capsOf(c) {
+  if (!c || typeof c !== 'object') return null;
+  const out = {};
+  for (const k of CAP_KEYS) if (CAP_VALUES.has(c[k])) out[k] = c[k];
+  for (const k of ['planMin', 'resumeMin']) if (typeof c[k] === 'string' && /^[\d.]{1,20}$/.test(c[k])) out[k] = c[k];
+  return Object.keys(out).length ? out : null;
+}
+
+// The versions SiberSentez was checked with (server/tools.mjs toolTested), known words only; null when absent
+function testedOf(v) {
+  if (!v || typeof v !== 'object') return null;
+  const ver = (s) => typeof s === 'string' && /^[\d.]{1,20}$/.test(s);
+  if (!ver(v.from) || !ver(v.to) || !/^\d{4}-\d{2}-\d{2}$/.test(String(v.at))) return null;
+  return { from: v.from, to: v.to, at: v.at, fit: ['in', 'newer', 'older', 'unknown'].includes(v.fit) ? v.fit : 'unknown' };
+}
+
 // The server's answer, kept to known ids and words (pure)
 export function normalizeTools(d) {
   const list = Array.isArray(d?.tools) ? d.tools : [];
@@ -121,6 +141,11 @@ export function normalizeTools(d) {
       app: x.app === true,
       // The command's name (no folder) for the wizard's sign-in line
       cmd: typeof x.cmd === 'string' && /^[a-z][a-z0-9-]{0,30}$/.test(x.cmd) ? x.cmd : null,
+      // What SiberSentez does with it (capsLine), and whether a job starts in its plan mode with this version (the Start
+      // sentence); both were dropped here before, so the panel's line never showed (found by the U4 check, 2026-10-10)
+      caps: capsOf(x.caps),
+      ...(typeof x.planNow === 'boolean' ? { planNow: x.planNow } : {}),
+      tested: testedOf(x.tested),
     });
   }
   const node = d?.node && typeof d.node === 'object' ? { installed: d.node.installed === true, version: typeof d.node.version === 'string' && VERSION_RE.test(d.node.version) ? d.node.version : null } : null;
@@ -233,7 +258,7 @@ export function aiStartMenuItems(payload, { name = '', projectId = null, hasIdea
 const hasText = (key) => t(key) !== key;
 
 // res: the start-ai reply; item: the menu item that sent it; fallbackText(res): the menu's general error text
-export function aiStartToast(res, item, fallbackText = () => '') {
+export function aiStartToast(res, item, fallbackText = (_res) => '') {
   const r = res || {};
   const tool = item?.toolName || TOOL_INFO[r.tool]?.name || TOOL_INFO[item?.payload?.tool]?.name || 'AI';
   const name = String(item?.name || '');
@@ -321,13 +346,23 @@ function seenLine(x, seen = []) {
 
 // chosen: the tool jobs start with (marked, and where to change it said)
 // What SiberSentez does with the tool (plan D4, server/tools.mjs capabilities), one honest line; '' from an older server
-const CAP_KEYS = Object.freeze(['plan', 'resume', 'live', 'usage', 'signIn']);
+const CAP_KEYS = Object.freeze(['plan', 'resume', 'live', 'usage', 'signIn', 'observe']);
 const CAP_VALUES = new Set(['yes', 'no', 'unknown', 'file']);
 export function capsLine(caps) {
   if (!caps || typeof caps !== 'object') return '';
   const min = (k) => (caps[k] === 'yes' && typeof caps[`${k}Min`] === 'string' && /^[\d.]{1,20}$/.test(caps[`${k}Min`]) ? ` (${t('aiCapMin', { version: caps[`${k}Min`] })})` : '');
   const parts = CAP_KEYS.filter((k) => CAP_VALUES.has(caps[k])).map((k) => `<span class="ai-cap ${caps[k]}">${esc(t(`aiCap_${k}`))}: ${esc(t(`aiCapV_${caps[k]}`))}${esc(min(k === 'plan' ? 'plan' : k === 'resume' ? 'resume' : ''))}</span>`);
   return parts.length ? `<p class="small ai-caps"><span class="muted">${esc(t('aiCapsTitle'))}</span> ${parts.join(' · ')}</p>` : '';
+}
+
+// Which versions SiberSentez was checked with, and where the installed one stands (pure); '' without the answer's field
+export function testedLine(x) {
+  const v = x?.tested;
+  if (!v) return '';
+  const range = v.from === v.to ? v.from : `${v.from}–${v.to}`;
+  const fit = x.installed && x.version ? v.fit : 'unknown';
+  const warn = fit === 'older' || fit === 'newer';
+  return `<p class="small ai-tested${warn ? ' warn' : ' muted'}">${esc(t(`aiTested_${fit}`, { range, date: v.at, version: x.version || '' }))}</p>`;
 }
 
 function toolCardHtml(x, node, seen = [], chosen = false, platform = 'win32') {
@@ -362,6 +397,8 @@ function toolCardHtml(x, node, seen = [], chosen = false, platform = 'win32') {
   }
   const caps = capsLine(x.caps);
   if (caps) lines.push(caps);
+  const tested = testedLine(x);
+  if (tested) lines.push(tested);
   if (chosen) lines.push(`<p class="small muted">${esc(t('aiChosenWhere'))}</p>`);
   return `<li class="ai-card${x.installed ? ' on' : ''}${chosen ? ' chosen' : ''}" data-ai-tool="${esc(x.id)}">${head}${lines.join('')}</li>`;
 }
@@ -489,43 +526,46 @@ function createPanel() {
   let view = null;
   let pick = null;
   const signed = new Set();
-  let poll = 0;
+  /** @type {(() => void) | null} */
+  let poll = null;
   const inWizard = () => view === 'wizard' || (view === null && wizardFirst(state));
   const pollFor = (on) => {
     // Not while the window is hidden: once when it shows again (plan D5)
     if (on && !poll) poll = everyVisible(() => loadTools({ refresh: true }), WIZARD_POLL_MS);
     if (!on && poll) {
       poll();
-      poll = 0;
+      poll = null;
     }
   };
   const draw = () => {
     if (inWizard()) {
-      const focusWz = document.activeElement && box.contains(document.activeElement) ? document.activeElement.dataset?.wz || document.activeElement.dataset?.aiAct : null;
+      const a = activeEl();
+      const focusWz = a && box.contains(a) ? a.dataset?.wz || a.dataset?.aiAct : null;
       const canType = !!setupTyper && actionsState().mode === 'live';
       box.innerHTML = wizardPanelHtml(state, pick, { canType, signedIn: signed.has(pick) });
       if (canType) addTypeButtons(box);
       const step = wizardState(state, pick, TOOL_INFO).step;
       pollFor(step === 'needs' || step === 'install' || step === 'signin');
-      if (focusWz) (box.querySelector(`[data-wz="${focusWz}"]`) || box.querySelector(`[data-ai-act="${focusWz}"]`))?.focus({ preventScroll: true });
+      if (focusWz) (q(box, `[data-wz="${focusWz}"]`) || q(box, `[data-ai-act="${focusWz}"]`))?.focus({ preventScroll: true });
       return;
     }
     pollFor(false);
-    const focusAct = document.activeElement && box.contains(document.activeElement) ? document.activeElement.dataset?.aiAct : null;
+    const a = activeEl();
+    const focusAct = a && box.contains(a) ? a.dataset?.aiAct : null;
     // The pasted error survives a redraw (the tools answering while the panel is open); it is never stored
-    const ta = box.querySelector('[data-sc-text]');
+    const ta = field(box, '[data-sc-text]');
     const text = ta ? ta.value : '';
     const pos = ta && document.activeElement === ta ? [ta.selectionStart, ta.selectionEnd] : null;
-    const errOpen = !!box.querySelector('.sc-err')?.open;
+    const errOpen = !!(/** @type {HTMLDetailsElement | null} */ (box.querySelector('.sc-err'))?.open);
     box.innerHTML = toolsPanelHtml(state, Date.now(), store.tools, text);
     addTypeButtons(box);
     if (errOpen) box.querySelector('.sc-err')?.setAttribute('open', '');
     if (pos) {
-      const nt = box.querySelector('[data-sc-text]');
+      const nt = field(box, '[data-sc-text]');
       nt?.focus({ preventScroll: true });
       nt?.setSelectionRange(pos[0], pos[1]);
     }
-    if (focusAct) box.querySelector(`[data-ai-act="${focusAct}"]`)?.focus({ preventScroll: true });
+    if (focusAct) q(box, `[data-ai-act="${focusAct}"]`)?.focus({ preventScroll: true });
   };
   const say = (text) => {
     const live = box.querySelector('[data-ai-live]');
@@ -540,7 +580,7 @@ function createPanel() {
     draw();
     scrim.hidden = false;
     off = onToolsChange(draw);
-    (box.querySelector('[data-ai-act="close"]') || box).focus({ preventScroll: true });
+    (q(box, '[data-ai-act="close"]') || box).focus({ preventScroll: true });
   }
   function close() {
     if (scrim.hidden) return;
@@ -554,8 +594,8 @@ function createPanel() {
     back = null;
   }
   // The error box: results follow the text as it is typed or pasted; nothing leaves the page
-  scrim.addEventListener('input', (e) => {
-    const ta = e.target.closest?.('[data-sc-text]');
+  scrim.addEventListener('input', (/** @type {InputEvent & { target: HTMLElement }} */ e) => {
+    const ta = /** @type {HTMLTextAreaElement | null} */ (up(e.target, '[data-sc-text]'));
     if (!ta) return;
     const out = box.querySelector('[data-sc-results]');
     const html = errorBoxHtml(ta.value, matchError(ta.value));
@@ -567,12 +607,12 @@ function createPanel() {
       addTypeButtons(fresh);
     }
   });
-  scrim.addEventListener('click', (e) => {
+  scrim.addEventListener('click', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
     if (e.target === scrim) return close();
-    const act = e.target.closest('[data-ai-act]')?.dataset.aiAct;
+    const act = up(e.target, '[data-ai-act]')?.dataset.aiAct;
     if (act === 'close') return close();
     // The wizard's buttons: the first focusable element of the new step takes the keyboard
-    const wz = e.target.closest('[data-wz]')?.dataset.wz;
+    const wz = up(e.target, '[data-wz]')?.dataset.wz;
     if (wz) {
       if (wz === 'start') view = 'wizard';
       else if (wz === 'list') view = 'list';
@@ -587,11 +627,11 @@ function createPanel() {
         return;
       }
       draw();
-      (box.querySelector('.wz-h') ? box.querySelector('.wz button:not([data-wz="repick"]), .wz [data-ai-type], .wz [data-ai-copy]') : box.querySelector('[data-wz="start"]'))?.focus({ preventScroll: true });
+      (box.querySelector('.wz-h') ? q(box, '.wz button:not([data-wz="repick"]), .wz [data-ai-type], .wz [data-ai-copy]') : q(box, '[data-wz="start"]'))?.focus({ preventScroll: true });
       return;
     }
     if (act === 'recheck') return loadTools({ refresh: true });
-    const tb = e.target.closest('[data-ai-type]');
+    const tb = /** @type {HTMLButtonElement | null} */ (up(e.target, '[data-ai-type]'));
     if (tb && setupTyper) {
       const text = tb.parentElement.querySelector('code')?.textContent || '';
       tb.disabled = true;
@@ -602,7 +642,7 @@ function createPanel() {
         .finally(() => (tb.disabled = false));
       return;
     }
-    const cp = e.target.closest('[data-ai-copy]');
+    const cp = up(e.target, '[data-ai-copy]');
     if (cp) {
       const text = cp.parentElement.querySelector('code')?.textContent || '';
       Promise.resolve()
@@ -618,16 +658,16 @@ function createPanel() {
     }
   });
   // Keys stay in the dialog: Esc closes it (not the drawer behind), Tab cycles inside, page shortcuts do not fire
-  scrim.addEventListener('keydown', (e) => {
+  scrim.addEventListener('keydown', (/** @type {KeyboardEvent & { target: HTMLElement }} */ e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
       close();
     } else if (e.key === 'Tab') {
       // Only what can take focus now: the fields and buttons inside a closed fold are not (they made the last item
       // never the last, and Tab left the dialog for the page behind: found by an accessibility pass, 2026-10-08)
-      const f = [...box.querySelectorAll('button:not([disabled]), a[href], summary, textarea, input, select, [tabindex="0"]')].filter((el) => el.getClientRects().length > 0 && !el.closest('[hidden], details:not([open]) > :not(summary)'));
+      const f = qAll(box, 'button:not([disabled]), a[href], summary, textarea, input, select, [tabindex="0"]').filter((el) => el.getClientRects().length > 0 && !el.closest('[hidden], details:not([open]) > :not(summary)'));
       if (f.length) {
-        const i = f.indexOf(document.activeElement);
+        const i = f.indexOf(activeEl());
         if (i < 0) {
           e.preventDefault();
           f[e.shiftKey ? f.length - 1 : 0].focus();
@@ -651,11 +691,11 @@ function createPanel() {
 export function bindAiStart(bodyEl, { rerender = () => {} } = {}) {
   auto = true;
   bodyEl.addEventListener('change', (e) => {
-    const box = e.target.closest?.('[data-ai-idea]');
+    const box = /** @type {HTMLInputElement | null} */ (up(e.target, '[data-ai-idea]'));
     if (box) setIdeaPref(box.dataset.aiIdea, box.checked);
   });
-  bodyEl.addEventListener('click', (e) => {
-    const act = e.target.closest?.('[data-ai-act]')?.dataset.aiAct;
+  bodyEl.addEventListener('click', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
+    const act = up(e.target, '[data-ai-act]')?.dataset.aiAct;
     if (act === 'tools') openToolsPanel();
     else if (act === 'recheck') loadTools({ refresh: true });
   });
@@ -672,11 +712,11 @@ export function bindAiStart(bodyEl, { rerender = () => {} } = {}) {
 }
 
 // Tests: back to the first state (and a fake fetch)
-export function _resetToolsForTest({ fetch, autoLoad = false } = {}) {
+export function _resetToolsForTest({ fetch = undefined, autoLoad = false } = {}) {
   state = Object.freeze({ status: 'idle', tools: [], node: null, at: 0, checking: false, failedAt: 0 });
   inflight = null;
   auto = autoLoad;
   listeners.clear();
   ideaPrefs.clear();
-  fetchImpl = fetch || ((...a) => globalThis.fetch(...a));
+  fetchImpl = fetch || ((input, init) => globalThis.fetch(input, init));
 }

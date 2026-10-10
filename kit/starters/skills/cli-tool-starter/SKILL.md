@@ -2,10 +2,11 @@
 name: cli-tool-starter
 description: "Turns a script into a command line tool: arguments and options, a built-in help text, clear errors and exit codes, a version flag, tests, and a way to run it from any folder. Uses Python or Node.js. Use when the user has a script they run by editing it, wants a command to type in the terminal, or asks for a command line tool."
 license: "MIT (see LICENSE.md)"
-compatibility: "Needs Python 3.10 or newer, or Node.js 20 or newer, and git. Commands are written for Windows PowerShell; on macOS and Linux use .venv/bin/python and the same npm commands."
+compatibility: "Needs Python 3.11 or newer (3.14 is best), or Node.js 22 or newer (24 LTS is best), and git. Commands are written for Windows PowerShell; on macOS and Linux use .venv/bin/python and the same npm commands."
 metadata:
   author: "SiberSentez"
-  version: "0.1.0"
+  version: "0.1.1"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "python, javascript, cli"
   sibersentez-stage: "start"
   sibersentez-keywords-tr: "komut satırı*, terminal aracı, cli, argüman*, komut yaz*, terminalde çalış*, her klasörden çalış*, yardım metni"

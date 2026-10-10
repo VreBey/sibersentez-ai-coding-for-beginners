@@ -1,4 +1,4 @@
-// Contrast scan (docs/evidence-2026-10-08.md): run in the page (DevTools console, or a headless browser's
+// Contrast scan (docs/internal/evidence-2026-10-08.md): run in the page (DevTools console, or a headless browser's
 // Runtime.evaluate). Every visible text's colour against its background (the first opaque one up the ancestors, with the
 // translucent ones over it; gradients and images are not measured), WCAG 2.2: 4.5:1, or 3:1 for large text. Answers how
 // many texts were measured, the lowest ratio, and every one below its threshold, grouped by class.

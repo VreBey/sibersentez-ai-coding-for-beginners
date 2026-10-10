@@ -1,5 +1,8 @@
 # Launch checklist: reference
 
+Contents: Redirects · Headers · Apache or LiteSpeed (`.htaccess`, common on shared hosting) · DNS from more than one
+place · Link checker (Node.js 22 or newer, no packages) · Page tags · Legal pages: an outline to start from · Problems
+
 Written 2026-10-05 from a real launch of two small sites (a static site and a Node.js shop) on shared hosting. Commands
 are for Windows PowerShell (`curl.exe`, `nslookup`); outside PowerShell write `curl` instead of `curl.exe`. Replace
 `example.com` with the user's address.
@@ -69,7 +72,7 @@ Run it a few times. If one resolver fails now and then while the others answer, 
 servers of the domain (for example two name servers on the same single address). That is for the DNS host's support:
 send them the times, the resolver and the error text.
 
-## Link checker (Node.js 18 or newer, no packages)
+## Link checker (Node.js 22 or newer, no packages)
 
 Save as `check-links.mjs` outside the published folder and run `node check-links.mjs https://example.com`.
 

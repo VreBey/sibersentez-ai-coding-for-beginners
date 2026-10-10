@@ -60,6 +60,8 @@ export const STATUS = {
   busy: labelled('fmtSt_busy', { c: '#5ee39a' }),
   idle: labelled('fmtSt_idle', { c: '#ffcf6b' }),
   closed: labelled('fmtSt_closed', { c: '#5b6477' }),
+  // A session of a tool whose live state the app does not read (attention.js liveKnown)
+  unknown: labelled('fmtSt_unknown', { c: '#5b6477' }),
   running: labelled('fmtSt_running', { c: '#7c9cff' }),
   done: labelled('fmtSt_done', { c: '#5ee39a' }),
   stopped: labelled('fmtSt_stopped', { c: '#ff7a7a' }),

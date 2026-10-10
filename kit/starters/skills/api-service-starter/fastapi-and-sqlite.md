@@ -1,5 +1,7 @@
 # API service starter: Python route and SQLite
 
+Contents: Part A: Python with FastAPI · Part B: SQLite for the Node.js route · Common problems
+
 Part A is the whole Python route with FastAPI (it keeps its items in SQLite from the start). Part B moves the Node.js
 route of reference.md from the JSON file to SQLite. Written from the documentation of FastAPI
 (https://fastapi.tiangolo.com/), Python's `sqlite3` (https://docs.python.org/3/library/sqlite3.html) and the
@@ -8,7 +10,7 @@ before installing, and ask first.
 
 ## Part A: Python with FastAPI
 
-Needs Python 3.10 or newer (`py --version`). In a new subfolder `api/`:
+Needs Python 3.11 or newer (3.14 is best) (`py --version`). In a new subfolder `api/`:
 
 1. `py -m venv .venv`; then, after a yes (it downloads packages):
    `.venv\Scripts\python -m pip install fastapi uvicorn python-dotenv pytest httpx`. Write them to `requirements.txt` with a major
@@ -82,6 +84,8 @@ answers 422 itself when the body breaks the rules of `NewItem`.
 Ctrl+C. Open http://localhost:8000/docs: FastAPI writes a page where each route can be tried. From another terminal,
 in PowerShell:
 `curl.exe -X POST -H "Content-Type: application/json" -d "{\"title\":\"First\"}" http://localhost:8000/items`.
+On macOS and Linux: `.venv/bin/python` instead of `.venvScriptspython`, and
+`curl -X POST -H "Content-Type: application/json" -d '{"title":"First"}' http://localhost:8000/items`.
 
 ### test_api.py
 

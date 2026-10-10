@@ -1,6 +1,9 @@
 # Deploy web: reference
 
-Checked 2026-09-30 (revisit every six months). Hosts change commands, names and free limits: the official page is
+Contents: Two ways to deploy · Vercel · Netlify · GitHub Pages · Cloudflare Pages · Hosting with a control panel
+(cPanel and similar) · Environment variables · Custom domain · Problems · Docker on a VPS
+
+Checked 2026-10-09 (revisit every six months). Hosts change commands, names and free limits: the official page is
 the truth, this file only shows the shape. The commands below come from the hosts' documentation; the author of this
 kit did not deploy to each host, so read what the tool prints and stop at anything unexpected.
 
@@ -9,7 +12,8 @@ Official pages:
 - Vercel, command-line tool: https://vercel.com/docs/cli ; deployments: https://vercel.com/docs/deployments
 - Netlify, command-line tool: https://docs.netlify.com/cli/get-started/ ; deploys: https://docs.netlify.com/site-deploys/overview/
 - GitHub Pages: https://docs.github.com/en/pages
-- Cloudflare Pages: https://developers.cloudflare.com/pages/
+- Cloudflare Pages: https://developers.cloudflare.com/pages/ ; Workers static assets:
+  https://developers.cloudflare.com/workers/static-assets/
 - Domains and DNS: each host's documentation, section "custom domain".
 
 ## Two ways to deploy
@@ -58,7 +62,9 @@ never put a secret in a static site.
 ## Cloudflare Pages
 
 Connect the repository in the dashboard, or upload the built folder. For the command-line route read the current
-"Direct Upload" page in the documentation before running anything.
+"Direct Upload" page in the documentation before running anything. Pages keeps working, but Cloudflare now points new
+projects to Workers with static assets (the same files, deployed with its `wrangler` tool); follow whichever the
+dashboard offers today and read its page first.
 
 ## Hosting with a control panel (cPanel and similar)
 

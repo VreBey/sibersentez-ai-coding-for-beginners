@@ -46,6 +46,7 @@ import {
   aiStartSectionHtml,
   toolsPanelHtml,
   normalizeTools,
+  capsLine,
   loadTools,
   needTools,
   onToolsChange,
@@ -308,7 +309,13 @@ describe('detection: finding the tools', () => {
     const pub = publicTools(r);
     const text = JSON.stringify(pub);
     assert.doesNotMatch(text, /\\|:\/|Users|\.exe|\.cmd|@|email/i);
-    assert.deepEqual(Object.keys(pub.tools[0]).sort(), ['app', 'caps', 'cmd', 'id', 'installed', 'installs', 'name', 'onPath', 'others', 'pathDir', 'ready', 'version', 'via']);
+    assert.deepEqual(Object.keys(pub.tools[0]).sort(), ['app', 'caps', 'cmd', 'id', 'installed', 'installs', 'name', 'onPath', 'others', 'pathDir', 'planNow', 'ready', 'tested', 'version', 'via']);
+    // A job starts in plan mode only where the version installed has it (ui-states-plan U2): Claude Code yes, Codex none
+    assert.equal(pub.tools.find((x) => x.id === 'claude').planNow, true);
+    assert.equal(pub.tools.find((x) => x.id === 'codex').planNow, false);
+    assert.deepEqual([pub.tools[0].caps.observe, pub.tools.find((x) => x.id === 'codex').caps.observe], ['yes', 'no'], 'commands and reviewer agents observed for Claude Code only');
+    const old = publicTools({ tools: [{ id: 'gemini', name: 'Gemini CLI', installed: true, version: '0.60.0', via: 'npm', installs: [{}] }] }).tools[0];
+    assert.equal(old.planNow, false, 'below planMin it starts as usual: no plan promised');
     assert.equal(pub.tools[0].cmd, 'claude', 'the command name only');
     assert.deepEqual(pub.tools.map((x) => x.id), TOOL_IDS);
     const claude = pub.tools[0];
@@ -405,6 +412,10 @@ describe('launcher and first message', () => {
     const text = jobMessageText('Giriş sayfası ekle\nşifre sıfırlama da olsun');
     assert.ok(text.includes('> Giriş sayfası ekle\n> şifre sıfırlama da olsun'));
     for (const w of ['orchestrate skill', 'Plan, Build, Check and Finish', 'approve the plan before any code', 'approve the result', 'agent-rules', 'Add them only after I say yes', 'language the job is written in']) assert.ok(text.includes(w), w);
+  });
+
+  test('both first messages point the tool to a fitting project skill before it answers from memory (a real session picked mobile-app-starter only with that line, 2026-10-09)', () => {
+    for (const text of [firstMessageText('an iPhone app'), jobMessageText('put it in Docker')]) assert.ok(text.replace(/\s+/g, ' ').includes('When a skill in this project fits a step, use it before answering from memory'), text.slice(0, 40));
   });
 
   test('writing the first message: created with .sibersentez/.gitignore; the same text is left alone; another text is never overwritten (next name); a file or a junction in place of .sibersentez blocks', () => {
@@ -1023,6 +1034,16 @@ describe('page: tools state', () => {
     await loadTools({ refresh: true });
     assert.deepEqual(f.urls.at(-1), '/api/tools?refresh=1');
     assert.deepEqual(normalizeTools({ tools: [{ id: 'claude', installed: true, version: 'C:\\x', via: 'hack' }] }).tools[0].version, null);
+    // What the server says a tool supports reaches the page (it was dropped here, so the panel's line never showed:
+    // found by looking at the running app, 2026-10-10): the server's own answer, through the page's cleaning
+    const served = publicTools({ tools: [{ id: 'codex', name: 'Codex CLI', installed: true, version: '0.160.0', via: 'npm', installs: [{}] }, { id: 'claude', name: 'Claude Code', installed: true, version: '2.1.296', via: 'native', installs: [{}] }] });
+    const page = normalizeTools(JSON.parse(JSON.stringify(served))).tools;
+    const codex = page.find((x) => x.id === 'codex');
+    assert.deepEqual([codex.caps?.plan, codex.caps?.observe, codex.caps?.resumeMin, codex.planNow], ['no', 'no', '0.160.0', false]);
+    assert.deepEqual([page.find((x) => x.id === 'claude').caps?.live, page.find((x) => x.id === 'claude').planNow], ['yes', true]);
+    assert.ok(capsLine(codex.caps).includes('plan mode: no'), 'the panel\'s line is drawn from it');
+    const odd = normalizeTools({ tools: [{ id: 'claude', caps: { plan: '<b>', live: 'yes', planMin: 'x;y' }, planNow: 'yes' }] }).tools[0];
+    assert.deepEqual([odd.caps, odd.planNow], [{ live: 'yes' }, undefined], 'only known words; an older server says nothing of planNow');
     _resetToolsForTest({ fetch: answerFetch({}, 500) });
     await loadTools();
     assert.equal(toolsState().status, 'error');
@@ -1414,4 +1435,27 @@ test('live jobs get unique persistent ids; more than nine jobs work; preview and
     await live.close();
     await dry.close();
   }
+});
+
+test('the versions SiberSentez was checked with, per tool, and where the installed one stands (review §11)', async () => {
+  const { toolTested, TOOL_CHECKED } = await import('../server/tools.mjs');
+  assert.deepEqual(Object.keys(TOOL_CHECKED).sort(), [...TOOL_IDS].sort(), 'every tool has its range');
+  for (const c of Object.values(TOOL_CHECKED)) assert.match(c.at, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(toolTested('claude', '2.1.290').fit, 'in');
+  assert.equal(toolTested('claude', '2.1.296').fit, 'in', 'the newest checked is in');
+  assert.equal(toolTested('claude', '2.2.0').fit, 'newer');
+  assert.equal(toolTested('claude', '2.1.100').fit, 'older');
+  assert.equal(toolTested('claude', null).fit, 'unknown');
+  assert.equal(toolTested('cursor', '2026.10.01-e373342').fit, 'in', 'a build suffix after the date');
+  assert.equal(toolTested('nope', '1.0'), null);
+  // The page: through its cleaning, the card's line
+  const { normalizeTools: norm, testedLine } = await import('../public/js/views/tools.js');
+  const served = publicTools({ tools: [{ id: 'claude', name: 'Claude Code', installed: true, version: '2.2.0', via: 'native', installs: [{}] }] });
+  const x = norm(JSON.parse(JSON.stringify(served))).tools[0];
+  assert.deepEqual(x.tested, { ...TOOL_CHECKED.claude, fit: 'newer' });
+  assert.match(testedLine(x), /checked with 2\.1\.283–2\.1\.296 \(2026-\d\d-\d\d\); yours, 2\.2\.0, is newer: it should work, but it has not been checked with SiberSentez yet\./);
+  assert.match(testedLine(x), /class="small ai-tested warn"/);
+  assert.match(testedLine({ ...x, tested: { ...x.tested, from: '1.0', to: '1.0' }, version: '1.0' }), /checked with 1\.0 \(/, 'one version: no range');
+  assert.equal(testedLine({ id: 'claude' }), '', 'an older server: nothing');
+  assert.equal(norm({ tools: [{ id: 'claude', tested: { from: '<b>', to: '1', at: 'x' } }] }).tools[0].tested, null, 'known words only');
 });

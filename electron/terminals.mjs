@@ -1,3 +1,4 @@
+// @ts-check
 // Embedded terminals (docs/embedded-terminal.md): pseudo consoles in the shell's main process, shown in the window's
 // dock. The page reaches them only through the preload bridge of the SiberSentez window (never over HTTP), sends ids and
 // keystrokes, never a path or a command line: the folder comes from the server's own checks (terminal-target), the
@@ -175,7 +176,7 @@ export function createChunkBuffer(max = MAX_BUFFER) {
 // `windowMs` is joined into one message sent when the window ends. When more than `highWater` characters wait, they go
 // out now and pause() stops the pty until the window has passed, then resume() lets it go on: a program printing without
 // pause (yes, a big log) is throttled at the source instead of queuing IPC messages and xterm writes.
-export function createOutputBatcher({ send, pause = () => {}, resume = () => {}, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, windowMs = BATCH_MS, highWater = HIGH_WATER } = {}) {
+export function createOutputBatcher({ send = undefined, pause = () => {}, resume = () => {}, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, windowMs = BATCH_MS, highWater = HIGH_WATER } = {}) {
   let parts = [];
   let waiting = 0;
   let lastSent = -Infinity;
@@ -245,7 +246,7 @@ export function createOutputBatcher({ send, pause = () => {}, resume = () => {},
   };
 }
 
-const intIn = (v, [lo, hi]) => Number.isInteger(v) && v >= lo && v <= hi;
+const intIn = (v, range) => Number.isInteger(v) && v >= range[0] && v <= range[1];
 
 // spawn(file, args, { cwd, cols, rows, env }) -> { onData(cb), onExit(cb), write(s), resize(c, r), kill(), pid }
 // clock/setTimer/clearTimer: the output batching's time (fakes in tests)
@@ -253,7 +254,7 @@ const intIn = (v, [lo, hi]) => Number.isInteger(v) && v >= lo && v <= hi;
 // onChange(ended): after a terminal opened or ended (ended: { id, projectId, tool, jobId, exitCode } of the one that
 // ended, else null); the shell tells the server what runs (sessions()) so a restore sees AI tools of every kind
 // exists/every/stopEvery: the ended-mark check (fs.existsSync, setInterval, clearInterval; fakes in tests)
-export function createTerminals({ spawn, send = () => {}, onChange = () => {}, log = () => {}, env = {}, toolDirs = [], program = terminalProgram(), now = Date.now, clock = Date.now, max = MAX_TERMINALS, setTimer = setTimeout, clearTimer = clearTimeout, batchMs = BATCH_MS, highWater = HIGH_WATER, exists = (p) => fs.existsSync(p), every = setInterval, stopEvery = clearInterval, checkMs = TOOL_CHECK_MS } = {}) {
+export function createTerminals({ spawn = undefined, send = (..._args) => {}, onChange = (_change) => {}, log = (_line) => {}, env = {}, toolDirs = /** @type {string[] | (() => string[])} */ ([]), program = terminalProgram(), now = Date.now, clock = Date.now, max = MAX_TERMINALS, setTimer = setTimeout, clearTimer = clearTimeout, batchMs = BATCH_MS, highWater = HIGH_WATER, exists = (p) => fs.existsSync(p), every = setInterval, stopEvery = clearInterval, checkMs = TOOL_CHECK_MS } = {}) {
   const terms = new Map(); // id -> { pty, title, projectId, startedAt, buffer, ai, tool, jobId, endedMark, toolEnded }
   const changed = (ended = null) => {
     try {
@@ -332,7 +333,7 @@ export function createTerminals({ spawn, send = () => {}, onChange = () => {}, l
       t.buffer.push(s);
       t.out.push(s);
     });
-    pty.onExit(({ exitCode } = {}) => {
+    pty.onExit(({ exitCode = undefined } = {}) => {
       if (!terms.has(id)) return;
       t.out.flush();
       terms.delete(id);

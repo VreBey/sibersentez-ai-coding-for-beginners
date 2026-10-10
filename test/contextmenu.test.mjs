@@ -318,7 +318,7 @@ test('skill-flow menu items only while actions are on; the menu sends only launc
   const d = data();
   assert.deepEqual([...MENU_ACTIONS], ['resume', 'fork', 'terminal', 'explorer', 'vscode', 'start-ai']);
   // 'new' (a Claude Code session) is a server action the page knows but the menu never sends
-  assert.deepEqual([...ACTION_NAMES], ['resume', 'fork', 'new', 'terminal', 'explorer', 'vscode', 'library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'start-ai', 'github-fetch', 'github-import', 'github-discard', 'github-check-update']);
+  assert.deepEqual([...ACTION_NAMES], ['resume', 'fork', 'new', 'terminal', 'explorer', 'vscode', 'library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'project-relink', 'project-unlink', 'start-ai', 'github-fetch', 'github-import', 'github-discard', 'github-check-update']);
   assert.deepEqual(Object.keys(ACTION_FIELDS), [...ACTION_NAMES]);
   const all = [...TARGETS, { type: 'project', id: 'beta' }, { type: 'project', id: 'no-packages' }, { type: 'roster', id: 'skill:a11y-audit' }];
   const seen = { off: 0, dry: 0, live: 0 };
@@ -986,6 +986,8 @@ test('action client: one sender; each action carries only its own fields (ACTION
     fetchId: 'o-r@abcdef0',
     pointId: 'R20260930120000abcd',
     planId: '0123456789abcdef',
+    folder: 'D:\\Projects\\menu',
+    from: 'x-menu',
   };
   const want = {
     resume: { sessionId: S_OLD, projectId: 'cc', packages: ['web-ui', '7'] },
@@ -1004,6 +1006,8 @@ test('action client: one sender; each action carries only its own fields (ACTION
     'skills-apply': { projectId: 'cc', keys: ['skill:a', '7'], targets: ['claude', 'agents'] },
     'restore-preview': { projectId: 'cc', pointId: 'R20260930120000abcd' },
     'restore-apply': { projectId: 'cc', pointId: 'R20260930120000abcd', planId: '0123456789abcdef' },
+    'project-relink': { projectId: 'cc', folder: 'D:\\Projects\\menu', from: 'x-menu', plan: true, planId: '0123456789abcdef' },
+    'project-unlink': { projectId: 'cc', plan: true },
     'start-ai': { projectId: 'cc', sessionId: S_OLD, tool: 'claude', withIdea: true },
     'github-fetch': { url: 'https://github.com/o/r' },
     'github-import': { fetchId: 'o-r@abcdef0', items: [{ path: 'C:\\bad', category: 'web', replace: true }] },
@@ -1040,7 +1044,7 @@ test('action client: one sender; each action carries only its own fields (ACTION
   const js = (f) => fs.readFileSync(path.join(ROOT, 'public', 'js', f), 'utf8');
   const posts = /['"`]\/api\/action['"`]|X-SiberSentez-Token/;
   assert.match(js('actions.js'), posts);
-  for (const f of ['contextmenu.js', 'main.js', 'views/drawer.js', 'views/roster.js']) {
+  for (const f of ['contextmenu.js', 'main.js', 'views/drawer.js', 'views/drawerFit.js', 'views/roster.js']) {
     assert.doesNotMatch(js(f), posts, f);
     assert.doesNotMatch(js(f), /\brunSkillAction\b|\bskillBody\b|\bitemFlowView\b/, `${f} still names an old function`);
   }

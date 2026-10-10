@@ -1,4 +1,4 @@
-// The next step above the building (public/js/nextStep.js, docs/development-review-2026-10-06.md §3): one sentence and
+// The next step above the building (public/js/nextStep.js, docs/internal/development-review-2026-10-06.md §3): one sentence and
 // one button, before every other control; the sign says the same. Run: node --test test/next-step.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

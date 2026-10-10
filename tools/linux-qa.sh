@@ -33,7 +33,7 @@ check() {
 check 'the server is ready' 'server ready: http://127.0.0.1:'
 check 'the window loaded the page' 'window loaded: http://127.0.0.1:'
 check 'hidden: the window stays hidden, no tray icon' 'QA probe hidden: {"hidden":true,"visible":false,"tray":false}'
-check 'the bridge has its ten functions' 'QA probe bridge: createIdeaProject:function,openLogs:function,pickLibraryFolder:function,pickProjectFolder:function,reportError:function,saveProjectIdea:function,setActionsMode:function,setAttention:function,setLanguage:function,setTheme:function$'
+check 'the bridge has its twelve functions' 'QA probe bridge: createIdeaProject:function,openLogs:function,pickLibraryFolder:function,pickProjectFolder:function,reportError:function,saveProjectIdea:function,saveSupport:function,setActionsMode:function,setAttention:function,setLanguage:function,setTheme:function,supportParts:function$'
 check 'the kit is in the package' 'QA probe kit folder: {"packaged":true,"resourcesKit":true}'
 check 'a project folder is added' 'QA probe project-add: {"ok":true'
 check 'the embedded terminal runs a command (node-pty built for Linux)' 'QA probe terminal: {"unpacked":true,"loaded":true,"exitCode":0,"echoed":true}'

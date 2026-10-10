@@ -9,7 +9,7 @@ export const CURRENT_JOB_FILE = 'current-job.json';
 export const newJobId = () => `J${crypto.randomBytes(16).toString('hex')}`;
 export const validJobId = (id) => typeof id === 'string' && JOB_ID_RE.test(id);
 // The AI tool an app job was started with (a tool id of server/tools.mjs), kept in the marker: a Claude session is
-// never offered to continue a job another tool started (docs/development-plan-2026-10-07.md F1)
+// never offered to continue a job another tool started (docs/internal/development-plan-2026-10-07.md F1)
 const TOOL_RE = /^[a-z][a-z0-9-]{1,30}$/;
 export const jobMessageName = (id) => {
   if (!validJobId(id)) throw new Error('invalid job id');

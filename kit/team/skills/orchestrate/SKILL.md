@@ -4,7 +4,7 @@ description: "Runs a whole job from start to finish with a small team of roles (
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.9"
+  version: "0.1.10"
   sibersentez-tags: "workflow, planning"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "bu işi yap, baştan sona, uçtan uca, yapay zeka ekibi*, işi bitir, sen halret, ekip halinde, ajanlarla çalış"

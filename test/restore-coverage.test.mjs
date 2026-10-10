@@ -1,4 +1,4 @@
-// What a restore point holds, said where the job is (docs/development-review-2026-10-06.md §4): a full copy, a lean one
+// What a restore point holds, said where the job is (docs/internal/development-review-2026-10-06.md §4): a full copy, a lean one
 // (big files and logs left out) or none, in the job box and the start notice; what a copy never holds in plain sight.
 // Run: node --test test/restore-coverage.test.mjs
 import { test } from 'node:test';

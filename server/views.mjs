@@ -155,6 +155,8 @@ export function projectView(ing, p, catalog = null) {
     exists: p.exists,
     // Nothing but AI tools' setup in the folder (fsutil toolsOnly): a moved project's old folder
     toolsOnly: !!p.toolsOnly,
+    // A moved project linked to its new folder (server/relinks.mjs): when, and its folder before
+    linked: p.linked ? { at: p.linked.at, oldPath: p.linked.oldPath } : null,
     broad: !!p.broad,
     place: typeof catalog?.placeOf === 'function' ? catalog.placeOf(p) : null,
     description: p.description,

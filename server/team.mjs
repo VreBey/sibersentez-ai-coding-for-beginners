@@ -21,6 +21,33 @@ const TITLE_MAX = 120;
 // A title as the person reads it: control characters out, markdown code and emphasis marks (`x`, **x**) out
 const clip = (s) => Array.from(String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/`+|\*\*|__/g, '').trim()).slice(0, TITLE_MAX).join('');
 
+// The plan's "Done when" checklist (the kit's planner writes one: things that can be run or seen), as the result's
+// acceptance guide shows them (docs/internal/acceptance-guide-plan.md): the list items under a "Done when" heading (or a
+// line of its own), up to the next heading or a paragraph; at most DONE_MAX, each at most DONE_TEXT_MAX characters,
+// control characters, markdown code and emphasis marks and a checkbox out, duplicates once. body: fenced examples blanked
+const DONE_MAX = 12;
+const DONE_TEXT_MAX = 200;
+const DONE_WORDS = '(?:Done when|Bitti sayılır|Bitti sayılma ölçütleri|Tamamlanma ölçütleri)';
+const DONE_HEADING = new RegExp(`^ {0,3}#{1,6}[ \\t]*${DONE_WORDS}(?![\\p{L}])`, 'iu');
+const DONE_LINE = new RegExp(`^ {0,3}(?:\\*\\*)?${DONE_WORDS}(?:\\*\\*)?:?(?:\\*\\*)?[ \\t]*$`, 'iu');
+function doneWhenOf(body) {
+  const lines = body.split(/\r?\n/);
+  // The kit writes the heading in English; a planner that translated it into Turkish is read too
+  const at = lines.findIndex((l) => DONE_HEADING.test(l) || DONE_LINE.test(l));
+  if (at < 0) return [];
+  const out = [];
+  for (const l of lines.slice(at + 1)) {
+    if (/^ {0,3}#{1,6}\s/.test(l)) break;
+    const m = /^ {0,3}(?:[-*+]|\d{1,2}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?(.+)$/.exec(l);
+    if (m) {
+      const item = Array.from(m[1].replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/`+|\*\*|__/g, '').trim()).slice(0, DONE_TEXT_MAX).join('');
+      if (item && !out.includes(item)) out.push(item);
+      if (out.length >= DONE_MAX) break;
+    } else if (out.length && l.trim() && !/^\s/.test(l)) break;
+  }
+  return out;
+}
+
 // PLAN.md: its title, its size, whether the person approved it and whether they accepted the result (pure). legacy:
 // written before job identities existed (no Job-ID line at all, as opposed to a broken one; a Job-ID in an example
 // still counts here, so an example never makes a plan legacy). Fenced examples never approve or accept.
@@ -30,7 +57,7 @@ export function parsePlan(text) {
   const body = blankFences(text);
   const title = /^#\s*Plan:\s*(.+)$/im.exec(body)?.[1];
   const size = /^Size:\s*(small|medium|big)\b/im.exec(body)?.[1]?.toLowerCase();
-  return { title: title ? clip(title) : '', size: SIZES.has(size) ? size : null, approved: /^Approved:\s*yes\b/im.test(body), accepted: /^Result:\s*accepted\b/im.test(body), jobId: documentJobId(text), legacy };
+  return { title: title ? clip(title) : '', size: SIZES.has(size) ? size : null, approved: /^Approved:\s*yes\b/im.test(body), accepted: /^Result:\s*accepted\b/im.test(body), jobId: documentJobId(text), legacy, doneWhen: doneWhenOf(body) };
 }
 
 // TASKS.md: every "## T<n>: title" block with its owner and status (pure). A block without a known status is todo.
@@ -190,6 +217,19 @@ export function jobHistory(folder) {
     const slug = n.replace(/^\d{4}-\d{2}-\d{2}-?/, '').replace(/[-_]+/g, ' ').trim();
     return { title: plan?.title || clip(slug) || n, date, accepted: !!plan?.accepted, verdict: review?.verdict || null, tasks: tasks.length };
   });
+}
+
+// When REVIEW.md was last written (ms), or null: the moment of the review as far as the files tell (jobResults.mjs)
+export function reviewFileTime(dir) {
+  for (const folder of [TEAM_DIR, LEGACY_TEAM_DIR]) {
+    try {
+      const st = fs.lstatSync(path.join(dir, folder, 'REVIEW.md'));
+      if (st.isFile()) return Math.floor(st.mtimeMs);
+    } catch {
+      /* not there */
+    }
+  }
+  return null;
 }
 
 // The files (the only part that reads the disk). dir: the project folder.

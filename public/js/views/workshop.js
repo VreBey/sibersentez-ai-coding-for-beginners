@@ -1,3 +1,4 @@
+// @ts-check
 // The Workshop screen (docs/hq.md): one project's building with its team at work, from the approved "SiberSentez Bina
 // Onayli" design of 2026-10-01. The counts over it, the building with its sign, the room tabs under it, the rewind
 // ("What happened?": the last 15 minutes), the team, the shared work, the recent activity, the quota, and a card for
@@ -9,7 +10,7 @@ import { t, language } from '../i18n.js';
 import { FLOORS, ROOMS, HISTORY_MS, DEMO_MS, TOOL_CATS, sceneFrom, createDemo, roomKindFor, countByCategory, eventLabel, frameInterval } from '../hq-scene.js';
 import { HqRenderer } from '../hq-render.js';
 import { projectsInOrder, projectNames, pastSnapshots, liveSnapshot, liveEvents, liveTicks, KindCache, LiveHistory, TeamCache } from '../hq-live.js';
-import { jobNowText, stepsHtml, resumeCandidate, aiIdleIn, JOB_MAX } from './job.js';
+import { jobNowText, stepsHtml, resumeCandidate, aiStateIn, JOB_MAX } from './job.js';
 import { sessionState } from '../attention.js';
 import { apiErrorHtml, projectApiError, apiErrorWords } from '../apiError.js';
 import { permModeChip } from '../permMode.js';
@@ -97,7 +98,7 @@ const TEMPLATE = () => `
 
 // root: the screen's body; store: the app's store; toast(text): a short notice; label(s): a session's title;
 // autoGuide: the guide opens by itself the first time (not on QA pages)
-export function createWorkshop(root, { store, toast = () => {}, label = (s) => s.title || '', autoGuide = true, giveJob = null }) {
+export function createWorkshop(root, { store, toast = (_text) => {}, label = (s) => s.title || '', autoGuide = true, giveJob = null }) {
   root.classList.add('ws');
   root.innerHTML = TEMPLATE();
   const $ = (name) => root.querySelector(`[data-ws="${name}"]`);
@@ -110,6 +111,13 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
   const reducedQuery = matchMedia('(prefers-reduced-motion: reduce)');
 
   let mode = 'live'; // live | demo
+  // Whether an AI works in a project now, as the job's sentence takes it (job.js aiStateIn): live and loaded only (the
+  // example and a rewound moment say nothing of it)
+  const aiNowOf = (projectId) => {
+    if (mode !== 'live' || !liveMode || !store.loaded) return {};
+    const st = aiStateIn({ sessions: store.sessions.values(), projectId, dock: store.dockRunning?.() || [] });
+    return { idle: st === 'idle', unknown: st === 'unknown' };
+  };
   let chosen = null; // the project picked in the list (null: the most urgent one)
   let demo = null;
   let current = 0; // the moment shown
@@ -400,8 +408,8 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     keys.nav = sig;
     const nav = $('nav');
     const active = document.activeElement;
-    const focusKey = ['actor', 'room', 'fixture', 'door', 'lift'].find((k) => nav.contains(active) && active?.dataset?.[k]);
-    const focusId = focusKey ? active.dataset[focusKey] : null;
+    const focusKey = ['actor', 'room', 'fixture', 'door', 'lift'].find((k) => nav.contains(active) && /** @type {HTMLElement} */ (active)?.dataset?.[k]);
+    const focusId = focusKey ? /** @type {HTMLElement} */ (active).dataset[focusKey] : null;
     nav.replaceChildren();
     const physical = (b, id, floor) => {
       b.addEventListener('focus', () => {
@@ -785,7 +793,7 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     box.hidden = !job && !err;
     if (!job && !err) return;
     const body = $('jobbox-body');
-    body.innerHTML = `${apiErrorHtml(err)}${job?.title ? `<p class="ws-job-title">${esc(job.title)}</p>` : ''}${job ? stepsHtml(job, { offline: mode === 'live' && store.lost, idle: mode === 'live' && store.loaded && aiIdleIn({ sessions: store.sessions.values(), projectId: scene.project.id, dock: store.dockRunning?.() || [] }) }) : ''}`;
+    body.innerHTML = `${apiErrorHtml(err)}${job?.title ? `<p class="ws-job-title">${esc(job.title)}</p>` : ''}${job ? stepsHtml(job, { offline: mode === 'live' && store.lost, ...aiNowOf(scene.project.id) }) : ''}`;
     if (!job) return;
     // What the restore point of this job's start holds (a full copy, a lean one, one no longer kept, none): from this
     // page's start, else the server's record of it (asked on every frame above; the box draws again when it changes)
@@ -997,7 +1005,7 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
     const sceneSign = scene.planPending ? 'signPlan' : scene.resultReady ? 'signResult' : scene.waiting.length ? 'waiting' : scene.actors.some((a) => a.state === 'busy') ? 'working' : scene.actors.some((a) => a.state === 'running') ? 'signRunning' : scene.closed ? 'closed' : 'resting';
     sign.textContent = word(mode === 'live' && liveMode ? SIGN_OF_STEP[next.key] || sceneSign : sceneSign);
     sign.classList.toggle('waiting', scene.waiting.length > 0 && !scene.resultReady);
-    sign.title = scene.job ? `${word('lamps')}: ${jobNowText(scene.job, { offline: mode === 'live' && store.lost })}` : '';
+    sign.title = scene.job ? `${word('lamps')}: ${jobNowText(scene.job, { offline: mode === 'live' && store.lost, ...aiNowOf(scene.project.id) })}` : '';
     const empty = $('empty');
     // No project to show (review U10): the Building folds to one short card, its controls, counts, timeline and team
     // panel out of sight; a project, or the example, brings it all back
@@ -1176,7 +1184,7 @@ export function createWorkshop(root, { store, toast = () => {}, label = (s) => s
       renderUi();
     },
     // QA (headless pages get no frames): draw now; at: a moment of the example
-    simulate({ demoAt } = {}) {
+    simulate({ demoAt = undefined } = {}) {
       if (demoAt != null) {
         startDemo();
         current = liveNow = clamp(demoAt, 0, DEMO_MS - 1);

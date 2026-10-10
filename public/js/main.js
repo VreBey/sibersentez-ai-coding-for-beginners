@@ -1,3 +1,4 @@
+// @ts-check
 // Entry point: the live connection, tabs, top bar, right rail, indicator strip
 import { store } from './store.js';
 import { Stage } from './stage.js';
@@ -41,9 +42,11 @@ import { setRunTyper, setRunOpener, setRunAsker } from './runHint.js';
 import { startTheme } from './theme.js';
 import { sessionTool, sessionToolName, canContinueTool } from './jobId.js';
 import { diagnosticsText, collectDiagnostics } from './diagnostics.js';
+import { supportBundleText } from './supportBundle.js';
 import { hintHtml, initHints } from './hints.js';
 import { installPageErrors } from './pageErrors.js';
 import { whileVisible, everyVisible } from './whileVisible.js';
+import { q, qAll, activeEl } from './dom.js';
 
 // First in this file, so an error anywhere below is caught too (review A4); the imports above run before it
 const pageErrors = installPageErrors();
@@ -90,9 +93,9 @@ startTheme();
 // data-i18n-attr = "attribute:key;attribute:key". The HTML holds the English text; this fills in the page language.
 function applyStaticText() {
   document.documentElement.lang = language();
-  for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
-  for (const el of document.querySelectorAll('[data-i18n-html]')) el.innerHTML = t(el.dataset.i18nHtml);
-  for (const el of document.querySelectorAll('[data-i18n-attr]')) {
+  for (const el of qAll(document, '[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of qAll(document, '[data-i18n-html]')) el.innerHTML = t(el.dataset.i18nHtml);
+  for (const el of qAll(document, '[data-i18n-attr]')) {
     for (const pair of el.dataset.i18nAttr.split(';')) {
       const [attr, key] = pair.split(':');
       if (attr && key) el.setAttribute(attr, t(key));
@@ -177,7 +180,7 @@ if (shellBridge(window)) window.sibersentezActionsPanel = Object.freeze({ confir
 if (QA) {
   window.__sibersentezQa = {
     fakeMode: (mode) => initActions({ fetch: async () => ({ ok: true, status: 200, json: async () => ({ mode, token: 'f'.repeat(64) }) }) }),
-    realMode: () => initActions({ fetch: (...a) => globalThis.fetch(...a) }),
+    realMode: () => initActions({ fetch: (input, init) => globalThis.fetch(input, init) }),
     // Redraw through the app's own drawing paths (like the patch refresh of the live panel)
     rerenderDrawer: () => drawer.rerender(),
     rerenderRail: () => {
@@ -230,7 +233,7 @@ if (qaDock) setTimeout(() => termDock.open({ projectId: store.sortedProjects()[0
 if (termDock.available) setDockOpener((target) => termDock.open(target), () => termDock.count() >= 8);
 // What the last start's restore point holds, per project: the job box says it next to the job (restore.js)
 // A start takes a point (and may push an old one out): the project's list is asked again
-window.addEventListener(AI_STARTED_EVENT, (e) => {
+window.addEventListener(AI_STARTED_EVENT, (/** @type {CustomEvent} */ e) => {
   pointsChanged(e.detail?.projectId);
   rememberStartPoint(e.detail?.projectId, e.detail?.restorePoint, e.detail?.jobId);
 });
@@ -271,7 +274,7 @@ const inside = (r, x, y) => x >= r.left && x <= r.right && y >= r.top && y <= r.
 // trigger's event arriving within a short time is swallowed (a mouse right click is not affected)
 let keyMenuAt = 0;
 let keyMenuEl = null;
-document.addEventListener('contextmenu', (e) => {
+document.addEventListener('contextmenu', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
   if (e.target.closest?.('.ctx-menu')) return e.preventDefault();
   if (keyMenuEl && e.target === keyMenuEl && performance.now() - keyMenuAt < 600) return e.preventDefault();
   if (e.target.closest?.('input, textarea, select, [contenteditable]')) return; // the native menu (paste etc.)
@@ -292,17 +295,6 @@ document.addEventListener('contextmenu', (e) => {
 // Shift+F10 or the ContextMenu key: the menu for the focused card/row
 document.addEventListener('keydown', (e) => {
   if (!((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') || palette.isOpen()) return;
-  // The building's keyboard ring: the menu of what it is on, at that spot
-  if (document.activeElement === stageCanvas && stage.focus) {
-    const f = stage.focus.type === 'floor' ? { type: 'project', id: stage.focus.id } : stage.focus;
-    const at = stage.clientPosOf(stage.focus.type, stage.focus.id);
-    if (!at) return;
-    e.preventDefault();
-    keyMenuAt = performance.now();
-    keyMenuEl = stageCanvas;
-    menu.openAt(at.x, at.y, f, null);
-    return;
-  }
   const hit = menuTargetOf(document.activeElement);
   if (!hit) return;
   e.preventDefault();
@@ -330,6 +322,7 @@ const notifier = createNotifier({ stackEl: $('#toasts'), buttonEl: $('#bellBtn')
 // The full tour on an example (tour.js): the Building plays its example, the job box gets an example job typed into
 // it; nothing is pressed or started, and everything goes back when the tour ends
 let tourSaved = null; // the job box's own text while the tour types its example
+/** @type {any} */
 let tourTimer = 0;
 function tourBox(fill) {
   const input = $('#wsGiveText');
@@ -411,7 +404,7 @@ $('#toolsBtn').innerHTML = `${icon('spark')}<span>${esc(t('navTools'))}</span>`;
 $('#toolsBtn').addEventListener('click', () => openToolsPanel());
 $('#guideBtn').innerHTML = `<span class="side-q" aria-hidden="true">?</span><span>${esc(t('navGuide'))}</span>`;
 // The menu's icons (docs/shell.md)
-for (const b of document.querySelectorAll('[data-nav-icon]')) b.insertAdjacentHTML('afterbegin', icon(b.dataset.navIcon));
+for (const b of qAll(document, '[data-nav-icon]')) b.insertAdjacentHTML('afterbegin', icon(b.dataset.navIcon));
 $('#paletteBtn').addEventListener('click', () => palette.show());
 
 // Color key: stays closed, opens on hover (so it does not cover parts of the scene)
@@ -425,12 +418,11 @@ $('#legend').innerHTML =
   `<span class="lg-sep"></span><span class="lg-note">${esc(t('shLegendNote'))}</span></div>`;
 
 // ---------- scene mode: live / replay ----------
-const modeBtns = document.querySelectorAll('.stage-controls [data-mode]');
+const modeBtns = qAll(document, '.stage-controls [data-mode]');
 const rangeSel = $('#replayRange');
 const replayBar = $('#replayBar');
 const playBtn = $('#replayPlay');
 function setMode(mode) {
-  if (SCENE === 'building' && mode === 'replay') return; // the building has no replay
   for (const b of modeBtns) b.classList.toggle('on', b.dataset.mode === mode);
   if (mode === 'replay') {
     stage.startReplay(Number(rangeSel.value));
@@ -532,7 +524,7 @@ const resumeSession = (sessionId) => {
   if (!canContinueTool(tool)) return actionToastHere({ tone: 'warn', title: t('termResume'), body: t('aiErr_resume-not-supported') });
   return runMenuItem({ id: 'resume', label: tool === 'claude' ? t('termResume') : t('termResumeTool', { tool: sessionToolName(s) }), action: 'start-ai', payload: { sessionId, tool, resume: true } }, { openDrawer: open, toast: actionToastHere });
 };
-window.addEventListener('hq-action', (e) => {
+window.addEventListener('hq-action', (/** @type {CustomEvent} */ e) => {
   const d = e.detail || {};
   if (d.action === 'open-session' && d.sessionId) open({ type: 'session', id: d.sessionId });
   else if (d.action === 'open-project' && d.projectId) open({ type: 'project', id: d.projectId });
@@ -562,6 +554,11 @@ window.addEventListener('hq-action', (e) => {
   }
 });
 
+// The diagnostic info (diagnostics.js): Settings copies it alone, and the support bundle starts with it
+async function diagText() {
+  return diagnosticsText({ ...(await collectDiagnostics({ loadTools, toolsState })), mode: actionsState().mode, lang: language(), desktop: !!shellBridge(window), pageErrors: pageErrors.count() });
+}
+
 const views = {
   // Today's parts (the scene, the rail, the numbers, the usage strip) draw themselves as data comes in
   today: { render: () => {} },
@@ -581,8 +578,33 @@ const views = {
             if (!r?.ok) actionToastHere({ tone: 'err', title: t('setLogsFailed') });
           }
         : null,
+    // The support bundle (supportBundle.js; desktop app only, the logs are the shell's): the diagnostic info and the
+    // shell's masked parts, shown before they are copied or saved
+    supportBundle:
+      typeof window.sibersentezShell?.supportParts === 'function'
+        ? {
+            build: async () => {
+              const parts = await window.sibersentezShell.supportParts();
+              if (!parts?.ok) throw new Error('no parts');
+              return supportBundleText({ diagnostics: await diagText(), parts });
+            },
+            copy: async (text) => {
+              try {
+                await navigator.clipboard.writeText(text);
+                actionToastHere({ tone: 'ok', title: t('setBundleCopied') });
+              } catch {
+                actionToastHere({ tone: 'err', title: t('shCmCopyFailed'), body: t('setDiagCopyFailed') });
+              }
+            },
+            save: async (text) => {
+              const r = await window.sibersentezShell.saveSupport(text).catch(() => null);
+              if (r?.ok) actionToastHere({ tone: 'ok', title: t('setBundleSaved') });
+              else if (r?.reason !== 'cancelled' && r?.reason !== 'busy') actionToastHere({ tone: 'err', title: t('setBundleSaveFailed') });
+            },
+          }
+        : null,
     copyDiagnostics: async () => {
-      const text = diagnosticsText({ ...(await collectDiagnostics({ loadTools, toolsState })), mode: actionsState().mode, lang: language(), desktop: !!shellBridge(window), pageErrors: pageErrors.count() });
+      const text = await diagText();
       try {
         await navigator.clipboard.writeText(text);
         actionToastHere({ tone: 'ok', title: t('setDiagCopied'), code: text });
@@ -660,7 +682,7 @@ try {
 }
 function showTab(key) {
   active = key;
-  for (const b of document.querySelectorAll('[data-tab]')) {
+  for (const b of qAll(document, '[data-tab]')) {
     const on = b.dataset.tab === key || b.dataset.tabAlso === key;
     b.classList.toggle('on', on);
     // The menu moves between screens (navigation, review U03): its buttons say which screen is shown (aria-current);
@@ -668,7 +690,7 @@ function showTab(key) {
     if (b.closest('.side-nav, .side-foot')) {
       if (on) b.setAttribute('aria-current', 'page');
       else b.removeAttribute('aria-current');
-    } else b.setAttribute('aria-pressed', on);
+    } else b.setAttribute('aria-pressed', String(on));
   }
   for (const k of TAB_KEYS) $(`#tab-${k}`).hidden = k !== key;
   try {
@@ -683,7 +705,7 @@ function showTab(key) {
   }
   if (key === 'today') workshop.shown();
 }
-for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => showTab(b.dataset.tab));
+for (const b of qAll(document, '[data-tab]')) b.addEventListener('click', () => showTab(b.dataset.tab));
 
 // ---------- where the user was, across the reload after a mode change ----------
 // A mode change restarts the panel server and the shell reloads the window (docs/actions-toggle.md §3b): the tab and
@@ -833,7 +855,7 @@ function renderUsageStrip() {
   el.hidden = !html;
   if (el._html === html) return;
   // The focused period button or dollar switch keeps the focus across the redraw
-  const act = document.activeElement;
+  const act = activeEl();
   const fk = act && el.contains(act) ? act.dataset?.fk : null;
   el._html = html;
   replaceHtml(el, html);
@@ -951,8 +973,6 @@ function applyQaParams() {
   if (o && params.has('skills')) actionsReady().then(() => qaSkills(o[1], o[2]));
   else if (o) open({ type: o[1], id: o[2] });
   if (params.has('palette')) palette.show(params.get('palette'));
-  // ?floor=<project id>: the building inside that floor; ?floor=1 the first floor (docs/cutaway.md §2)
-  if (params.has('floor') && stage.zoomTo) stage.zoomTo(params.get('floor') === '1' ? projectsInOrder(store)[0]?.p.id : params.get('floor'));
   // ?wsdemo=<ms>: the Workshop's example at that moment; ?wsproject=<id>: the Workshop on that project
   if (params.has('wsproject')) workshop.showProject(params.get('wsproject'));
   if (params.has('wsdemo')) workshop.simulate({ demoAt: Number(params.get('wsdemo')) || 0 });
@@ -981,7 +1001,7 @@ function qaActionsPanel(step) {
   if (step === 'confirm') return actSwitch.confirmLive();
   actSwitch.open();
   const other = actionsState().mode === 'dry' ? 'off' : 'dry';
-  if (step === 'error' || step === 'saved') document.querySelector(`#actPanel [data-asw-mode="${other}"]`)?.click();
+  if (step === 'error' || step === 'saved') q(document, `#actPanel [data-asw-mode="${other}"]`)?.click();
 }
 
 // QA: ?pick=<item id> and ?flow=preview|confirm work only in preview (dry) mode: a real process is never started
@@ -1014,13 +1034,13 @@ async function qaSkills(type, id) {
   open({ type, id, section: type === 'roster' ? 'install' : 'skills' });
   const flow = params.get('flow');
   if (!flow || !qaDry()) return;
-  const click = (act) => document.querySelector(`#drawer [data-flow-act="${act}"]`)?.click();
+  const click = (act) => q(document, `#drawer [data-flow-act="${act}"]`)?.click();
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   // The project section loads its suggestions first (GET /api/projects/<id>/suggestions)
   await wait(700);
   // ?proj=<id>: the target project of a roster item's install section
   const proj = params.get('proj');
-  const pick = proj && document.querySelector('#drawer [data-flow-proj]');
+  const pick = proj && /** @type {HTMLSelectElement | null} */ (document.querySelector('#drawer [data-flow-proj]'));
   if (pick && [...pick.options].some((o) => o.value === proj)) {
     pick.value = proj;
     pick.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1092,7 +1112,7 @@ function connect() {
     // The job cards say the connection is lost (review B8) instead of showing the last state as live
     schedule();
     // A non-200 answer closes an EventSource for good: in a plain browser the page stayed frozen (the desktop app
-    // reloads its page). Open a new one after a growing pause (docs/backlog.md "Long-running load")
+    // reloads its page). Open a new one after a growing pause (docs/internal/backlog.md "Long-running load")
     if (es.readyState === 2) {
       es.close();
       setTimeout(connect, reconnectDelay(streamRetries++));
@@ -1105,9 +1125,9 @@ function connect() {
 const NAV_BUTTONS = '.side-nav [data-tab], .side-foot [data-tab]';
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-  const at = document.activeElement;
+  const at = activeEl();
   if (!at?.matches?.(NAV_BUTTONS)) return;
-  const list = [...document.querySelectorAll(NAV_BUTTONS)].filter((b) => b.getClientRects().length > 0);
+  const list = qAll(document, NAV_BUTTONS).filter((b) => b.getClientRects().length > 0);
   const i = list.indexOf(at);
   if (i < 0) return;
   e.preventDefault();
@@ -1125,7 +1145,6 @@ document.addEventListener('keydown', (e) => {
   if (typing) return;
   // Esc in the building: out of a floor (docs/cutaway.md §2)
   if (e.key === 'Escape' && active === 'today' && workshop.escape()) return;
-  if (e.key === 'Escape' && active === 'feed' && stage.escape?.()) return;
   if (e.key >= '1' && e.key <= '5') showTab(NAV_KEYS[Number(e.key) - 1]);
   else if (e.key === '?' && !e.ctrlKey && !e.altKey && !e.metaKey) guide.show();
   else if (e.key === 'r' || e.key === 'R') setMode(stage.mode === 'replay' ? 'live' : 'replay');

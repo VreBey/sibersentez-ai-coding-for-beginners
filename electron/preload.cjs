@@ -10,6 +10,8 @@
 //   window.sibersentezShell.saveProjectIdea(projectId, text)  the project's idea, kept with the program's project memory
 //   window.sibersentezShell.reportError(text)                 an error of the page, written to the shell's log (review A4)
 //   window.sibersentezShell.openLogs()                        the folder of the shell's logs, in File Explorer
+//   window.sibersentezShell.supportParts()                    the support bundle's masked settings and log lines
+//   window.sibersentezShell.saveSupport(text)                 the support bundle, saved where the person chooses
 //
 // setActionsMode asks the shell to switch the actions mode and resolves the shell's short answer ({ changed, mode,
 // reason, code? }, electron/helpers.mjs panelReply). The panel asks the user before it sends 'live'.
@@ -45,6 +47,10 @@ const ATTENTION_MAX = 80;
 // Same names and limit as PAGE_ERROR_IPC_CHANNEL, LOGS_OPEN_IPC_CHANNEL and PAGE_ERROR_MAX in helpers.mjs
 const PAGE_ERROR_CHANNEL = 'sibersentez:page-error';
 const LOGS_CHANNEL = 'sibersentez:open-logs';
+// Same names and limit as SUPPORT_PARTS_IPC_CHANNEL, SUPPORT_SAVE_IPC_CHANNEL and SUPPORT_TEXT_MAX in support-bundle.mjs
+const SUPPORT_PARTS_CHANNEL = 'sibersentez:support-parts';
+const SUPPORT_SAVE_CHANNEL = 'sibersentez:support-save';
+const SUPPORT_TEXT_MAX = 256 * 1024;
 const PAGE_ERROR_MAX = 1000;
 const MODES = ['off', 'dry', 'live'];
 // Same rules as PROJECT_ID_RE (server/util.mjs; the sandboxed preload cannot import it) and IDEA_TEXT_MAX in helpers.mjs
@@ -162,5 +168,14 @@ contextBridge.exposeInMainWorld('sibersentezShell', {
   },
   openLogs() {
     return ipcRenderer.invoke(LOGS_CHANNEL);
+  },
+  // The support bundle (Settings → Help): the masked settings and the last log lines; then the file, where the person
+  // chooses in the Save dialog
+  supportParts() {
+    return ipcRenderer.invoke(SUPPORT_PARTS_CHANNEL);
+  },
+  saveSupport(text) {
+    if (typeof text !== 'string' || text.length === 0 || text.length > SUPPORT_TEXT_MAX) return Promise.resolve({ ok: false, reason: 'invalid' });
+    return ipcRenderer.invoke(SUPPORT_SAVE_CHANNEL, text);
   },
 });

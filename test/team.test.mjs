@@ -30,10 +30,10 @@ const TASKS = [
 ].join('\n');
 
 test('plan: title, size and approval; an unapproved or empty plan', () => {
-  assert.deepEqual(parsePlan(PLAN), { title: 'Sign-in page', size: 'small', approved: true, accepted: false, jobId: null, legacy: true });
-  assert.deepEqual(parsePlan('# Plan: x\nApproved: no\n'), { title: 'x', size: null, approved: false, accepted: false, jobId: null, legacy: true });
+  assert.deepEqual(parsePlan(PLAN), { title: 'Sign-in page', size: 'small', approved: true, accepted: false, jobId: null, legacy: true, doneWhen: [] });
+  assert.deepEqual(parsePlan('# Plan: x\nApproved: no\n'), { title: 'x', size: null, approved: false, accepted: false, jobId: null, legacy: true, doneWhen: [] });
   // The wrap-up's "Result: accepted"; markdown marks leave the title (the drawer showed `index.html` with its backticks)
-  assert.deepEqual(parsePlan('# Plan: The `index.html` **list**\nApproved: yes\nResult: accepted\n'), { title: 'The index.html list', size: null, approved: true, accepted: true, jobId: null, legacy: true });
+  assert.deepEqual(parsePlan('# Plan: The `index.html` **list**\nApproved: yes\nResult: accepted\n'), { title: 'The index.html list', size: null, approved: true, accepted: true, jobId: null, legacy: true, doneWhen: [] });
   assert.equal(parsePlan('# Plan: x\nApproved: yes\nResult: open\n').accepted, false);
   assert.equal(parseTasks('## T1: Write `index.html`\n- status: doing\n')[0].title, 'Write index.html');
   assert.equal(parsePlan(''), null);
@@ -146,4 +146,36 @@ test('fenced examples: "Approved: yes", "Result: accepted" and example tasks ins
   const approve = { verdict: 'APPROVE', blockers: 0, nits: 0, tasks: [], scope: 'whole', jobId };
   const realPlan = parsePlan(['# Plan: Real job', `Job-ID: ${jobId}`, 'Approved: yes', fence('Result: accepted'), ''].join('\n'));
   assert.equal(teamStep({ plan: realPlan, tasks: parseTasks(`Job-ID: ${jobId}\n## T1: Real\n- status: done\n`), review: approve }), 'finish', 'an example acceptance is not the person saying yes');
+});
+
+test('plan: its "Done when" checklist, for the acceptance guide (fenced examples, marks and a checkbox out; bounded)', () => {
+  const plan = [
+    '# Plan: Menu',
+    'Approved: yes',
+    '## Approach',
+    '- not a done-when item',
+    '## Done when',
+    '- [ ] The menu page opens in the browser and lists **every** drink',
+    '- [x] `npm test` passes',
+    '1. The contact link opens the mail app',
+    '- The menu page opens in the browser and lists **every** drink',
+    '',
+    'A closing paragraph.',
+    '- after the paragraph: not an item',
+    '## Approval',
+    '- not either',
+  ].join('\n');
+  assert.deepEqual(parsePlan(plan).doneWhen, ['The menu page opens in the browser and lists every drink', 'npm test passes', 'The contact link opens the mail app']);
+  assert.deepEqual(parsePlan('# Plan: x\n**Done when:**\n- one\n- two\n').doneWhen, ['one', 'two'], 'a bold line of its own');
+  assert.deepEqual(parsePlan('# Plan: x\n```\n## Done when\n- an example\n```\n').doneWhen, [], 'a fenced example is no list');
+  assert.deepEqual(parsePlan('# Plan: x\n1. Build it\n   Done when: it opens\n').doneWhen, [], 'a task\'s own "Done when: ..." line is not the plan\'s list');
+  const many = parsePlan(`# Plan: x\n## Done when\n${Array.from({ length: 20 }, (_, i) => `- item ${i} ${'x'.repeat(300)}`).join('\n')}\n`).doneWhen;
+  assert.equal(many.length, 12);
+  assert.ok(many.every((x) => Array.from(x).length <= 200));
+});
+
+test('plan: a Done-when heading a planner translated into Turkish is read too; a longer English word is not', () => {
+  assert.deepEqual(parsePlan('# Plan: x\n## Bitti sayılır\n- Sayfa açılıyor\n').doneWhen, ['Sayfa açılıyor']);
+  assert.deepEqual(parsePlan('# Plan: x\n**Tamamlanma ölçütleri:**\n- Test geçiyor\n').doneWhen, ['Test geçiyor']);
+  assert.deepEqual(parsePlan('# Plan: x\n## Done whenever\n- no\n').doneWhen, []);
 });

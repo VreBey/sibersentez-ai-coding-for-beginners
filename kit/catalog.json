@@ -1,8 +1,8 @@
 {
   "name": "sibersentez-kit",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "license": "MIT (see LICENSE.md)",
-  "count": 75,
+  "count": 76,
   "items": [
     {
       "kind": "skill",
@@ -31,7 +31,7 @@
       "offer": [],
       "path": "ai-apps/skills/llm-app-basics",
       "notice": "ai-apps/skills/llm-app-basics/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -60,7 +60,7 @@
       "offer": [],
       "path": "backend/skills/auth-flow",
       "notice": "backend/skills/auth-flow/LICENSE.md",
-      "version": "0.1.1"
+      "version": "0.1.2"
     },
     {
       "kind": "skill",
@@ -87,7 +87,7 @@
       "offer": [],
       "path": "backend/skills/contact-form",
       "notice": "backend/skills/contact-form/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -112,7 +112,7 @@
       "offer": [],
       "path": "backend/skills/database-schema",
       "notice": "backend/skills/database-schema/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "agent",
@@ -284,7 +284,7 @@
       "offer": [],
       "path": "docs/skills/agent-rules",
       "notice": "docs/skills/agent-rules/LICENSE.md",
-      "version": "0.1.2"
+      "version": "0.1.3"
     },
     {
       "kind": "skill",
@@ -385,6 +385,34 @@
       "path": "docs/skills/explain-codebase",
       "notice": "docs/skills/explain-codebase/LICENSE.md",
       "version": "0.1.1"
+    },
+    {
+      "kind": "skill",
+      "name": "skill-writer",
+      "category": "docs",
+      "description": "Turns a job the user keeps explaining to the AI into their own skill or agent file in the project, in the format their tool reads, then proves the tool picks it for the right requests and not for others. Use when the user wants to write their own skill, make an agent for the project, or stop repeating the same instructions.",
+      "tags": [
+        "docs",
+        "workflow"
+      ],
+      "stage": "any",
+      "keywordsTr": [
+        "kendi skill*",
+        "skill yaz*",
+        "skill oluştur*",
+        "skill dosyası",
+        "beceri yaz*",
+        "beceri oluştur*",
+        "beceriye çevir*",
+        "kendi ajan*",
+        "ajan yaz*",
+        "agent yaz*",
+        "subagent yaz*"
+      ],
+      "offer": [],
+      "path": "docs/skills/skill-writer",
+      "notice": "docs/skills/skill-writer/LICENSE.md",
+      "version": "0.1.0"
     },
     {
       "kind": "agent",
@@ -704,7 +732,7 @@
       "offer": [],
       "path": "quality/skills/performance-check",
       "notice": "quality/skills/performance-check/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -751,7 +779,7 @@
       "offer": [],
       "path": "quality/skills/review-changes",
       "notice": "quality/skills/review-changes/LICENSE.md",
-      "version": "0.1.1"
+      "version": "0.1.2"
     },
     {
       "kind": "skill",
@@ -891,7 +919,7 @@
       "offer": [],
       "path": "quality/agents/reviewer.md",
       "notice": "frontmatter",
-      "version": "0.2.4"
+      "version": "0.2.5"
     },
     {
       "kind": "agent",
@@ -937,7 +965,7 @@
       "offer": [],
       "path": "release/skills/deploy-web",
       "notice": "release/skills/deploy-web/LICENSE.md",
-      "version": "0.3.0"
+      "version": "0.3.1"
     },
     {
       "kind": "skill",
@@ -961,7 +989,7 @@
       "offer": [],
       "path": "release/skills/docker-basics",
       "notice": "release/skills/docker-basics/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -989,7 +1017,7 @@
       "offer": [],
       "path": "release/skills/domain-email",
       "notice": "release/skills/domain-email/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -1014,7 +1042,7 @@
       "offer": [],
       "path": "release/skills/env-and-secrets",
       "notice": "release/skills/env-and-secrets/LICENSE.md",
-      "version": "0.1.1"
+      "version": "0.1.2"
     },
     {
       "kind": "skill",
@@ -1038,7 +1066,7 @@
       "offer": [],
       "path": "release/skills/finish-branch",
       "notice": "release/skills/finish-branch/LICENSE.md",
-      "version": "0.1.1"
+      "version": "0.1.2"
     },
     {
       "kind": "skill",
@@ -1065,7 +1093,7 @@
       "offer": [],
       "path": "release/skills/git-basics",
       "notice": "release/skills/git-basics/LICENSE.md",
-      "version": "0.2.0"
+      "version": "0.2.1"
     },
     {
       "kind": "skill",
@@ -1089,7 +1117,7 @@
       "offer": [],
       "path": "release/skills/github-actions-setup",
       "notice": "release/skills/github-actions-setup/LICENSE.md",
-      "version": "0.2.1"
+      "version": "0.2.2"
     },
     {
       "kind": "skill",
@@ -1117,7 +1145,7 @@
       "offer": [],
       "path": "release/skills/launch-checklist",
       "notice": "release/skills/launch-checklist/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -1143,7 +1171,7 @@
       "offer": [],
       "path": "release/skills/move-to-new-host",
       "notice": "release/skills/move-to-new-host/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -1169,7 +1197,7 @@
       "offer": [],
       "path": "release/skills/release-prep",
       "notice": "release/skills/release-prep/LICENSE.md",
-      "version": "0.1.1"
+      "version": "0.1.2"
     },
     {
       "kind": "agent",
@@ -1243,7 +1271,7 @@
       "offer": [],
       "path": "security/skills/secrets-cleanup",
       "notice": "security/skills/secrets-cleanup/LICENSE.md",
-      "version": "0.1.2"
+      "version": "0.1.3"
     },
     {
       "kind": "skill",
@@ -1321,7 +1349,7 @@
       "offer": [],
       "path": "starters/skills/api-service-starter",
       "notice": "starters/skills/api-service-starter/LICENSE.md",
-      "version": "0.2.0"
+      "version": "0.2.1"
     },
     {
       "kind": "skill",
@@ -1346,7 +1374,7 @@
       "offer": [],
       "path": "starters/skills/browser-extension-starter",
       "notice": "starters/skills/browser-extension-starter/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -1372,7 +1400,7 @@
       "offer": [],
       "path": "starters/skills/cli-tool-starter",
       "notice": "starters/skills/cli-tool-starter/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -1400,7 +1428,7 @@
       "offer": [],
       "path": "starters/skills/data-analysis-starter",
       "notice": "starters/skills/data-analysis-starter/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -1431,7 +1459,7 @@
       "offer": [],
       "path": "starters/skills/desktop-app-starter",
       "notice": "starters/skills/desktop-app-starter/LICENSE.md",
-      "version": "0.1.1"
+      "version": "0.1.2"
     },
     {
       "kind": "skill",
@@ -1457,7 +1485,7 @@
       "offer": [],
       "path": "starters/skills/game-prototype-godot",
       "notice": "starters/skills/game-prototype-godot/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -1489,7 +1517,7 @@
       "offer": [],
       "path": "starters/skills/game-prototype-unity",
       "notice": "starters/skills/game-prototype-unity/LICENSE.md",
-      "version": "0.2.0"
+      "version": "0.2.1"
     },
     {
       "kind": "skill",
@@ -1514,7 +1542,7 @@
       "offer": [],
       "path": "starters/skills/landing-page-starter",
       "notice": "starters/skills/landing-page-starter/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -1545,7 +1573,7 @@
       "offer": [],
       "path": "starters/skills/mobile-app-starter",
       "notice": "starters/skills/mobile-app-starter/LICENSE.md",
-      "version": "0.2.1"
+      "version": "0.3.0"
     },
     {
       "kind": "skill",
@@ -1572,7 +1600,7 @@
       ],
       "path": "starters/skills/project-setup",
       "notice": "starters/skills/project-setup/LICENSE.md",
-      "version": "0.1.2"
+      "version": "0.1.3"
     },
     {
       "kind": "skill",
@@ -1605,7 +1633,7 @@
       "offer": [],
       "path": "starters/skills/python-bot-starter",
       "notice": "starters/skills/python-bot-starter/LICENSE.md",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "kind": "skill",
@@ -1645,7 +1673,7 @@
       "offer": [],
       "path": "starters/skills/web-app-starter",
       "notice": "starters/skills/web-app-starter/LICENSE.md",
-      "version": "0.1.4"
+      "version": "0.1.5"
     },
     {
       "kind": "skill",
@@ -1717,7 +1745,7 @@
       "offer": [],
       "path": "team/skills/orchestrate",
       "notice": "team/skills/orchestrate/LICENSE.md",
-      "version": "0.1.9"
+      "version": "0.1.10"
     },
     {
       "kind": "skill",
@@ -1852,7 +1880,7 @@
       "offer": [],
       "path": "team/agents/builder.md",
       "notice": "frontmatter",
-      "version": "0.1.3"
+      "version": "0.1.4"
     },
     {
       "kind": "agent",

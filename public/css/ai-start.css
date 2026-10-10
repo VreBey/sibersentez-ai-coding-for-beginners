@@ -145,6 +145,22 @@ textarea.job-text { resize: vertical; min-height: 4.6em; max-height: 20em; line-
 .jr-files .jr-deleted::before { content: '−'; color: var(--idle); }
 .jr-checks { margin: 0 0 8px; padding-left: 18px; font-size: 13px; color: var(--text-2); }
 .jr-checks li { margin: 2px 0; }
+.jr-checks .jr-stale b { color: var(--warn-ink); font-weight: 600; }
+.jr-cmd-fails { margin: 2px 0; padding-left: 16px; }
+.jr-cmd-fails code { font: 12px/1.4 var(--mono); color: var(--text); }
+/* Try it yourself (acceptGuide.js): the plan's Done-when items, each with the person's own mark */
+.ag { margin: 10px 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.ag-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; }
+.ag-item { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; }
+.ag-text { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.ag-btns { display: flex; gap: 6px; flex: none; }
+.ag-btns .chip-btn { display: inline-flex; align-items: center; gap: 4px; }
+.ag-btns .chip-btn svg { width: 13px; height: 13px; }
+.ag-btns .ag-ok.on { border-color: var(--teal); color: var(--text); background: rgba(var(--teal-rgb), 0.14); }
+.ag-btns .ag-no.on { border-color: var(--warn-ink); color: var(--warn-ink); }
+.ag-item.ag-no .ag-text { color: var(--warn-ink); }
+.ag .act-btn { margin: 4px 0 2px; }
+.jr-checks .jr-stale .act-btn { display: flex; width: fit-content; margin: 6px 0 2px; }
 .jr-go { margin: 4px 0 10px; }
 /* The result's four ways in one row (review B3) */
 .jr-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }

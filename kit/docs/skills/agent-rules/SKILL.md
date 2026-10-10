@@ -4,7 +4,7 @@ description: "Creates or updates the project's instruction file for AI coding to
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.2"
+  version: "0.1.3"
   sibersentez-tags: "docs, workflow"
   sibersentez-stage: "any"
   sibersentez-keywords-tr: "agents md, claude md, talimat dosyası, kural dosyası, yapay zekâ kuralları, proje kuralları, copilot talimat*, yapay zekâ talimat*"
@@ -71,9 +71,10 @@ Keep it short, under about 80 lines, in the user's language (commands stay as th
 - <files and folders: generated files, `.env`, vendor code, the old folder>
 
 ## SiberSentez starter
-For a job bigger than one small change, use the orchestrate skill. Before saying something is done, run the
-verify-before-done check. When something does not work, use debug-helper. When unsure what to do next, use
-next-step.
+When one of the skills in this project fits the request, use it before answering from memory: its steps are
+checked and current. For a job bigger than one small change, use the orchestrate skill. Before saying something
+is done, run the verify-before-done check. When something does not work, use debug-helper. When unsure what to do
+next, use next-step.
 ```
 
 Add the "SiberSentez starter" block only after the user agrees to it. Leave sections out when they would be guesses.

@@ -1,3 +1,4 @@
+// @ts-check
 // Roster tab: every skill, agent and plugin on this machine, which folder it sits in, where it applies and how often
 // it was called. On top: how many skills and agents are in the user's own library (copies counted once), and one line
 // on the SiberSentez kit that comes with the app (docs/kit.md). Below: a folder list (library categories, the kit's
@@ -236,7 +237,7 @@ export function createRosterView(root, openDrawer) {
         <div class="rf-items">${rows.join('')}</div>
       </details>`);
     }
-    const focused = el.contains(document.activeElement) ? document.activeElement.dataset?.folder : null;
+    const focused = el.contains(document.activeElement) ? /** @type {HTMLElement} */ (document.activeElement).dataset?.folder : null;
     const scroll = el.scrollTop;
     if (setIf(el, parts.join(''))) {
       el.scrollTop = scroll;
@@ -331,7 +332,7 @@ export function createRosterView(root, openDrawer) {
     if (el._html === html) return;
     // The focused control (data-fk) keeps focus after a redraw
     const act = document.activeElement;
-    const fk = act && el.contains(act) ? act.dataset?.fk : null;
+    const fk = act && el.contains(act) ? /** @type {HTMLElement} */ (act).dataset?.fk : null;
     el._html = html;
     el.innerHTML = html;
     if (fk) el.querySelector(`[data-fk="${CSS.escape(fk)}"]`)?.focus({ preventScroll: true });
@@ -722,7 +723,7 @@ const timeoutSignal = (ms) => (typeof AbortSignal !== 'undefined' && typeof Abor
 // The suggestions of one project at a time (pure but for the injected fetchFit(projectId, idea)): itemsFor(p) answers
 // what is known for p and asks again when the project changed or ttl ms passed, one request at a time. An answer for a
 // project no longer shown is dropped; a failed request keeps the last list. onChange() runs when a request settles.
-export function createSuggest({ fetchFit, onChange = () => {}, now = () => Date.now(), ttl = SUGGEST_TTL_MS } = {}) {
+export function createSuggest({ fetchFit = undefined, onChange = () => {}, now = () => Date.now(), ttl = SUGGEST_TTL_MS } = {}) {
   const st = { id: null, at: 0, items: [], loading: false };
   function itemsFor(p) {
     if (!p?.id) return [];

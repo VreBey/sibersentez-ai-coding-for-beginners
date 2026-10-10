@@ -32,6 +32,8 @@ export const ACTION_FIELDS = Object.freeze({
   // Restore points (docs/restore.md): a project and one of its points by id
   'restore-preview': Object.freeze(['projectId', 'pointId']),
   'restore-apply': Object.freeze(['projectId', 'pointId', 'planId']),
+  'project-relink': Object.freeze(['projectId', 'folder', 'from', 'plan', 'planId']),
+  'project-unlink': Object.freeze(['projectId', 'plan']),
   // An AI tool in a terminal (docs/ai-start.md): a tool id and whether the saved idea becomes its first message
   'start-ai': Object.freeze(['projectId', 'sessionId', 'tool', 'withIdea', 'resume', 'job', 'inDock']),
   // GitHub import (docs/github-import.md §6): a link, a download id, import picks, library items to check
@@ -172,7 +174,7 @@ export function actionBody(b) {
   const out = { action };
   for (const k of ACTION_FIELDS[action]) {
     const v = b[k];
-    if (k === 'projectId' || k === 'sessionId' || k === 'source' || k === 'url' || k === 'fetchId' || k === 'pointId' || k === 'planId') {
+    if (k === 'projectId' || k === 'sessionId' || k === 'source' || k === 'url' || k === 'fetchId' || k === 'pointId' || k === 'planId' || k === 'folder' || k === 'from') {
       if (v !== undefined && v !== null && v !== '') out[k] = String(v);
     } else if (k === 'packages') {
       if (Array.isArray(v) && v.length) out.packages = v.map(String).slice(0, MAX_PACKAGES);

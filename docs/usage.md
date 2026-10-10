@@ -192,7 +192,7 @@ and counts it. A second start from the saved ledger gave the same numbers.
 
 ## Other AI tools (2026-10-07)
 
-Codex CLI's, Gemini CLI's and Qwen Code's requests go into the same ledger (`server/ingest.mjs foreignUsage`, from the
+Codex CLI's, Gemini CLI's and Qwen Code's requests go into the same ledger (`server/ingestForeign.mjs foreignUsage`, from the
 logs `server/toolLogs.mjs` reads): Codex's `last_token_usage` per `token_count` event (keyed by the session's running
 total, so an event written again counts once), Gemini CLI's `tokens` per message id, Qwen Code's `usageMetadata` per
 record uuid. These tools count the cached input inside the input; it is taken out and booked as a cache read, as Claude
@@ -208,12 +208,25 @@ window is not counted.
 job's span runs from its start record (`restore.mjs recordJobPoint`) to the project's next job start, at most three
 hours and never past now; its usage is the project's usage in the ledger's hours of that span (`UsageLedger.span`, the
 end hour left out). Whole UTC hours: another session in the same project and hour counts too, so the page says
-"about". The answer: `{ jobs: [{ projectId, jobId, at, until, messages, processed, output, usd }], estimate: { jobs,
-low, high, median } | null }`; `usd` is null when a model of the job has no price (Codex, Gemini...: tokens only), and
-the estimate is the range of the last ten priced jobs that did anything, none below two.
+"about". The answer: `{ jobs: [{ projectId, jobId, at, until, messages, processed, output, usd, capped, split,
+others }], estimate: { jobs, low, high, median } | null, pricedAt }`; `usd` is null when a model of the job has no price
+(Codex, Gemini...: tokens only), and the estimate is the range of the last ten priced jobs that did anything, none below
+two. Each job says how its numbers were made (independent review §7.7, 2026-10-10): `split` (an hour shared with
+another job, split evenly), `capped` (the span cut at three hours before the next start or now) and `others` (how many
+other sessions of the project were open in its whole hours, from their start to their last line, idle or not, from the
+log reader: `ingest.otherSessionsIn`, asked for the jobs answered only; null when those hours are older than its window
+or it is still reading the logs).
 
 - **Before a job** (the job box, under Start): "Recent jobs on this computer (N): about $low to $high each, API
   equivalent. On a subscription this is not billed; it counts toward your plan's usage." Without a range: where the
   number will show. Nothing with "Hide $".
-- **After it** (the job's result): "This job: about $X API equivalent, N tokens processed", or its tokens only.
+- **After it** (the job's result): "This job: ~$X API equivalent (estimate), about N tokens processed", or its tokens
+  only, then how it was counted: "Counted from this project's usage in the whole hours the job ran", with "an hour
+  shared with another job is split evenly", "N other AI sessions of this project were open in those hours, and their
+  usage then counts too" (or "any other session ... counts too" when not known) and "only about its first three hours
+  are counted" (whole hours) when they hold, and the prices' date when dollars are shown. A job with no usage in its
+  hours says so ("its AI tool may not log it": Cursor's logs hold no tokens), or that none is known when its hours are
+  out of the logs' reach; never $0.
+- Every other dollar figure says it is an API equivalent next to it: the strip, the usage cards, the project card's
+  "30 days ~$X API equivalent", the daily chart's title, the drawer's usage footer with the prices' date.
 - Not done: suggesting a lighter model or effort for a first job (it would need a launch option per tool).

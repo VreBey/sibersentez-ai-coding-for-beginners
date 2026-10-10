@@ -1,3 +1,4 @@
+// @ts-check
 // Command palette (Ctrl+K): search projects, sessions, agents and roster items, Enter goes to the detail.
 import { store } from './store.js';
 import { t, language } from './i18n.js';
@@ -157,10 +158,10 @@ export function createPalette({ open, commands = [], beforeRun = () => {} }) {
   });
   // Focus that leaves the dialog some other way (a click outside closes it already) comes back to the input
   root.addEventListener('focusout', (e) => {
-    if (!root.hidden && e.relatedTarget && !root.contains(e.relatedTarget)) input.focus();
+    if (!root.hidden && e.relatedTarget && !root.contains(/** @type {Node} */ (e.relatedTarget))) input.focus();
   });
-  list.addEventListener('mousemove', (e) => {
-    const li = e.target.closest('[data-i]');
+  list.addEventListener('mousemove', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
+    const li = /** @type {HTMLElement | null} */ (e.target.closest('[data-i]'));
     if (li && Number(li.dataset.i) !== sel) {
       sel = Number(li.dataset.i);
       for (const x of list.children) {
@@ -170,8 +171,8 @@ export function createPalette({ open, commands = [], beforeRun = () => {} }) {
       input.setAttribute('aria-activedescendant', li.id);
     }
   });
-  list.addEventListener('click', (e) => {
-    const li = e.target.closest('[data-i]');
+  list.addEventListener('click', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
+    const li = /** @type {HTMLElement | null} */ (e.target.closest('[data-i]'));
     if (li) choose(Number(li.dataset.i));
   });
   root.addEventListener('mousedown', (e) => {

@@ -4,7 +4,8 @@ description: "Sets up a new project folder from the plan: folder layout, git rep
 license: "MIT (see LICENSE.md)"
 metadata:
   author: "SiberSentez"
-  version: "0.1.2"
+  version: "0.1.3"
+  sibersentez-checked: "2026-10-09"
   sibersentez-tags: "planning, docs"
   sibersentez-stage: "start"
   sibersentez-keywords-tr: "kurulum, iskelet, klasör yapısı, proje kur*, projeyi kur*, projeyi oluştur*, başlangıç, git"

@@ -1,7 +1,7 @@
 // @ts-check
 // What went wrong when Claude Code wrote an error in place of an answer (docs/attention.md, "When the AI stops on an
 // error"). Claude Code logs such a turn as an assistant record with isApiErrorMessage: true, an `error` code and, for a
-// limit, quotaLimits { rateLimitType, resetsAt (seconds) }. Seen on the owner's machine (2026-10-02, 185 records):
+// limit, quotaLimits { rateLimitType, resetsAt (seconds) }. Shapes seen in real logs (2026-10-02):
 // rate_limit "You've hit your session limit · resets 2pm" (429), "...weekly limit...", server_error "API Error:
 // Connection lost mid-response", invalid_request "Prompt is too long", authentication_failed "Not logged in · Please run
 // /login" / "OAuth session expired", oauth_org_not_allowed "Your organization has disabled Claude subscription access".

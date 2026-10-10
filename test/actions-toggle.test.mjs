@@ -588,7 +588,7 @@ describe('shell: the restart that applies the mode', () => {
   });
 
   test('main.mjs wiring: tray and QA share one path; the restart is "requested", never a failure; the window reloads', () => {
-    const src = fs.readFileSync(path.join(ROOT, 'electron', 'main.mjs'), 'utf8');
+    const src = fs.readFileSync(path.join(ROOT, 'electron', 'main.mjs'), 'utf8') + fs.readFileSync(path.join(ROOT, 'electron', 'qa-run.mjs'), 'utf8');
     const body = (name) => {
       const start = src.indexOf(`function ${name}(`);
       assert.ok(start >= 0, `missing function ${name}`);
@@ -640,7 +640,7 @@ describe('shell: the restart that applies the mode', () => {
     assert.equal((src.match(/writeHubActionsSetting\(/g) || []).length, 0);
     assert.doesNotMatch(src, /settings\.json['"`]\s*\)\s*,\s*JSON/);
     // The bridge's three handlers (the actions mode, and the new project's folder picker and idea: docs/start-flow.md)
-    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'the bridge handlers (actions, project folder, library folder, language, theme, idea, a project made from an idea, attention, page error, log folder) and five for the terminal (open, list, close; write and resize as sends: test/terminal.test.mjs), nothing else');
+    assert.equal((src.match(/\bipcMain\.\w+\(/g) || []).join(), 'ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.handle(,ipcMain.on(,ipcMain.on(', 'the bridge handlers (actions, project folder, library folder, language, theme, idea, a project made from an idea, attention, page error, log folder, the support bundle: parts and file) and five for the terminal (open, list, close; write and resize as sends: test/terminal.test.mjs), nothing else');
     assert.doesNotMatch(src, /contextBridge|ipcRenderer/);
     // The one send into the page: the embedded terminals' output, only while the window shows the app
     assert.equal((src.match(/webContents\.send\(/g) || []).length, 1);
@@ -865,7 +865,7 @@ describe('shell: actions found on without the tray', () => {
   });
 
   test('main.mjs: every ready server runs the tested check; tray balloon and a dialog, texts from the string table', () => {
-    const src = fs.readFileSync(path.join(ROOT, 'electron', 'main.mjs'), 'utf8');
+    const src = fs.readFileSync(path.join(ROOT, 'electron', 'main.mjs'), 'utf8') + fs.readFileSync(path.join(ROOT, 'electron', 'qa-run.mjs'), 'utf8');
     const body = (name) => {
       const start = src.indexOf(`function ${name}(`);
       assert.ok(start >= 0, `missing function ${name}`);
@@ -905,11 +905,13 @@ describe('shell: the window menu, and the retired path of the old native chooser
   const exact = `${origin}${SHELL_ACTIONS_MODE_PATH}`;
   // Source text with LF line ends (the working tree may use CRLF), so a function body ends at its own closing brace
   const textOf = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8').replace(/\r\n/g, '\n');
-  const mainSrc = () => textOf('electron', 'main.mjs');
+  // The shell's main module and its QA run (electron/qa-run.mjs, moved out of it: module-split-plan M1)
+  const mainSrc = () => textOf('electron', 'main.mjs') + textOf('electron', 'qa-run.mjs');
   const bodyOf = (src, name) => {
     const start = src.indexOf(`function ${name}(`);
     assert.ok(start >= 0, `missing function ${name}`);
-    const end = src.indexOf('\n}\n', start);
+    // Up to the "}" at the function's own indentation (functions inside createQaRun are indented)
+    const end = src.indexOf(`\n${(src.slice(src.lastIndexOf('\n', start) + 1, start).match(/^\s*/) || [''])[0]}}\n`, start);
     assert.ok(end > start, `end of function ${name}`);
     return src.slice(start, end);
   };

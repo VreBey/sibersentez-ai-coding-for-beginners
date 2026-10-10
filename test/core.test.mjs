@@ -35,6 +35,29 @@ test('readLinesFrom: a partial line is not processed, the next read continues wh
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('readLinesFrom: a line over the byte budget is skipped up to its newline and counted; the lines around it are read; a line across many chunks is whole (independent review §7.5)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-'));
+  const f = path.join(dir, 'c.jsonl');
+  const long = 'L'.repeat(100);
+  const across = 'A'.repeat(40);
+  fs.writeFileSync(f, `first\n${long}\n${across}\nlast\n`);
+  const seen = [];
+  const skipped = [];
+  const opts = { maxLine: 50, chunkSize: 8, onSkip: (n) => skipped.push(n) };
+  const off = await readLinesFrom(f, 0, (buf, a, b) => seen.push(buf.toString('utf8', a, b)), opts);
+  assert.deepEqual(seen, ['first', across, 'last'], 'the 100-byte line is skipped, the 40-byte one read whole over five chunks');
+  assert.deepEqual(skipped, [100], 'the skipped line is reported with its size');
+  assert.equal(off, fs.statSync(f).size);
+  // An oversized line still being written: what was read of it is passed, the next read starts after it
+  const g = path.join(dir, 'd.jsonl');
+  fs.writeFileSync(g, `ok\n${'B'.repeat(80)}`);
+  const seen2 = [];
+  const off2 = await readLinesFrom(g, 0, (buf, a, b) => seen2.push(buf.toString('utf8', a, b)), { maxLine: 50, chunkSize: 16 });
+  assert.deepEqual(seen2, ['ok']);
+  assert.equal(off2, fs.statSync(g).size, 'never held whole, never read again');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('readLinesFrom: a shortened file is not reread from the start (no double counting), it jumps to the end', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ork-'));
   const f = path.join(dir, 'b.jsonl');

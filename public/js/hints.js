@@ -1,3 +1,4 @@
+// @ts-check
 // "?" hints next to words a new user may not know yet (token, agent, workflow...). hintHtml() is a focusable mark;
 // one bubble for the whole page follows the mouse and the keyboard focus, placed in the viewport so no card with
 // overflow: hidden cuts it. The text is also the mark's accessible description.
@@ -39,22 +40,22 @@ function hide(el) {
 
 // Once, from main.js: the page's listeners (the marks come and go with the redraws)
 export function initHints(root = document) {
-  root.addEventListener('mouseover', (e) => {
+  root.addEventListener('mouseover', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
     const el = e.target.closest?.('.hint');
     if (el) show(el);
   });
-  root.addEventListener('mouseout', (e) => {
+  root.addEventListener('mouseout', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
     const el = e.target.closest?.('.hint');
-    if (el && !el.contains(e.relatedTarget)) hide(el);
+    if (el && !el.contains(/** @type {Node} */ (e.relatedTarget))) hide(el);
   });
-  root.addEventListener('focusin', (e) => {
+  root.addEventListener('focusin', (/** @type {FocusEvent & { target: HTMLElement }} */ e) => {
     if (e.target.classList?.contains('hint')) show(e.target);
   });
-  root.addEventListener('focusout', (e) => {
+  root.addEventListener('focusout', (/** @type {FocusEvent & { target: HTMLElement }} */ e) => {
     if (e.target.classList?.contains('hint')) hide(e.target);
   });
   // A click or Enter keeps the bubble for touch and keyboard users; Esc closes it
-  root.addEventListener('click', (e) => {
+  root.addEventListener('click', (/** @type {MouseEvent & { target: HTMLElement }} */ e) => {
     const el = e.target.closest?.('.hint');
     if (el) {
       e.preventDefault();
@@ -66,7 +67,7 @@ export function initHints(root = document) {
     if (e.key === 'Escape' && current) {
       hide();
       e.stopPropagation();
-    } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList?.contains('hint')) {
+    } else if ((e.key === 'Enter' || e.key === ' ') && /** @type {HTMLElement} */ (e.target).classList?.contains('hint')) {
       e.preventDefault();
       show(e.target);
     }

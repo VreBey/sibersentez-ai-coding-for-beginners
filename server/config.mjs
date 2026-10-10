@@ -1,3 +1,4 @@
+// @ts-check
 // App settings (contract §3). Precedence: environment variable -> <app>\sibersentez.json -> default.
 //   SIBERSENTEZ_PORT    | port    | 4545
 //   SIBERSENTEZ_DAYS    | days    | 14 (how many days of logs are scanned)
@@ -106,6 +107,7 @@ function readConfigFile(file, log) {
 // Returns { appDir, homeDir, claudeDir, port, days, hub, hubSource, actions }.
 //   hub: absolute path of an existing hub folder, or null. An explicit path (environment or file) that does not
 //   exist also yields null; there is no fallback to the default (a misconfiguration must not be hidden), one log line.
+/** @param {{ env?: Record<string, string | undefined>, appDir?: string, homeDir?: string, log?: (line: string) => void }} [options] */
 export function resolveConfig({ env = {}, appDir = APP_DIR, homeDir = os.homedir(), log = () => {} } = {}) {
   const file = readConfigFile(configPath(appDir), log);
 
@@ -181,6 +183,7 @@ function actionModeFrom({ env, file, hub, log }) {
 // The actions mode as the same sources say it now (docs/actions-toggle.md §3.5): the desktop shell asks the running
 // server to read it again after it saved a new mode, instead of restarting it. The hub folder stays the one the server
 // started with.
+/** @param {{ env?: Record<string, string | undefined>, appDir?: string, hub?: string | null, log?: (line: string) => void }} [options] */
 export function resolveActionModeNow({ env = {}, appDir = APP_DIR, hub = null, log = () => {} } = {}) {
   return actionModeFrom({ env, file: readConfigFile(configPath(appDir), log), hub, log });
 }

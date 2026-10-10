@@ -164,7 +164,7 @@ export async function projectChanges({ catalog, projectId, status = gitStatus, r
   return { status: 200, body: { ...body, via: 'time', files: r.files, more: r.more, ...(gitSkipped ? { gitSkipped: true } : {}) } };
 }
 
-// A short cache over projectChanges (docs/backlog.md "Long-running load"): every open drawer asked git status every
+// A short cache over projectChanges (docs/internal/backlog.md "Long-running load"): every open drawer asked git status every
 // 20 s, and two windows or a quick reopen asked it twice. One answer per project is kept for ttl ms and a request
 // while one runs waits for that one.
 export const CHANGES_TTL_MS = 10000;

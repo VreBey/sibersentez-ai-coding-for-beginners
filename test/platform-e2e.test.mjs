@@ -63,6 +63,8 @@ test('start-ai in the app\'s own terminal: the sh launcher runs the tool in the 
     p.onData((d) => (out += d));
     const ended = launcher + '.ended';
     for (let i = 0; i < 100 && !fs.existsSync(ended); i++) await new Promise((ok) => setTimeout(ok, 50));
+    // The pty's output can arrive after the mark under load (a coverage run on Linux lost it once): wait for it too
+    for (let i = 0; i < 60 && !/user's language\.\r?\n/.test(out); i++) await new Promise((ok) => setTimeout(ok, 50));
     p.kill();
     const lines = out.replace(/\r/g, '').split('\n').filter((l) => l.startsWith('TOOL-'));
     assert.equal(lines[0], `TOOL-CWD=${proj}`, out);

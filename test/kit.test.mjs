@@ -35,7 +35,7 @@ const SKILL_KEYS = new Set(['name', 'description', 'license', 'compatibility', '
 const AGENT_KEYS = new Set(['name', 'description', 'tools', 'model', 'license', 'metadata']);
 const META_KEYS = ['author', 'version', 'sibersentez-tags', 'sibersentez-stage', 'sibersentez-keywords-tr'];
 // Optional metadata: sibersentez-offer (empty-folder: offered in a folder with nothing in it yet, docs/kit.md §6)
-const META_OPTIONAL = ['sibersentez-offer'];
+const META_OPTIONAL = ['sibersentez-offer', 'sibersentez-checked'];
 // Agent Skills name: 1-64 characters, lower-case letters, digits and single hyphens, no hyphen at either end
 const SPEC_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SEMVER = /^\d+\.\d+\.\d+$/;
@@ -45,6 +45,9 @@ const AGENT_TOOLS = new Set(['Read', 'Grep', 'Glob', 'Bash', 'Edit', 'Write', 'W
 // Body limits: SKILL.md and agents stay short (progressive disclosure), details go to reference files
 const MAX_BODY_LINES = 150;
 const MAX_REFERENCE_LINES = 250;
+// A longer reference file opens with a contents line, so a tool that reads only its start still sees what is in it
+// (Agent Skills authoring guidance, checked 2026-10-09)
+const CONTENTS_FROM_LINES = 100;
 // The hub library reader and the fit engine read this much of a description (server/library.mjs, server/fit.mjs)
 const ENGINE_DESC_MAX = 400;
 // Nothing in the kit may suggest switching off permission prompts, safety checks or history protection
@@ -343,8 +346,8 @@ test('kit: layout is <category>/skills/<name>/SKILL.md and <category>/agents/<na
     }
   };
   walk(KIT);
-  // docs/kit-v2.md §4: waves 1, 1.5 and 2 of kit v2 are in, plus the launch items of 0.5.0 (the counts move with each wave)
-  assert.equal(SKILLS.length, 59);
+  // docs/kit-v2.md §4: waves 1, 1.5 and 2 of kit v2 are in, plus the launch items of 0.5.0 and skill-writer of 0.8.0 (the counts move with each wave)
+  assert.equal(SKILLS.length, 60);
   assert.equal(AGENTS.length, 16);
 });
 
@@ -375,6 +378,7 @@ test('kit: every agent file is a valid Claude Code subagent with the SiberSentez
     assert.equal(d.name, it.name, `${where}: name equals the file name`);
     assert.match(d.name, SPEC_NAME, `${where}: name characters`);
     assert.ok(d.name.length <= 64 && validName(d.name), `${where}: the hub accepts the name`);
+    assert.ok(!/anthropic|claude/.test(d.name), `${where}: reserved word in the name`);
     if ('tools' in d) {
       const tools = list(d.tools);
       assert.ok(tools.length, `${where}: tools list`);
@@ -414,6 +418,15 @@ test('kit: bodies are short, speak the user language and ask before risky steps;
     for (const f of fs.readdirSync(it.dir).filter((x) => x !== 'SKILL.md')) {
       const r = lineCount(readText(path.join(it.dir, f)));
       assert.ok(r <= MAX_REFERENCE_LINES, `${it.rel}/${f}: ${r} lines (limit ${MAX_REFERENCE_LINES})`);
+      if (!f.endsWith('.md') || f === 'LICENSE.md' || r <= CONTENTS_FROM_LINES) continue;
+      const text = readText(path.join(it.dir, f));
+      // The contents paragraph: from a line starting "Contents:" in the first lines up to the next blank line
+      const lines = text.split(/\r?\n/);
+      const start = lines.findIndex((l, i) => i < 12 && l.startsWith('Contents: '));
+      assert.ok(start >= 0, `${it.rel}/${f}: ${r} lines, so it opens with a "Contents:" line`);
+      const end = lines.findIndex((l, i) => i > start && !l.trim());
+      const contents = lines.slice(start, end < 0 ? undefined : end).join(' ');
+      for (const h of text.matchAll(/^## (.+)$/gm)) assert.ok(contents.includes(h[1].trim()), `${it.rel}/${f}: contents names "${h[1].trim()}"`);
     }
   }
   for (const it of AGENTS) {
@@ -639,6 +652,10 @@ const IDEAS = [
   ['Uygulamamı Docker konteynerine koymak istiyorum', 'docker-basics'],
   ['Eski paketleri güncellemek ve bağımlılıkları kontrol etmek istiyorum', 'dependency-update'],
   ['Bu uygulamayı kullanıcı gözüyle dene ve sorun listesi çıkar', 'qa-explorer'],
+  // Kit 0.8.0: the user's own skill or agent
+  ['Kendi skill dosyamı yazmak istiyorum', 'skill-writer'],
+  ['Her seferinde anlattığım bu işi bir beceriye çevir', 'skill-writer'],
+  ['Projeme özel bir ajan yazalım, sadece kodu okusun', 'skill-writer'],
 ];
 
 // Sentences that must NOT go to the named item: it is not ranked first (neighbours keep their own ground)
@@ -664,6 +681,9 @@ const NOT_IDEAS = [
   ['Bu fonksiyon için birim test yaz', 'try-it-in-browser'],
   ['Projenin kullanım kılavuzu ve readme yaz', 'api-docs'],
   ['Hangi programlama dilini ve teknolojiyi seçmeliyim', 'game-prototype-godot'],
+  // Kit 0.8.0: the project's rules file and a hand-off stay with their own skills
+  ['Projeye AGENTS.md talimat dosyası yaz', 'skill-writer'],
+  ['Yarın kaldığım yerden devam edelim, devir notu bırak', 'skill-writer'],
 ];
 
 test('kit: Turkish idea sentences reach the right skill through sibersentez-keywords-tr', () => {
@@ -788,8 +808,8 @@ const WAVE2_AGENTS = { security: ['security-auditor'], quality: ['qa-explorer'],
 const WAVE2_ITEM_NAMES = new Set([...Object.values(WAVE2_SKILLS).flat(), ...Object.values(WAVE2_AGENTS).flat()]);
 const STATUS_WORDS = ['DONE', 'DONE_WITH_CONCERNS', 'NEEDS_CONTEXT', 'BLOCKED'];
 
-test('kit wave 2: the new skills and agents are in their categories (the catalog is 0.7.0 since the third wave)', () => {
-  assert.equal(CATALOG.version, '0.7.0');
+test('kit wave 2: the new skills and agents are in their categories (the catalog is 0.8.0 since the freshness round)', () => {
+  assert.equal(CATALOG.version, '0.8.0');
   for (const [category, names] of Object.entries(WAVE2_SKILLS)) {
     for (const name of names) {
       const it = SKILLS.find((x) => x.name === name);
@@ -890,4 +910,77 @@ test('kit 0.7.0 (2026-10-08): a contact form and a multi-language skill; the bro
   assert.match(read('team/skills/orchestrate-plan/SKILL.md'), /Do not offer extras while planning/);
   assert.match(read('design/skills/ui-check/SKILL.md'), /\| Dialogs \|/);
   assert.match(read('backend/skills/contact-form/SKILL.md'), /No secret in the page\./);
+});
+
+test('kit 0.8.0 (2026-10-09): no item recommends an unsupported Node.js; Expo Go sign-in, Unity 6.0 LTS and Workers are said', () => {
+  const read = (rel) => fs.readFileSync(path.join(KIT, rel), 'utf8');
+  for (const it of SKILLS) {
+    const text = fs.readdirSync(it.dir).filter((f) => f.endsWith('.md')).map((f) => read(path.join(path.relative(KIT, it.dir), f))).join('\n');
+    // Node.js 20 and older left their support window (github.com/nodejs/Release); such a floor sends a beginner to it
+    assert.doesNotMatch(text, /Node\.js\s*\(?(?:1\d|20)(?:\.\d+)? or newer|node:(?:1\d|20)\b|node:22-alpine/, `${it.rel}: no Node.js 20-or-older floor and the current LTS image`);
+  }
+  const mobile = read('starters/skills/mobile-app-starter/SKILL.md');
+  assert.match(mobile, /22\.13 or newer/, 'Expo SDK 57 needs Node.js 22.13');
+  assert.match(mobile, /npx expo login/, 'Expo Go on an iPhone needs the same account in the terminal and the app');
+  assert.match(read('starters/skills/game-prototype-unity/SKILL.md'), /6\.0 LTS\s+stops getting fixes/);
+  assert.match(read('release/skills/deploy-web/reference.md'), /Workers with static assets/);
+  assert.match(read('release/skills/docker-basics/reference.md'), /FROM node:24-alpine/);
+  // The user's own skill or agent (docs/direction.md K6)
+  const writer = SKILLS.find((x) => x.name === 'skill-writer');
+  assert.equal(writer?.category, 'docs');
+  assert.match(read('docs/skills/skill-writer/SKILL.md'), /Read every file in it before it goes into the project, scripts first/);
+});
+
+test('kit 0.8.0: the starter block tells the tool to use a fitting project skill before answering from memory (a real session picked mobile-app-starter only with it, docs/internal/kit-eval.md)', () => {
+  const rules = fs.readFileSync(path.join(KIT, 'docs/skills/agent-rules/SKILL.md'), 'utf8');
+  const block = rules.slice(rules.indexOf('## SiberSentez starter'), rules.indexOf('```', rules.indexOf('## SiberSentez starter')));
+  assert.match(block, /When one of the skills in this project fits the request, use it before answering from memory/);
+});
+
+// The date an item was last checked against the official pages of what it names (metadata sibersentez-checked,
+// 2026-10-09). Absent means never checked; tools/kit-freshness.mjs lists those and the ones older than six months
+// before a release, so a test never starts failing on its own with the calendar.
+test('kit: sibersentez-checked is a real date not in the future and equals the newest "Checked <date>" line of the item', async () => {
+  const { kitFreshness } = await import('../tools/kit-freshness.mjs');
+  const today = new Date().toISOString().slice(0, 10);
+  for (const it of SKILLS) {
+    const c = it.fm.data.metadata['sibersentez-checked'];
+    const text = fs.readdirSync(it.dir).filter((f) => f.endsWith('.md') && f !== 'LICENSE.md').map((f) => readText(path.join(it.dir, f))).join('\n');
+    const dates = [...text.matchAll(/\bChecked\b[^\n]*?(\d{4}-\d{2}-\d{2})/g)].map((m) => m[1]).sort();
+    if (dates.length) assert.equal(c, dates.at(-1), `${it.rel}: the metadata says the newest Checked line`);
+    if (c === undefined) continue;
+    assert.match(c, /^\d{4}-\d{2}-\d{2}$/, `${it.rel}: a date`);
+    assert.equal(new Date(`${c}T00:00:00Z`).toISOString().slice(0, 10), c, `${it.rel}: a real date`);
+    assert.ok(c <= today, `${it.rel}: not in the future`);
+  }
+  // The release tool: due after six months, the unchecked listed apart
+  const rows = kitFreshness(KIT, '2027-05-01');
+  const row = (n) => rows.find((r) => r.name === n);
+  assert.equal(row('mobile-app-starter').status, 'due', 'checked 2026-10-09, more than six months before');
+  assert.equal(row('security-check').status, 'unchecked');
+  assert.equal(kitFreshness(KIT, '2026-10-10').find((r) => r.name === 'mobile-app-starter').status, 'ok');
+  assert.ok(!rows.some((r) => r.name === 'idea-to-plan'), 'an item that names no outside tool or service is not listed');
+});
+
+test('kit 0.8.0: the items checked against the official pages on 2026-10-09 carry that date', () => {
+  for (const n of ['mobile-app-starter', 'web-app-starter', 'desktop-app-starter', 'api-service-starter', 'python-bot-starter', 'game-prototype-godot', 'game-prototype-unity', 'docker-basics', 'deploy-web', 'github-actions-setup']) {
+    assert.equal(SKILLS.find((x) => x.name === n)?.fm.data.metadata['sibersentez-checked'], '2026-10-09', n);
+  }
+});
+
+test('kit 0.8.0: the builder changes only lines the task needs; a review with no findings names what it checked', () => {
+  const read = (rel) => fs.readFileSync(path.join(KIT, rel), 'utf8').replace(/\s+/g, ' ');
+  assert.match(read('team/agents/builder.md'), /Every changed line must be needed for the task/);
+  assert.match(read('team/agents/builder.md'), /goes into your report as a follow-up, never into the code/);
+  assert.match(read('quality/skills/review-changes/SKILL.md'), /\*\*Scope\*\*: every changed line serves the intent/);
+  assert.match(read('quality/skills/review-changes/SKILL.md'), /"nothing found" is only worth something next to what was looked at/);
+  assert.match(read('quality/agents/reviewer.md'), /a review with no findings and no checks is no approval/);
+});
+
+test('kit 0.8.0: no item sends a beginner to a Python past its end of life (3.10 ended 2026-10-01, devguide.python.org/versions); Getform is Forminit now', () => {
+  for (const it of SKILLS) {
+    const text = fs.readdirSync(it.dir).filter((f) => f.endsWith('.md')).map((f) => readText(path.join(it.dir, f))).join('\n');
+    assert.doesNotMatch(text, /Python 3\.(?:[0-9]|10) or newer|requires-python = ">=3\.(?:[0-9]|10)"|Python\.Python\.3\.(?:[0-9]|1[0-3])\b/, `${it.rel}: a supported Python floor and the current installer id`);
+  }
+  assert.match(readText(path.join(KIT, 'backend/skills/contact-form/SKILL.md')), /Forminit \(formerly Getform\)/);
 });

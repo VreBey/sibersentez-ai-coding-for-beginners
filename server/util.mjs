@@ -90,9 +90,16 @@ export function toMs(ts) {
 
 const NL = 10;
 
+// A log line longer than this is skipped up to its next newline, so an unfinished line can never grow without bound
+// (the longest line in real Claude Code logs was about 3.6 MB, 2026-10-09; independent review §7.5)
+export const MAX_LINE_BYTES = 32 << 20;
+
 // Reads the file from byte `start` to the end, calls onLine(buf, a, b) for every complete line.
 // An incomplete last line is not processed; the return value is the byte where the next read starts.
-export async function readLinesFrom(file, start, onLine) {
+// A line over maxLine is never held: onSkip(bytes) is told and reading goes on after its newline. One still being
+// written when the file ends is passed over too: the next read starts after what was read of it, so the rest of that
+// line comes as a line of its own, which the callers' JSON parsing refuses (counted as a line error).
+export async function readLinesFrom(file, start, onLine, { maxLine = MAX_LINE_BYTES, chunkSize = 4 << 20, onSkip = null } = {}) {
   const fh = await open(file, 'r');
   try {
     const { size } = await fh.stat();
@@ -100,25 +107,53 @@ export async function readLinesFrom(file, start, onLine) {
     // would count the counters twice, so it jumps to the end and only what is appended later is read.
     if (size < start) return size;
     if (size === start) return start;
-    const chunkSize = 4 << 20;
     const buf = Buffer.allocUnsafe(chunkSize);
     let pos = start;
-    let carry = null;
+    // The unfinished line: its pieces, joined once when its newline comes
+    let parts = [];
+    let partLen = 0;
+    // Bytes of an oversized line passed over so far (its newline not seen yet)
+    let skipping = 0;
     let consumed = start;
     while (pos < size) {
       const { bytesRead } = await fh.read(buf, 0, Math.min(chunkSize, size - pos), pos);
       if (!bytesRead) break;
       pos += bytesRead;
-      const data = carry ? Buffer.concat([carry, buf.subarray(0, bytesRead)]) : buf.subarray(0, bytesRead);
+      const chunk = buf.subarray(0, bytesRead);
       let a = 0;
-      let nl = data.indexOf(NL, a);
+      let nl = chunk.indexOf(NL, a);
       while (nl !== -1) {
-        if (nl > a) onLine(data, a, nl);
+        // A line carried over from earlier chunks can only end at the first newline of this one (a is 0 there)
+        if (skipping) {
+          onSkip?.(skipping + nl);
+          skipping = 0;
+        } else if (partLen) {
+          if (partLen + nl > maxLine) onSkip?.(partLen + nl);
+          else {
+            const line = Buffer.concat([...parts, chunk.subarray(0, nl)]);
+            onLine(line, 0, line.length);
+          }
+          parts = [];
+          partLen = 0;
+        } else if (nl - a > maxLine) onSkip?.(nl - a);
+        else if (nl > a) onLine(chunk, a, nl);
         a = nl + 1;
-        nl = data.indexOf(NL, a);
+        nl = chunk.indexOf(NL, a);
       }
-      carry = a < data.length ? Buffer.from(data.subarray(a)) : null;
-      consumed = pos - (carry ? carry.length : 0);
+      const rest = bytesRead - a;
+      if (rest) {
+        if (skipping) skipping += rest;
+        else if (partLen + rest > maxLine) {
+          skipping = partLen + rest;
+          parts = [];
+          partLen = 0;
+        } else {
+          // A copy: buf is reused by the next read
+          parts.push(Buffer.from(chunk.subarray(a)));
+          partLen += rest;
+        }
+      }
+      consumed = skipping ? pos : pos - partLen;
     }
     return consumed;
   } finally {

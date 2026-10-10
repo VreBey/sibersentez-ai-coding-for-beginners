@@ -164,3 +164,28 @@ test('a finished web job: "Put it online" first looks through the project (plan 
   assert.equal($('[data-sec="publish"]'), null, 'the check closes');
   assert.equal(actionPosts().length, before, 'nothing was sent to start');
 });
+
+test('before a job: what the start\'s copy would hold, under Start; its fold stays open across redraws (docs/restore.md §12)', async () => {
+  const scope = (files) => ({ project: 'kafe', ok: true, scope: 'lean', files, bytes: 2 * 1024 * 1024, leftOut: 3, leftBytes: 9 * 1024 * 1024, big: [{ rel: 'media/intro.mp4', size: 6 * 1024 * 1024 }], skipped: [{ name: 'node_modules', why: 'packages' }] });
+  addRoutes({ 'GET /api/projects/kafe/restore-scope': scope(41) });
+  drawer.close?.();
+  later();
+  await settle();
+  await openKafe();
+  const fold = $('details.job-scope');
+  assert.ok(fold, 'the line under Start');
+  assert.match(fold.querySelector('summary').textContent, /41/);
+  assert.match(fold.textContent, /node_modules/);
+  assert.match(fold.textContent, /media\/intro\.mp4/);
+  fold.open = true;
+  fold.dispatchEvent(new win.Event('toggle'));
+  // A newer answer redraws the drawer: the fold the person opened stays open
+  addRoutes({ 'GET /api/projects/kafe/restore-scope': scope(42) });
+  later();
+  for (let i = 0; i < 4; i++) {
+    await settle(4);
+    drawer.rerender?.();
+  }
+  assert.match($('details.job-scope summary').textContent, /42/);
+  assert.equal($('details.job-scope').open, true);
+});

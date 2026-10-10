@@ -8,3 +8,7 @@
 *.png binary
 *.ico binary
 *.woff2 binary
+# Kept in the local repository only: the public tree is made with `git archive`, which leaves these out (docs/release.md)
+docs/internal export-ignore
+docs/internal/** export-ignore
+.claude/** export-ignore

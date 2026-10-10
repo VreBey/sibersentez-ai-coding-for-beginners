@@ -48,7 +48,7 @@ to undo a mistake. SiberSentez is the friendly room around them.
 |---|---|---|
 | Getting started | Install Git, Node.js and the tool by hand | A step-by-step wizard; you press Enter on each command |
 | Giving a job | Write a good prompt in a terminal | Say it in your own words; the team, the plan and the check are set up for you |
-| Before files change | Depends on the tool's settings | The AI writes a plan first and waits for your approval |
+| Before files change | Depends on the tool's settings | With a tool that has a plan mode, the AI writes a plan first and waits for your approval |
 | Checking the work | You read the code | A separate reviewer checks it; you open the result in one click |
 | A mistake | `git` if you know it | Every job keeps a copy first: go back in one click, and undo that too |
 | Seeing what happens | Scrolling terminal output | A building where you watch who works, who waits for you and what changed |
@@ -59,17 +59,17 @@ It runs only on your computer, brings no AI of its own and sends your work nowhe
 
 1. **Create a project.** Give it a name and say what you want to make: "a recipe site with a search box".
 2. **Press Start.** Your AI tool opens in its own terminal inside the window, with your job as its first message.
-3. **Approve the plan.** Nothing is touched before you say yes; ask for changes if you like.
+3. **Approve the plan.** With a tool that has a plan mode (Claude Code, Gemini CLI, GitHub Copilot CLI, Cursor CLI and Qwen Code), nothing is touched before you say yes; ask for changes if you like.
 4. **Open the result.** A separate reviewer has checked it. Keep it, ask for a change, or go back to before the job.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/plan.webp" alt="The lead's plan waits for your approval before any file is touched"><br><b>A plan first.</b> The lead writes a plan and raises a hand; nothing is touched before you approve it.</td>
+    <td width="50%"><img src="docs/screenshots/plan.webp" alt="The lead's plan waits for your approval before any file is touched"><br><b>A plan first.</b> The lead writes a plan and raises a hand; with a tool that has a plan mode, nothing is touched before you approve it.</td>
     <td width="50%"><img src="docs/screenshots/result.webp" alt="The result is ready: open or run it, see what changed, or undo"><br><b>The result, checked.</b> A separate reviewer checks the work; then open or run it, see what changed, or undo it.</td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/light.webp" alt="The light theme: the Building with the team at work"><br><b>Dark or light.</b> Pick a theme or follow the system; the building stays an evening window.</td>
-    <td width="50%"><img src="docs/screenshots/skills.webp" alt="Skills and agents: the SiberSentez kit and your own library"><br><b>Skills and agents.</b> A kit of 59 skills and 16 agents written for beginners, installed into a project only when you choose.</td>
+    <td width="50%"><img src="docs/screenshots/skills.webp" alt="Skills and agents: the SiberSentez kit and your own library"><br><b>Skills and agents.</b> A kit of 60 skills and 16 agents written for beginners, installed into a project only when you choose.</td>
   </tr>
 </table>
 
@@ -101,12 +101,12 @@ It runs only on your computer, brings no AI of its own and sends your work nowhe
 - It runs only on this computer (`127.0.0.1`). It goes to the internet in **two cases only**, both your choice: when you bring skills from GitHub (only with actions **On** and only when you press **Fetch** or **Check for update**: `github.com`, `codeload.github.com` and `api.github.com`), and, if you turn on **Tell me when a new version is out** in Settings (off by default), once a day to read the list of SiberSentez's releases on `api.github.com`. Nothing is sent and nothing is downloaded by that look. Otherwise it sends nothing anywhere (see [Privacy and security](#privacy-and-security)).
 - It is **read-only by default**: while actions are Off (the default) it reads logs, projects and settings and changes none of them. The only files it writes then are its own settings and logs and, in the hub folder, the skeleton on first start, its project memory (`registry\discovered.json`), its usage ledger (`usage\ledger.json`), the last new-version answer (`update-check.json`, only when that look is turned on) and, when you change it (header indicator, window menu or tray menu), the actions mode in `settings.json`; it also deletes its own GitHub downloads in `incoming\` once they are seven days old. With actions **On**, the skill flow also copies into the hub library, keeps `registry\installs.json` and a `trials\` folder, and installs into or removes from the project folders you choose (see [Skills](#skills)); a GitHub import downloads into `incoming\` and records where each item came from in `registry\sources.json`; **Start with AI** writes a small start file into `launch\`, a restore point of the project into `restore\` in the hub and, when you start with your idea or a job, `.sibersentez\` into the project. In **Preview** it only shows what it would do.
 - It is **free and open source**: the app is under the GNU GPL version 3 or later, its kit of skills and agents under the MIT License (see [License](#license)).
-- It comes with **its own small kit of skills and agents** (59 skills, 16 agents, written for SiberSentez; see [Skills](#skills)) and is **not tied to any AI service**. Nothing is active until you install it into a project; the tools you already set up in your own projects are found and shown too.
+- It comes with **its own small kit of skills and agents** (60 skills, 16 agents, written for SiberSentez; see [Skills](#skills)) and is **not tied to any AI service**. Nothing is active until you install it into a project; the tools you already set up in your own projects are found and shown too.
 
 ## Requirements
 
 - Windows 10 or Windows 11 (64-bit), or Linux (64-bit, x86_64; an AppImage, since 0.18.0). macOS is experimental
-  and not released. What differs between them and what has been tried is in [docs/platforms.md](docs/platforms.md).
+  and not released. What is supported and what has been tried on each is in the support matrix of [docs/platforms.md](docs/platforms.md#support-matrix-as-of-2026-10-10).
 - Optional: an AI coding tool. Live sessions are read from the session logs of Claude Code, Codex CLI, Gemini CLI, Qwen Code, GitHub Copilot CLI, Cursor CLI and OpenCode, token usage from all of them but Cursor (see [Privacy and security](#privacy-and-security)). Projects, skills, agents and plugins are found for Claude Code, Codex, Gemini CLI, GitHub Copilot (CLI and VS Code Chat), Cursor and Antigravity (see [Roster sources](#roster-sources)). **Start with AI** starts Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor CLI, Qwen Code or OpenCode. Without any of them the program still opens; there is simply nothing to show.
 - Optional: git, for GitHub downloads. Without it SiberSentez downloads the repository as an archive.
 
@@ -219,7 +219,7 @@ session files only.
 
 - **Where:** mostly the **Start** button of the **Building** (a job: see [Do a job](#do-a-job)). Also in the project drawer, folded under *Details*: one **Start with *tool*** button per tool found, **Start with my idea (first message ready)** when the project has a saved idea (on by default, remembered per project in this browser), **Plain terminal**, and the links **AI tools on this computer** and **Check again**. The right-click menu of a project or a session has the same **Start with *tool*** items (see [Right-click menu](#right-click-menu)); the **Getting started** card has an **AI tools** button.
 - **Finding the tools** happens only when first needed (a project drawer, the tools panel, a project or session menu), never when SiberSentez starts, and the answer is kept for five minutes (**Check again** asks anew, at most once in ten seconds). A tool is found by looking for its file (`.exe`, `.bat`, `.cmd`) in the folders of `PATH` and in the folders the official installers use (`%USERPROFILE%\.local\bin`, `%APPDATA%\npm`, `%LOCALAPPDATA%\Microsoft\WinGet\Links`, `%USERPROFILE%\scoop\shims`), so a tool installed while SiberSentez runs is found too. Only the tools found this way are run, hidden and with a time limit: for their version and, for Claude Code and Codex, the sign-in check, of which only the exit code is kept (its output, which names your account, is not even read). No path, file name or user name reaches the page. Tools whose sign-in cannot be checked show "Sign-in not known: it asks the first time if needed".
-- **Starting:** in **Preview** the button shows the command and starts nothing; with actions **On** the tool opens in a new tab of SiberSentez's own terminal in the project folder, named after the project (in the desktop app; **Open in Windows Terminal** or, when the dock is full or missing, a Windows Terminal tab; a Command Prompt window when Windows Terminal is missing or does not start). The tool starts interactively: a one-shot mode (`-p`, `exec`) is never used and no permission, "yolo" or bypass option is ever added; the only mode flag is that a **job** starts Claude Code in plan mode (`--permission-mode plan`), so you approve the plan first. After the tool ends, the shell stays open in the project folder. Closing a running AI's tab asks once (a second click stops it), and an AI that stopped half-way offers **Go on where it stopped**.
+- **Starting:** in **Preview** the button shows the command and starts nothing; with actions **On** the tool opens in a new tab of SiberSentez's own terminal in the project folder, named after the project (in the desktop app; **Open in Windows Terminal** or, when the dock is full or missing, a Windows Terminal tab; a Command Prompt window when Windows Terminal is missing or does not start). The tool starts interactively: a one-shot mode (`-p`, `exec`) is never used and no permission, "yolo" or bypass option is ever added; the only mode flag is that a **job** starts the tool in its plan mode when it has one (Claude Code, Gemini CLI, GitHub Copilot CLI, Cursor CLI and Qwen Code; for example Claude Code's `--permission-mode plan`), so you approve the plan first. Codex CLI and OpenCode have no plan mode: the job box says so before Start. After the tool ends, the shell stays open in the project folder. Closing a running AI's tab asks once (a second click stops it), and an AI that stopped half-way offers **Go on where it stopped**.
 - **The first message** (actions On, with your idea): SiberSentez writes `.sibersentez\ilk-mesaj.md` into the project: your idea and plain instructions (work out a plan with me step by step, one question at a time, write `PLAN.md` at the end, use the `idea-to-plan` skill if it is installed, talk in the idea's language), plus `.sibersentez\.gitignore` (`*`, only when there is none), and starts the tool with one fixed sentence: *Please read .sibersentez/ilk-mesaj.md and follow it. Reply in the user's language.* Nothing is ever overwritten: a file with the same text is used as it is, a file you changed stays and the new message goes to the next free name (`ilk-mesaj-2.md` … `ilk-mesaj-9.md`); a `.sibersentez` that is a file or a link blocks the start. Without the idea nothing is written into the project.
 - **The start file:** Windows Terminal never receives the tool's path or your idea. SiberSentez writes a small ASCII start file, `launch\<12 hex>.cmd` in the hub (or in `%LOCALAPPDATA%\SiberSentez\launch`: without a hub, or when only that folder's path can go on the terminal's command line as it is), and the terminal only runs `cmd.exe` with it. Start files older than 24 hours are removed at the next start.
 - **The tools panel** (**AI tools on this computer**): the installed tools first, with version, how each was installed and whether it is signed in (and a note when a tool is installed twice); then the other tools with their official install command and a **Copy** button, the account each needs, the Node.js 20 note for npm commands and a tip for when PowerShell refuses to run scripts. **SiberSentez never runs these commands**: you copy one and run it yourself, then press **Check again**. The first time a tool opens in a folder, it asks whether you trust the folder and asks you to sign in; answer in the terminal.
@@ -247,6 +247,8 @@ SiberSentez\
                              with New project ("via": ["sibersentez"]), each with its "idea" when you wrote one;
                              remembered so a project stays listed after a tool deletes its logs (written by the
                              program, never edit it by hand)
+  registry\relinks.json      moved projects linked to their new folder, and the hours an undone link joined (written by
+                             the program in live mode)
   usage\ledger.json          the usage ledger: tokens per hour, project and model (older hours per day), so the
                              numbers survive restarts and the deletion of old logs (written in every actions mode;
                              a broken file is kept as ledger.json.broken and rebuilt from the logs)
@@ -259,7 +261,8 @@ SiberSentez\
   incoming\                  GitHub downloads waiting to be added to the library (deleted after adding or
                              cancelling, at the latest after 7 days)
   launch\                    start files of Start with AI (each removed after 24 hours)
-  restore\                   restore points: a copy of a project's files taken before each start (five per project)
+  restore\                   restore points: a copy of a project's files taken before each start (five per project);
+                             restore\<key>\job-results.json is the app's own record of each job's verdict
 ```
 
 - **Project registry:** every folder on a local drive where you used a supported AI tool shows up automatically as an unregistered project and is remembered in `registry\discovered.json`; so does a folder you add with **New project** (marked `"via": ["sibersentez"]`, with your `"idea"`, at most 300 characters, never logged). A folder that no longer exists stays listed as missing. Projects you add to `registry\projects.json` become registered; their name, description, stage and rules are shown.
@@ -269,7 +272,7 @@ SiberSentez\
 
 Skills and agents come from three places: the **SiberSentez kit** that comes with the program, **your library** in the hub, and **your other projects**. SiberSentez picks the fitting ones for a project by itself, lets you try them without installing, installs them into the project and removes them again (details: [docs/auto-skills.md](docs/auto-skills.md), [docs/skills-flow.md](docs/skills-flow.md), [docs/kit.md](docs/kit.md)). The lists are shown whatever the actions mode; installing and trying need actions in Preview or On, and in Preview every step only shows its plan and writes nothing.
 
-- **The SiberSentez kit** (*SiberSentez seti*): 59 skills and 16 agents written for SiberSentez, covering idea → setup → build → ship: the team that does a job (`orchestrate`, with the `planner`, `builder`, `reviewer`, `tester` and `debugger` agents and others), planning (`idea-to-plan`, `task-breakdown`), starters (`project-setup` and web, mobile, desktop, Unity and Python bot starters), quality (`test-first`, `review-changes`, `debug-helper`), trying and shipping (`try-it-in-browser`, `deploy-web`, `launch-checklist`, `domain-email`, `move-to-new-host`, `release-prep`), `security-check`, `docs-writer` and `explain-codebase`. Skills follow the Agent Skills format, agents the Claude Code subagent format, so any AI tool that reads them can use them; they talk to you in your language. The kit is a read-only folder next to the program (`resources\kit` in the program folder), is updated with the program and is **not counted in your library** (the Roster shows it as a source of its own, "SiberSentez seti: 59 skills · 16 agents, ready to install into a project"). A kit item installs straight from the kit, never through the library, and every installed copy carries its license notice (`LICENSE.md` in a skill folder, two comment lines at the top of an agent). The kit's license: `kit/LICENSE.md`.
+- **The SiberSentez kit** (*SiberSentez seti*): 60 skills and 16 agents written for SiberSentez, covering idea → setup → build → ship: the team that does a job (`orchestrate`, with the `planner`, `builder`, `reviewer`, `tester` and `debugger` agents and others), planning (`idea-to-plan`, `task-breakdown`), starters (`project-setup` and web, mobile, desktop, Unity and Python bot starters), quality (`test-first`, `review-changes`, `debug-helper`), trying and shipping (`try-it-in-browser`, `deploy-web`, `launch-checklist`, `domain-email`, `move-to-new-host`, `release-prep`), `security-check`, `docs-writer` and `explain-codebase`. Skills follow the Agent Skills format, agents the Claude Code subagent format, so any AI tool that reads them can use them; they talk to you in your language. The kit is a read-only folder next to the program (`resources\kit` in the program folder), is updated with the program and is **not counted in your library** (the Roster shows it as a source of its own, "SiberSentez seti: 60 skills · 16 agents, ready to install into a project"). A kit item installs straight from the kit, never through the library, and every installed copy carries its license notice (`LICENSE.md` in a skill folder, two comment lines at the top of an agent). The kit's license: `kit/LICENSE.md`.
 - **The idea box** (*What do you want to build in this project?*): in the project drawer, above the list. Type what you want to build ("a 2D platform game in Unity", "an online store with Next.js", "a Telegram bot in Python", in English or Turkish); SiberSentez reads the tools and topics it names, locally and without any AI, and ticks the skills that fit, each with "your idea mentions “…”" as a reason. An empty folder gets `idea-to-plan` and `project-setup` from the kit even without an idea. In the SiberSentez app the idea is kept with the project (`registry\discovered.json`); in a browser only in that browser.
 - **Skills for this project** (top of the project drawer): the project's tags (Unity, C#, Next.js, testing, ...: read from its files) and the skills and agents that fit it, from the kit and the library (one row per name: library first, then the kit), each with its reason (for example *Unity project · installed in Demo*). At most five fits are shown first, the strong ones checked for you (at most 4 skills and 1 agent); the rest wait behind **Show more**, and items found only in your other projects behind **Also from my other projects** (they are never checked unseen); items already in the project or active everywhere are folded, and items made for other kinds of projects (a React Native skill for a Unity project) are left out and only counted. In Preview the button is **Show what would be installed**: it lists the plan, copies nothing and says so in a banner with a **Change actions** button. With actions Off the button reads **Turn actions on and install**: one question says what On does and what is installed, then both happen. With actions On it is **Install the selected**: after a confirmation, items found only in other projects are added to the library first, then everything is installed, and one line says what happened ("8 skills installed, 0 skipped"). **Try** starts a Claude Code session with the selected library items from a session-only folder (`trials\` in the hub, removed after 7 days) without installing anything.
 - **Project list:** a card shows a small **N fit** badge while strong fits are not installed yet; fits are asked only for the cards on screen, one at a time, and kept for five minutes.
@@ -456,7 +459,6 @@ Headless screenshot mode without a live connection: `?qa=1`. Extra parameters:
 | `aitools=1` | opens the **AI tools on this computer** panel |
 | `menu=project:<id>` (also `session:`, `agent:`, `roster:`) | that context menu, open; with `pick=<item id>` (Preview only), for example `pick=start-ai:claude`, the item is run and shows its plan |
 | `open=roster:<id>&skills=1` | a roster item's drawer at *Install into a project* (`open=project:<id>&skills=1`: the project's skills); with `flow=preview\|confirm\|install\|try` (Preview only) and `proj=<id>` the flow is walked through |
-| `scene=building\|orchestra`, `floor=<project id>\|1` | that scene for this page; with the building, inside that floor (`1`: the top floor) |
 | `replay=0.6`, `open=project:<id>`, `palette=<query>`, `toast=1` | replay position, an open drawer, the command palette, a notice |
 
 Example: `?qa=1&usage=30d&cost=0&sort=spend&open=project:<id>` (the usage section of a project with the dollars hidden).
@@ -476,12 +478,15 @@ electron/            program shell: window, tray, single instance, start at logi
   actions-mode.mjs   the actions mode: tray switch, menus, the in-app request, the confirmation for On
   new-project.mjs    the folder picker, the folder rules and the idea
   shell-state.mjs    the shell's own state file
-  qa-window.mjs      QA mode, the hidden QA run and the window's options
+  qa-window.mjs      QA mode and the window's options
+  qa-run.mjs         the hidden QA run: the actions switch, the screenshot and the probes
+  support-bundle.mjs the support bundle's masked settings and log lines, and its Save dialog
   terminals.mjs      the embedded terminal (node-pty)
-  preload.cjs        the window's bridge: setActionsMode, pickProjectFolder, saveProjectIdea
+  preload.cjs        the window's bridge (twelve functions): the actions mode, the folder pickers, the language, the
+                     theme, the project idea, attention, page errors, the log folder and the support bundle
   strings.mjs        tray, menu and dialog texts (English and Turkish)
 build/               icon and packaging resources
-kit/                 the SiberSentez kit: 59 skills and 16 agents, catalog.json, LICENSE.md; packaged as resources\kit
+kit/                 the SiberSentez kit: 60 skills and 16 agents, catalog.json, LICENSE.md; packaged as resources\kit
 server/
   index.mjs          HTTP + SSE, timers, the shell's message channel
   config.mjs         settings resolution (environment → sibersentez.json → default)
@@ -496,6 +501,10 @@ server/
                      downloaded item fits
   suggest.mjs        library items ranked for a project
   ingest.mjs         log reading: sessions, agents, workflows, events, counters, last action
+  ingestForeign.mjs  the other AI tools' logs (Codex, Gemini, Qwen, OpenCode, Cursor, Copilot)
+  ingestText.mjs     what a log line says in words (tool category, action text, program name)
+  jobResults.mjs     the app's own record of a job's verdict (restore\<key>\job-results.json)
+  relinks.mjs        moved projects linked to their new folder (registry\relinks.json)
   usage.mjs          usage ledger (usage\ledger.json): deduplicated tokens per hour, project and model, periods,
                      the older logs, the report of GET /api/usage
   prices.mjs         Anthropic API prices (dated) for the API-equivalent estimate
@@ -530,7 +539,7 @@ start.cmd            developer launcher (browser)
 - A subagent's "finished" state is inferred from its last log message; an unfinished agent silent for 10 minutes counts as "stopped".
 - A workflow record is written when the run ends; while it runs, the workflow is followed through its worker agents.
 - The window slides: even if the program runs for days, sessions, agents and counters older than 14 days are pruned. Token usage is the exception: the usage ledger keeps it (see [Usage and cost](#usage-and-cost)).
-- Usage is counted by whole hours ("24 hours" is the current hour and the 23 before it); dollars only for Anthropic's models, and Cursor's logs carry no token counts. A project whose folder was moved keeps its older usage under the old folder, so its history is split between two projects.
+- Usage is counted by whole hours ("24 hours" is the current hour and the 23 before it); dollars only for Anthropic's models, and Cursor's logs carry no token counts. A project whose folder was moved can be linked to its new folder from its drawer, keeping its history; after an undo the hours joined so far stay with that project. A folder linked while its parent folder is opened as a project of its own may show some hours under both after an undo.
 - The installer is not code-signed yet (SmartScreen warning, see Installation).
 
 ## Contributing and review

@@ -1,9 +1,7 @@
 # Product direction — 2026-09-30
 
-Decisions after two audits of the same day (local, not in git): `qa/kit-v2/rakip-icerik-kiyas.md` (our kit and
-orchestration against superpowers, anthropics/skills, wshobson, VoltAgent, BMAD, Spec Kit, Kiro, Cursor, skills.sh) and
-`qa/urun-denetim/rapor.md` (the app walked through as a new user, 19 screenshots; features and architecture against
-Conductor, Emdash, AgentSpace, Superset, Nimbalyst, Warp, Claude Code Desktop, Cursor 3, Kiro, Wave).
+Decisions after two reviews of the same day: the kit and its team flow next to other public skill collections and
+spec tools, and the app walked through as a new user next to other AI coding desktops.
 
 ## 1. Where we stand
 
@@ -64,7 +62,7 @@ Conductor, Emdash, AgentSpace, Superset, Nimbalyst, Warp, Claude Code Desktop, C
    **Restore points done 2026-09-30** (docs/restore.md): a copy in the hub before every live AI start, a preview of
    what going back changes, one yes, and the present kept first so going back can be undone.
 5. **Maintenance, in between:** async and cached catalog reload and `/fit`, the git watcher and a terminal flow
-   control (`docs/backlog.md` "Long-running load"); `npm test` runs every file in `test/` instead of a hand list;
+   control (`docs/internal/backlog.md` "Long-running load"); `npm test` runs every file in `test/` instead of a hand list;
    old installers out of `dist/`.
 6. **Last** (owner decision): installer run end to end, code signing, licence and subscription.
    **2026-09-30:** 0.9.0 built (all of §3.1-3.5), hidden QA 39/39, a silent install over 0.8.1 and a smoke test of

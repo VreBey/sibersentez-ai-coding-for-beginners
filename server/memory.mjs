@@ -1,3 +1,4 @@
+// @ts-check
 // Project memory: every project folder a source adapter has shown is remembered, so a project stays listed after
 // a tool deletes its logs (Claude Code removes sessions after 30 days by default). With a hub the memory lives in
 // <hub>/registry/discovered.json (the user's registry/projects.json is never touched); without a hub it lives in
@@ -124,6 +125,7 @@ export class ProjectMemory {
   }
 
   // Remember a project folder seen by an adapter (via = adapter id)
+  /** @param {string} folder @param {{ via?: string, lastSeenAt?: number }} [options] */
   record(folder, { via, lastSeenAt = 0 } = {}) {
     const n = normPath(folder);
     if (!n) return;
@@ -228,6 +230,7 @@ export class ProjectMemory {
 // handle(msg) returns the reply { sibersentez: 'shell-reply', id, ok, reason, projectId?, existed?, saved? }, or null for a
 // message that is not a request (it gets no answer). onChange(type, projectId) runs after a change (see
 // shellChangeHandler for what the server does then). The reply never carries a path or the idea.
+/** @param {{ catalog?: any, appDir?: string | null, onChange?: (type: string, projectId: string) => void, reloadActions?: any, terminalTarget?: any, terminalState?: any }} [options] */
 export function createProjectChannel({ catalog, appDir = null, onChange = () => {}, reloadActions = null, terminalTarget = null, terminalState = null } = {}) {
   const changed = (type, projectId) => {
     try {

@@ -48,7 +48,7 @@ nasıl geri alacağını bildiğini varsayarlar. SiberSentez onların etrafında
 |---|---|---|
 | Başlamak | Git, Node.js ve aracı elle kur | Adım adım sihirbaz; her komutta Enter'a sen basarsın |
 | İş vermek | Terminalde iyi bir istem yaz | Kendi sözlerinle söyle; ekip, plan ve kontrol senin için kurulur |
-| Dosyalar değişmeden önce | Aracın ayarlarına bağlı | Yapay zekâ önce plan yazar, onayını bekler |
+| Dosyalar değişmeden önce | Aracın ayarlarına bağlı | Plan kipi olan araçta yapay zekâ önce plan yazar, onayını bekler |
 | İşi kontrol etmek | Kodu sen okursun | Ayrı bir denetçi kontrol eder; sonucu tek tıkla açarsın |
 | Bir hata | Biliyorsan `git` | Her işten önce kopya alınır: tek tıkla geri dön, onu da geri al |
 | Ne olduğunu görmek | Akan terminal çıktısı | Kimin çalıştığını, kimin seni beklediğini ve neyin değiştiğini gösteren bir bina |
@@ -59,7 +59,7 @@ Yalnız senin bilgisayarında çalışır, kendi yapay zekâsını getirmez ve i
 
 1. **Proje oluştur.** Bir ad ver ve ne yapmak istediğini yaz: "arama kutusu olan bir tarif sitesi".
 2. **Başlat'a bas.** Yapay zekâ aracın pencerenin içindeki kendi terminalinde, işin ilk mesajıyla açılır.
-3. **Planı onayla.** Sen evet demeden hiçbir şeye dokunulmaz; istersen değişiklik iste.
+3. **Planı onayla.** Plan kipi olan araçta (Claude Code, Gemini CLI, GitHub Copilot CLI, Cursor CLI ve Qwen Code) sen evet demeden hiçbir şeye dokunulmaz; istersen değişiklik iste.
 4. **Sonucu aç.** Ayrı bir denetçi kontrol etti. Kabul et, değişiklik iste ya da işten önceki hâle dön.
 
 <table>
@@ -78,7 +78,7 @@ Yalnız senin bilgisayarında çalışır, kendi yapay zekâsını getirmez ve i
 - **Seni bekleyenleri bil.** Kullanım limiti, oturum kapanması, bağlantı kopması: ne yapacağını söyleyen bir kart çıkar.
 - **Paylaşmadan önce tarama.** "İnternete koy", projede parola, anahtar ya da `.env` gibi gizli bilgileri arar.
 - **Kurulum kontrolü ve sihirbaz.** Bilgisayardaki araçları bulur, eksiği sade bir dille söyler ve sırayla hazırlatır.
-- **Hazır kit.** Yeni başlayanlar için yazılmış 59 skill ve 16 ajan; hiçbiri sen kurmadan etkin olmaz.
+- **Hazır kit.** Yeni başlayanlar için yazılmış 60 skill ve 16 ajan; hiçbiri sen kurmadan etkin olmaz.
 - **Türkçe ve İngilizce**, koyu ve açık tema, klavyeyle kullanım, ekran okuyucu için terminal.
 
 Ayrıntılı belgeler (kurulum, eylemler, veri nerede durur, gizlilik, geliştiriciler için) İngilizce README'de:
