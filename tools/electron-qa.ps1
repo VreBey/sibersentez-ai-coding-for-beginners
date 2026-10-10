@@ -328,7 +328,11 @@ try {
   Check 'probe: node-pty loads from outside the archive and runs a command (embedded terminal)' ($P6['terminal'].unpacked -and $P6['terminal'].loaded -and $P6['terminal'].exitCode -eq 0 -and $P6['terminal'].echoed)
   Check 'probe: the actions panel opens (?qa=1&actpanel=choose)' ($P6['actions panel'] -eq 'open')
   $L = $P6['laptop next step']
-  Check 'probe: at 1366 x 768 the next step is in the first screen, fits, no sideways scroll, comes first for the keyboard' ($L.shown -and $L.firstScreen -and $L.inWidth -and $L.noSideScroll -and $L.text -and $L.oneLineFits -and $L.keyboardFirst -and $L.width -eq 1366 -and $L.height -eq 768)
+  # With no project of the person's own yet (a new install, GitHub's runner) the strip steps back by design (firstScreen.js)
+  # and the "Got an idea?" card is the one primary start: then the card's button must be in the first screen
+  $stripOk = $L.shown -and $L.firstScreen -and $L.inWidth -and $L.oneLineFits -and $L.keyboardFirst
+  $cardOk = $L.step -eq 'newProject' -and -not $L.shown -and $L.card -and $L.card.shown -and $L.card.firstScreen -and $L.card.inWidth
+  Check 'probe: at 1366 x 768 the next step (or, with no project yet, the start card) is in the first screen, fits, no sideways scroll' (($stripOk -or $cardOk) -and $L.noSideScroll -and $L.text -and $L.width -eq 1366 -and $L.height -eq 768)
   $K = $P6['keyboard']
   Check 'probe: keyboard: the search dialog keeps Tab, closes on Escape with focus back; the menu arrow moves; no tab roles' ($K.searchButton -and $K.opened.open -and $K.opened.inInput -and $K.afterTabs.open -and $K.afterTabs.inInput -and -not $K.afterEscape.open -and $K.afterEscape.focus -eq 'paletteBtn' -and $K.menuButton -and $K.menu.focus -eq 'projects' -and $K.menu.tabRoles -eq 0)
   $LD = $P6['laptop next step demo']
