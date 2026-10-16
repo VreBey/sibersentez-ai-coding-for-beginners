@@ -22,7 +22,7 @@ once the whole roadmap (F1–F5) is done. The version number changes only at thi
 5. A clean Windows (Windows Sandbox, or another computer, never the owner's own, where SiberSentez is installed): install
    the new installer, upgrade from the last release over it, uninstall. Each step written down.
 6. `tools/perf-baseline.mjs` and `tools/contrast-scan.js` again; the numbers next to the last ones
-   (`docs/internal/evidence-*.md`).
+   (`docs/release-evidence.md`, the last release's "Checked by the maintainer").
 7. Dependencies (plan A5): `npm audit --omit=dev` finds nothing (the CI runs it on every push; it covers what ships in
    the app, node-pty). `npm audit` for the build tools: on 2026-10-09 eight moderate findings, all in electron-builder's
    chain (sprintf-js, a denial of service through a format string), which runs only while the installer is built and
@@ -49,3 +49,8 @@ once the whole roadmap (F1–F5) is done. The version number changes only at thi
    Not run on GitHub yet (2026-10-10): the first tagged build is its first try; until it passes, the site does not
    speak of attestations.
 5. Code signing waits for its own decision (roadmap F3b): until then the installer is unsigned, as before.
+6. The evidence (independent review of 0.19.0 §11): a new section on top of `docs/release-evidence.md`. The release's
+   facts from `node tools/release-evidence.mjs v<version>` (the commit, each file's SHA-256 as GitHub keeps it, whether
+   `SHA256SUMS.txt` says the same, the attestations, the workflow runs of that commit); then what the maintainer ran
+   by hand, an outside review if there is one, and what was not tested. Every fact says who saw it. The page goes out
+   with the next push; it never points to `docs/internal/`, which the public tree leaves out.

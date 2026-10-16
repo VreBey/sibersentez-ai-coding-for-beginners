@@ -58,7 +58,7 @@ export const TOOL_IDS = Object.freeze(TOOLS.map((t) => t.id));
 // (docs/release.md) moves "to" and "at" when the check passes on a newer version; the tools panel says where the
 // installed version stands (toolTested). Checked 2026-10-10 on the owner's computer: every tool "ok".
 export const TOOL_CHECKED = Object.freeze({
-  claude: Object.freeze({ from: '2.1.283', to: '2.1.296', at: '2026-10-10' }),
+  claude: Object.freeze({ from: '2.1.283', to: '2.1.301', at: '2026-10-16' }),
   codex: Object.freeze({ from: '0.160.0', to: '0.160.1', at: '2026-10-10' }),
   gemini: Object.freeze({ from: '0.61.0', to: '0.63.0', at: '2026-10-10' }),
   copilot: Object.freeze({ from: '1.0.92', to: '1.0.93', at: '2026-10-10' }),

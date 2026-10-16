@@ -1442,7 +1442,7 @@ test('the versions SiberSentez was checked with, per tool, and where the install
   assert.deepEqual(Object.keys(TOOL_CHECKED).sort(), [...TOOL_IDS].sort(), 'every tool has its range');
   for (const c of Object.values(TOOL_CHECKED)) assert.match(c.at, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(toolTested('claude', '2.1.290').fit, 'in');
-  assert.equal(toolTested('claude', '2.1.296').fit, 'in', 'the newest checked is in');
+  assert.equal(toolTested('claude', '2.1.301').fit, 'in', 'the newest checked is in');
   assert.equal(toolTested('claude', '2.2.0').fit, 'newer');
   assert.equal(toolTested('claude', '2.1.100').fit, 'older');
   assert.equal(toolTested('claude', null).fit, 'unknown');
@@ -1453,7 +1453,7 @@ test('the versions SiberSentez was checked with, per tool, and where the install
   const served = publicTools({ tools: [{ id: 'claude', name: 'Claude Code', installed: true, version: '2.2.0', via: 'native', installs: [{}] }] });
   const x = norm(JSON.parse(JSON.stringify(served))).tools[0];
   assert.deepEqual(x.tested, { ...TOOL_CHECKED.claude, fit: 'newer' });
-  assert.match(testedLine(x), /checked with 2\.1\.283–2\.1\.296 \(2026-\d\d-\d\d\); yours, 2\.2\.0, is newer: it should work, but it has not been checked with SiberSentez yet\./);
+  assert.match(testedLine(x), /checked with 2\.1\.283–2\.1\.301 \(2026-\d\d-\d\d\); yours, 2\.2\.0, is newer: it should work, but it has not been checked with SiberSentez yet\./);
   assert.match(testedLine(x), /class="small ai-tested warn"/);
   assert.match(testedLine({ ...x, tested: { ...x.tested, from: '1.0', to: '1.0' }, version: '1.0' }), /checked with 1\.0 \(/, 'one version: no range');
   assert.equal(testedLine({ id: 'claude' }), '', 'an older server: nothing');

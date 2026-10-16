@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { parseAgent, convertAgent, AGENT_FORMATS } from '../server/agentFormats.mjs';
+import { parseAgent, convertAgent, conversionReport, AGENT_FORMATS } from '../server/agentFormats.mjs';
 import { planInstall, executeInstall, planRemove, executeRemove, readInstalls, TARGETS } from '../server/install.mjs';
 
 const KIT_AGENT = [
@@ -46,7 +46,7 @@ test("each tool's shape: only the keys it accepts (Gemini's schema is strict), t
   assert.ok(gemini.includes('# SPDX-License-Identifier: MIT') && gemini.includes("You build one task. Don't touch other files."));
   assert.deepEqual(keysOf(convertAgent(KIT_AGENT, 'qwen')), ['name', 'description', 'tools'], 'the tools in Qwen Code names');
   const oc = convertAgent(KIT_AGENT, 'opencode');
-  assert.deepEqual(keysOf(oc), ['description', 'mode']);
+  assert.deepEqual(keysOf(oc), ['description', 'mode', 'permission'], 'a builder reaches no web: denied there too');
   assert.ok(oc.includes('mode: subagent'));
   const toml = convertAgent(KIT_AGENT, 'codex');
   assert.match(toml, /^name = "backend-builder"$/m);
@@ -118,7 +118,11 @@ test('Gemini CLI: the agent keeps its tool limits in Gemini names when every Cla
   const toolsOf = (md) => JSON.parse(/^tools: (.*)$/m.exec(md)?.[1] ?? 'null');
   assert.deepEqual(toolsOf(convertAgent(withTools('tools: Read, Grep, Glob'), 'gemini')), ['read_file', 'read_many_files', 'grep_search', 'glob', 'list_directory'], 'a scout reads only');
   assert.deepEqual(toolsOf(convertAgent(KIT_AGENT, 'gemini')), ['read_file', 'read_many_files', 'grep_search', 'glob', 'list_directory', 'replace', 'write_file', 'run_shell_command'], 'a builder');
-  assert.equal(toolsOf(convertAgent(withTools('tools: Read, mcp__db__query'), 'gemini')), null, 'a tool with no Gemini name: no list, the defaults apply rather than a wrong limit');
+  // A tool with no Gemini name is left out: the role does without it, never with every default tool (independent
+  // review of 0.19.0 §7.4; before, the whole list was dropped)
+  assert.deepEqual(toolsOf(convertAgent(withTools('tools: Read, mcp__db__query, TodoWrite'), 'gemini')), ['read_file', 'read_many_files']);
+  assert.equal(toolsOf(convertAgent(withTools('tools: mcp__db__query'), 'gemini')), null, 'no tool with a Gemini name: no list (conversionReport says the defaults apply)');
+  assert.deepEqual(toolsOf(convertAgent(withTools('tools: LS, PowerShell'), 'gemini')), ['list_directory', 'run_shell_command']);
   assert.equal(toolsOf(convertAgent(withTools(''), 'gemini')), null, 'no tools line: every tool');
   assert.equal(toolsOf(convertAgent(withTools('tools: Read'), 'opencode')), null, 'OpenCode takes a map, not a list');
 });
@@ -131,17 +135,19 @@ test('Qwen Code: the agent keeps its tool limits in Qwen names (ToolNames of the
   assert.deepEqual(toolsOf(convertAgent(withTools('tools: Read, Grep, Glob'), 'qwen')), ['read_file', 'grep_search', 'glob', 'list_directory'], 'a scout reads only');
   assert.deepEqual(toolsOf(convertAgent(KIT_AGENT, 'qwen')), ['read_file', 'grep_search', 'glob', 'list_directory', 'edit', 'write_file', 'run_shell_command'], 'a builder');
   assert.deepEqual(toolsOf(convertAgent(withTools('tools: Read, Bash(git:*), PowerShell, WebFetch, WebSearch, TodoWrite, Task, Skill, NotebookEdit, MultiEdit, LS'), 'qwen')), ['read_file', 'run_shell_command', 'web_fetch', 'web_search', 'todo_write', 'agent', 'skill', 'notebook_edit', 'edit', 'list_directory']);
-  assert.equal(toolsOf(convertAgent(withTools('tools: Read, mcp__db__query'), 'qwen')), null, 'a tool with no Qwen name: no list, the defaults apply rather than a wrong limit');
+  assert.deepEqual(toolsOf(convertAgent(withTools('tools: Read, mcp__db__query'), 'qwen')), ['read_file'], 'a tool with no Qwen name is left out, the rest kept');
   assert.equal(toolsOf(convertAgent(withTools(''), 'qwen')), null, 'no tools line: every tool');
 });
 
-test('OpenCode: an agent without edit or shell tools gets those permissions denied (checked with the installed OpenCode 1.18.35: opencode agent list shows the rules, 2026-10-09)', () => {
+test('OpenCode: an agent without edit, shell or web tools gets those permissions denied (checked with the installed OpenCode 1.18.35: opencode agent list shows the rules, 2026-10-09 and 2026-10-16)', () => {
   const withTools = (tools) => KIT_AGENT.replace('tools: Read, Grep, Glob, Edit, Write, Bash', tools);
   const perm = (md) => (/^permission:\n((?: {2}.+\n)+)/m.exec(md)?.[1] || '').trim().split('\n').filter(Boolean).map((l) => l.trim());
-  assert.deepEqual(perm(convertAgent(withTools('tools: Read, Grep, Glob'), 'opencode')), ['edit: deny', 'bash: deny'], 'a scout');
-  assert.deepEqual(perm(convertAgent(withTools('tools: Read, Grep, Glob, Bash'), 'opencode')), ['edit: deny'], 'a reviewer runs checks, writes nothing');
-  assert.deepEqual(perm(convertAgent(withTools('tools: Read, Grep, Glob, Write'), 'opencode')), ['bash: deny'], 'a planner writes its plan, runs nothing');
-  assert.deepEqual(perm(convertAgent(KIT_AGENT, 'opencode')), [], 'a builder: no denial');
+  const web = ['webfetch: deny', 'websearch: deny'];
+  assert.deepEqual(perm(convertAgent(withTools('tools: Read, Grep, Glob'), 'opencode')), ['edit: deny', 'bash: deny', ...web], 'a scout');
+  assert.deepEqual(perm(convertAgent(withTools('tools: Read, Grep, Glob, Bash'), 'opencode')), ['edit: deny', ...web], 'a reviewer runs checks, writes nothing');
+  assert.deepEqual(perm(convertAgent(withTools('tools: Read, Grep, Glob, Write'), 'opencode')), ['bash: deny', ...web], 'a planner writes its plan, runs nothing');
+  assert.deepEqual(perm(convertAgent(KIT_AGENT, 'opencode')), web, 'a builder: no web');
+  assert.deepEqual(perm(convertAgent(withTools('tools: Read, Edit, Bash, WebFetch'), 'opencode')), [], 'a role that may use the web: no denial');
   assert.deepEqual(perm(convertAgent(withTools(''), 'opencode')), [], 'no tools line: every tool');
   assert.deepEqual(keysOf(convertAgent(withTools('tools: Read'), 'opencode')), ['description', 'mode', 'permission']);
 });
@@ -152,4 +158,49 @@ test('a tool given as a permission rule (Bash(git:*)) is that tool in every conv
   assert.doesNotMatch(convertAgent(md, 'codex'), /sandbox_mode/, 'it runs commands: not read-only');
   assert.doesNotMatch(convertAgent(md, 'opencode'), /bash: deny/);
   assert.match(convertAgent(md, 'gemini'), /"run_shell_command"/);
+});
+
+test('what carries over, before an install (independent review of 0.19.0 §7.4): kept, left out, the whole tool for a rule, and what a role may do beyond its list', () => {
+  const withTools = (tools) => KIT_AGENT.replace('tools: Read, Grep, Glob, Edit, Write, Bash', tools);
+  const r = (tools, format) => conversionReport(withTools(tools), format);
+  // No tools line: every tool here and there
+  for (const f of AGENT_FORMATS) assert.equal(r('', f).limits, 'none', f);
+  // Gemini and Qwen keep the limits in their names; a tool with no name is left out; none with a name: their defaults
+  assert.deepEqual(r('tools: Read, Grep, Glob', 'gemini'), { format: 'gemini', limits: 'kept', wider: [], left: [], whole: [], readOnly: false });
+  assert.deepEqual(r('tools: Read, TodoWrite, mcp__db__query', 'gemini').left, ['TodoWrite', 'mcp__db__query']);
+  assert.equal(r('tools: Read, TodoWrite', 'gemini').limits, 'kept');
+  assert.deepEqual(r('tools: mcp__db__query', 'qwen'), { format: 'qwen', limits: 'defaults', wider: ['edit', 'shell', 'web'], left: ['mcp__db__query'], whole: [], readOnly: false });
+  // A permission rule is the whole tool there
+  assert.deepEqual(r('tools: Read, Bash(git:*)', 'gemini').whole, ['Bash(git:*)']);
+  assert.deepEqual(r('tools: Read, Bash(git:*)', 'opencode').whole, ['Bash(git:*)']);
+  // OpenCode denies what the list leaves out of edits, commands and the web
+  assert.deepEqual(r('tools: Read, Grep, Glob, Bash', 'opencode'), { format: 'opencode', limits: 'kept', wider: [], left: [], whole: [], readOnly: false });
+  // Codex: a role that only reads runs read-only; any other keeps the session's sandbox: its limits are instructions
+  assert.deepEqual(r('tools: Read, Grep, Glob', 'codex'), { format: 'codex', limits: 'kept', wider: ['shell'], left: [], whole: [], readOnly: true }, 'a scout may run commands that read there');
+  assert.deepEqual(r('tools: Read, Grep, Glob, Bash', 'codex'), { format: 'codex', limits: 'instructions', wider: ['edit'], left: [], whole: [], readOnly: false }, 'a reviewer may change files there');
+  assert.deepEqual(r('tools: Read, Grep, Glob, Write', 'codex').wider, ['shell'], 'a planner may run commands there');
+  assert.deepEqual(r('tools: Read, Grep, Glob, Edit, Write, Bash', 'codex').wider, [], 'a builder: nothing beyond its list');
+  assert.equal(conversionReport('no frontmatter', 'gemini'), null);
+  assert.equal(conversionReport(KIT_AGENT, 'claude'), null);
+});
+
+test('the kit\'s own agents: their limits hold in Gemini CLI, Qwen Code and OpenCode; in Codex every role that cannot both change files and run commands may do more (the job box says so before Start)', () => {
+  const root = new URL('../kit/', import.meta.url);
+  const files = [];
+  for (const group of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!group.isDirectory()) continue;
+    const dir = new URL(`${group.name}/agents/`, root);
+    if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir)) if (f.endsWith('.md')) files.push([f.slice(0, -3), fs.readFileSync(new URL(f, dir), 'utf8')]);
+  }
+  assert.ok(files.length >= 16, String(files.length));
+  const wider = {};
+  for (const format of AGENT_FORMATS) {
+    for (const [name, text] of files) {
+      const rep = conversionReport(text, format);
+      assert.deepEqual([rep.left, rep.whole], [[], []], `${format} ${name}`);
+      if (rep.wider.length) (wider[format] ||= []).push(name);
+    }
+  }
+  assert.deepEqual(Object.keys(wider), ['codex']);
+  assert.deepEqual(wider.codex.sort(), ['launch-checker', 'planner', 'qa-explorer', 'reviewer', 'scout', 'security-auditor', 'task-slicer']);
 });

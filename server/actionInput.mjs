@@ -13,12 +13,14 @@ import { KEY_RE, normalizeJob } from './fit.mjs';
 import { toolById, TOOL_IDS } from './tools.mjs';
 import { parseGitHubUrl, FETCH_ID_RE } from './github.mjs';
 import { PROJECT_ID_RE } from './util.mjs';
+import { validJobId } from './job-id.mjs';
+import { triedMarks, triedItems } from './jobResults.mjs';
 import { PLATFORM, fileManager, isLocalAbsolute, normalizeDir } from './platform.mjs';
 
 // 'new' (a new Claude Code session) stays for the server and the skill trial; the context menu offers 'terminal'
 export const LAUNCH_ACTIONS = Object.freeze(['resume', 'fork', 'new', 'terminal', 'explorer', 'vscode']);
 
-export const SKILL_ACTIONS = Object.freeze(['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'project-relink', 'project-unlink']);
+export const SKILL_ACTIONS = Object.freeze(['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'project-relink', 'project-unlink', 'accept-marks']);
 
 // An AI tool started in a terminal, with the project's idea as its first message (docs/ai-start.md)
 const AI_ACTIONS = Object.freeze(['start-ai']);
@@ -76,6 +78,8 @@ const SKILL_FIELDS = {
   // project whose folder it is; and the link undone
   'project-relink': { required: ['projectId'], optional: ['folder', 'from', 'plan', 'planId'] },
   'project-unlink': { required: ['projectId'], optional: ['plan'] },
+  // The person's marks while trying a job's result (public/js/acceptGuide.js): the whole set, kept in the hub
+  'accept-marks': { required: ['projectId', 'jobId', 'marks', 'itemKeys'], optional: [] },
   // GitHub import (docs/github-import.md §6)
   'github-fetch': { required: ['url'], optional: [] },
   'github-import': { required: ['fetchId', 'items'], optional: [] },
@@ -362,6 +366,13 @@ export function createValidators({ catalog, ingest, hubDir, codeExe, homeDir, cl
         ctx.relink = { projectId: body.projectId, folder: body.folder ?? null, from: body.from ?? null, planId: body.planId || null };
       } else if (action === 'project-unlink') {
         ctx.relink = { projectId: body.projectId };
+      } else if (action === 'accept-marks') {
+        if (typeof body.jobId !== 'string' || !validJobId(body.jobId)) return reject(400, 'bad-job');
+        const marks = triedMarks(body.marks);
+        const itemKeys = triedItems(body.itemKeys);
+        // A mark is only of an item the person saw
+        if (!marks || !itemKeys || Object.keys(marks).some((k) => !itemKeys.includes(k))) return reject(400, 'bad-marks');
+        ctx.accept = { jobId: body.jobId, marks, itemKeys };
       } else if (action === 'restore-preview' || action === 'restore-apply') {
         if (typeof body.pointId !== 'string' || !POINT_ID_RE.test(body.pointId)) return reject(400, 'bad-point-id');
         ctx.pointId = body.pointId;
@@ -391,7 +402,7 @@ export function createValidators({ catalog, ingest, hubDir, codeExe, homeDir, cl
     }
     if (!hubDir || !isDir(hubDir)) return reject(404, 'no-hub');
     if (isLegacyHub(hubDir)) return reject(409, 'legacy-hub');
-    if (ctx.items || action === 'skills-apply' || ctx.pointId) {
+    if (ctx.items || action === 'skills-apply' || ctx.pointId || ctx.accept) {
       const r = resolveProject({ catalog, projectId: body.projectId, hubDir, homeDir, claudeDir });
       if (!r.ok) return reject(r.status, r.error);
       ctx.project = r.project;
@@ -408,7 +419,7 @@ export function createValidators({ catalog, ingest, hubDir, codeExe, homeDir, cl
     const github = ctx.repo ? [ctx.repo.name, ctx.repo.ref, ctx.repo.path] : ctx.fetchId || '';
     const digest = crypto
       .createHash('sha256')
-      .update(JSON.stringify([ctx.source || '', ctx.picks || ctx.items || ctx.adopt || ctx.keys || ctx.checks || [], ctx.targets || [], !!ctx.planOnly, github, ctx.pointId || '', ctx.relink || null]))
+      .update(JSON.stringify([ctx.source || '', ctx.picks || ctx.items || ctx.adopt || ctx.keys || ctx.checks || [], ctx.targets || [], !!ctx.planOnly, github, ctx.pointId || '', ctx.relink || null, ctx.accept || null]))
       .digest('hex')
       .slice(0, 16);
     return { ok: true, skill: true, action, ctx, key: `${action}|${body.projectId || ''}|${digest}` };

@@ -2,7 +2,9 @@
 // The first screen (docs/comprehensive-roadmap-tr-2026-10-07.md B4, package 2): one primary start until there is
 // something to work on. Two questions, two answers:
 //   ownProject       a project of the person's own exists (checklist.js hasOwnProject). Without one, the "Got an
-//                    idea?" card is the start: the next-step strip would only repeat it.
+//                    idea?" card is the start: the next-step strip, the folded Building's New project box
+//                    (workshop.js) and "Pick up where you left off" (today.js) would only repeat it, so they step
+//                    back (a new install showed three calls to make a project, 0.19.0 clean-install trial).
 //   buildingProject  the Building has a project to show (hq-live.js projectsInOrder: registered, or found and active
 //                    in the last days). Without one there is nothing to give a job to: the job row steps back, and
 //                    the strip's "create a project" (or the card) is the one primary New project.

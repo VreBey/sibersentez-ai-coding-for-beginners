@@ -281,6 +281,37 @@ not only after.
   `test/dom-drawer.test.mjs` (the line in the drawer, the fold kept open), `test/journey.test.mjs` (the answer before
   the job's start).
 
+## 13. A folder the scan cannot read (2026-10-16, independent review of 0.19.0, N01)
+
+Before, a folder the scan could not list (no access, a passing I/O error) was treated as an empty folder: the point
+said "full" with nothing left out, and once the folder could be read again, going back called its files "added
+later" and removed them (the before-restore point still held them). Now:
+
+- `scanProject` answers `unread`: the folders it could not list and the entries it could not look at (`lstat`
+  failed), at most `UNREAD_MAX` (200); more, or the project folder itself unreadable, is the problem
+  `folder-unreadable` (never an empty project). Something deleted while the scan runs (`ENOENT`: an editor's swap
+  file) is gone, not a gap.
+- A point keeps them in its manifest (`unread`, safe relative paths only; a manifest with anything else there is not
+  read), and `listPoints` counts them. Such a manifest is `version: 3`, so an older app, which would remove the files
+  under a gap, does not read the point at all; a point without gaps stays `version: 2`. A point with gaps is answered
+  again only for the same gaps, so a folder that can be read again gets a new, whole copy.
+- The plan (`planRestore`) never lists a file under one of the point's gaps as added: the point never saw it, so it
+  may be older than the point. A folder the project cannot be read in now leaves the point's files there alone:
+  neither missing nor written over. Both sets come back as `unread` (in the plan digest too), and the page names them
+  apart ("SiberSentez could not read these folders, so going back leaves everything in them as it is").
+- The scope preview answers `unread` (at most 12, `moreUnread` the rest) and shows them first, with the fold open: a
+  gap, not a choice. The fingerprint of a job's result answers the problem `unreadable` instead of a fingerprint
+  that would not cover the folder; it is tried again later (`server/jobResults.mjs`: 1 min, each wait twice the one
+  before, up to 30 min, also when a team file changes meanwhile). A folder that stays unreadable for good (a database
+  volume owned by another user) keeps the result's freshness unknown, said with that reason, and is looked at again
+  every 30 minutes while the project is open. A job's changes count files under a gap as `unknown`, never as the
+  job's additions or deletions.
+- Points taken before this change, while a folder could not be read, name no gap; going back to one still removes
+  files only after the before-restore point holds them.
+- Tests: `test/restore-unread.test.mjs` (the access error put into one folder or entry only: the scan, sync and async
+  points, a deeper folder, a folder unreadable now, reuse, the manifest check, the scope preview, the fingerprint, a
+  job's changes, the page).
+
 ## A moved project linked to its new folder
 
 A project whose folder is gone offers, in its drawer, the listed folders with its name ("Moved? Link it to its new

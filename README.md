@@ -49,7 +49,7 @@ to undo a mistake. SiberSentez is the friendly room around them.
 | Getting started | Install Git, Node.js and the tool by hand | A step-by-step wizard; you press Enter on each command |
 | Giving a job | Write a good prompt in a terminal | Say it in your own words; the team, the plan and the check are set up for you |
 | Before files change | Depends on the tool's settings | With a tool that has a plan mode, the AI writes a plan first and waits for your approval |
-| Checking the work | You read the code | A separate reviewer checks it; you open the result in one click |
+| Checking the work | You read the code | The job asks a separate reviewer to check it; the result card says what the app itself saw, and you try it before you accept |
 | A mistake | `git` if you know it | Every job keeps a copy first: go back in one click, and undo that too |
 | Seeing what happens | Scrolling terminal output | A building where you watch who works, who waits for you and what changed |
 
@@ -60,12 +60,12 @@ It runs only on your computer, brings no AI of its own and sends your work nowhe
 1. **Create a project.** Give it a name and say what you want to make: "a recipe site with a search box".
 2. **Press Start.** Your AI tool opens in its own terminal inside the window, with your job as its first message.
 3. **Approve the plan.** With a tool that has a plan mode (Claude Code, Gemini CLI, GitHub Copilot CLI, Cursor CLI and Qwen Code), nothing is touched before you say yes; ask for changes if you like.
-4. **Open the result.** A separate reviewer has checked it. Keep it, ask for a change, or go back to before the job.
+4. **Open the result.** The job asks a separate reviewer to check it; the result card says what SiberSentez saw itself (whether a reviewer ran, the commands and how they ended, whether files changed since). Try it, then keep it, ask for a change, or go back to before the job.
 
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/plan.webp" alt="The lead's plan waits for your approval before any file is touched"><br><b>A plan first.</b> The lead writes a plan and raises a hand; with a tool that has a plan mode, nothing is touched before you approve it.</td>
-    <td width="50%"><img src="docs/screenshots/result.webp" alt="The result is ready: open or run it, see what changed, or undo"><br><b>The result, checked.</b> A separate reviewer checks the work; then open or run it, see what changed, or undo it.</td>
+    <td width="50%"><img src="docs/screenshots/result.webp" alt="The result is ready: open or run it, see what changed, or undo"><br><b>The result and what was seen.</b> The job asks for a separate review and the card says what the app saw; open or run it, see what changed, or undo it.</td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/light.webp" alt="The light theme: the Building with the team at work"><br><b>Dark or light.</b> Pick a theme or follow the system; the building stays an evening window.</td>
@@ -82,7 +82,8 @@ It runs only on your computer, brings no AI of its own and sends your work nowhe
   your job as its first message. Under the box there are examples to click ("Fix a problem", "What is the next step?",
   "Make it look better").
 - **Do a job with a small team.** The AI first makes a plan (Claude Code starts in plan mode) and you approve it in the
-  terminal; it builds, has it checked by a separate reviewer and asks you to approve the result. A bar shows
+  terminal; it builds, asks a separate reviewer to check it and asks you to approve the result (the result card says
+  whether the app saw a reviewer run: a plan is what the AI intends, not a guarantee). A bar shows
   Plan → Build → Check → Finish. When a job is done, **What next?** suggests the next step, and **Earlier jobs** keeps
   the finished ones.
 - **Undo for every job.** Before an AI tool starts, SiberSentez keeps a copy of the project, named after your job
@@ -99,7 +100,7 @@ It runs only on your computer, brings no AI of its own and sends your work nowhe
 ## Good to know
 
 - It runs only on this computer (`127.0.0.1`). It goes to the internet in **two cases only**, both your choice: when you bring skills from GitHub (only with actions **On** and only when you press **Fetch** or **Check for update**: `github.com`, `codeload.github.com` and `api.github.com`), and, if you turn on **Tell me when a new version is out** in Settings (off by default), once a day to read the list of SiberSentez's releases on `api.github.com`. Nothing is sent and nothing is downloaded by that look. Otherwise it sends nothing anywhere (see [Privacy and security](#privacy-and-security)).
-- It is **read-only by default**: while actions are Off (the default) it reads logs, projects and settings and changes none of them. The only files it writes then are its own settings and logs and, in the hub folder, the skeleton on first start, its project memory (`registry\discovered.json`), its usage ledger (`usage\ledger.json`), the last new-version answer (`update-check.json`, only when that look is turned on) and, when you change it (header indicator, window menu or tray menu), the actions mode in `settings.json`; it also deletes its own GitHub downloads in `incoming\` once they are seven days old. With actions **On**, the skill flow also copies into the hub library, keeps `registry\installs.json` and a `trials\` folder, and installs into or removes from the project folders you choose (see [Skills](#skills)); a GitHub import downloads into `incoming\` and records where each item came from in `registry\sources.json`; **Start with AI** writes a small start file into `launch\`, a restore point of the project into `restore\` in the hub and, when you start with your idea or a job, `.sibersentez\` into the project. In **Preview** it only shows what it would do.
+- It is **read-only by default**: while actions are Off (the default) it reads logs, projects and settings and changes none of them. The only files it writes then are its own settings and logs and, in the hub folder, the skeleton on first start, its project memory (`registry\discovered.json`), its usage ledger (`usage\ledger.json`), the last new-version answer (`update-check.json`, only when that look is turned on) and, when you change it (header indicator, window menu or tray menu), the actions mode in `settings.json`; it also deletes its own GitHub downloads in `incoming\` once they are seven days old. With actions **On**, the skill flow also copies into the hub library, keeps `registry\installs.json` and a `trials\` folder, and installs into or removes from the project folders you choose (see [Skills](#skills)); a GitHub import downloads into `incoming\` and records where each item came from in `registry\sources.json`; **Start with AI** writes a small start file into `launch\`, a restore point of the project into `restore\` in the hub and, when you start with your idea or a job, `.sibersentez\` into the project; your marks under a result's **Try it yourself** go into the app's record of that job in the hub (`restore\`). In **Preview** it only shows what it would do.
 - It is **free and open source**: the app is under the GNU GPL version 3 or later, its kit of skills and agents under the MIT License (see [License](#license)).
 - It comes with **its own small kit of skills and agents** (60 skills, 16 agents, written for SiberSentez; see [Skills](#skills)) and is **not tied to any AI service**. Nothing is active until you install it into a project; the tools you already set up in your own projects are found and shown too.
 
@@ -190,7 +191,7 @@ The **Building** is the main screen (menu: **Building**, **Projects**, and under
 - **Give the job.** Write it in the box at the top (at most 300 characters; the project it goes to is chosen beside it) and press **Start**; the command palette (`Ctrl+K`) has **Give a job** too. Under the box there are examples that only fill it ("Fix a problem", "What is the next step?", "Make it look better"; first, while the project has an idea but no job yet, "Start with my idea"). With actions Off, **Start** asks once to turn them on (see [Actions](#actions)). With no AI tool installed it says so and opens the AI tools panel.
 - **What Start does.** In one go it takes a restore point (see below), sets up the team and the helpers the server chose for your words, and starts the tool in its plan mode when it has one (see the table in [Start with AI](#start-with-ai); another tool starts as usual) in SiberSentez's own terminal, with your job as its first message.
 - **Approve the plan.** The Building shows the plan; **Approve** takes you to the AI's own plan prompt in the terminal. SiberSentez never answers the AI's question for you.
-- **Follow the job.** A bar shows Plan → Build → Check → Finish with one plain sentence on where the job stands ("working on T2, 1 of 3 tasks done"). A separate reviewer checks the work before you accept it. If you close the terminal tab, the box says where the job stopped and offers **Go on where it stopped**.
+- **Follow the job.** A bar shows Plan → Build → Check → Finish with one plain sentence on where the job stands ("working on T2, 1 of 3 tasks done"). The job asks a separate reviewer to check the work; whether one was seen running is on the result card (Claude Code's log only so far), and the accept list asks you to try what you asked for yourself. If you close the terminal tab, the box says where the job stopped and offers **Go on where it stopped**.
 - **Open or run the result.** The result card has **Open / run it**, **What changed** and **Undo**. **How to run it** says in numbered steps how to start what was built (copy buttons; in the desktop app **Type in terminal** writes the command for you, you press Enter). For a plain web page there is **Open in the browser**; when a dev server prints a local address in the terminal (for example `localhost:5173`), **Open in the browser** also appears at the terminal's bottom right. SiberSentez runs none of these commands itself.
 - **Accept it and go on.** A finished job shows **What next?** ("Change something"; for a web project also "Try it like a user" and "Put it online"; each only fills the job box; "Put it online" first looks through the project for keys, .env files, passwords and personal numbers that should not go online and then writes the steps for GitHub Pages: [docs/publish.md](docs/publish.md)), and finished jobs are kept under **Earlier jobs**.
 - **Go back.** Before each start SiberSentez copies the project's files into the hub (`restore\`; at most five points, up to 3,000 files and 50 MB; over that a lean copy without files over 2 MB and logs, up to 6,000 files and 150 MB; git folders, `node_modules` and build output are always left out). The start notice says whether the copy is full, lean (and how many files it left out) or could not be made; the job box says it next to that job, after a reload too (the restore points in the project drawer list every copy). A point is named after the job ("Before “Add a menu page”"). **Undo** shows what would change and goes back; going back takes a new point first, so it can be undone too (details: [docs/restore.md](docs/restore.md)).
@@ -541,6 +542,11 @@ start.cmd            developer launcher (browser)
 - The window slides: even if the program runs for days, sessions, agents and counters older than 14 days are pruned. Token usage is the exception: the usage ledger keeps it (see [Usage and cost](#usage-and-cost)).
 - Usage is counted by whole hours ("24 hours" is the current hour and the 23 before it); dollars only for Anthropic's models, and Cursor's logs carry no token counts. A project whose folder was moved can be linked to its new folder from its drawer, keeping its history; after an undo the hours joined so far stay with that project. A folder linked while its parent folder is opened as a project of its own may show some hours under both after an undo.
 - The installer is not code-signed yet (SmartScreen warning, see Installation).
+
+## Release evidence
+
+What each release was built from, how it was checked, how to check your download (SHA-256 and GitHub's build
+provenance) and what was not tested: [docs/release-evidence.md](docs/release-evidence.md).
 
 ## Contributing and review
 

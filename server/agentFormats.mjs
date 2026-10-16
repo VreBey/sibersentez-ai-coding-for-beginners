@@ -12,14 +12,15 @@
 //   codex    <p>/.codex/agents/<name>.toml   Codex CLI 0.160: name, description, developer_instructions (it says it
 //            "must define developer_instructions"); sandbox_mode "read-only" when the agent can neither change files nor run commands
 // Tools are left out elsewhere (each tool names its own and a wrong name stops the agent from loading); Gemini CLI and
-// Qwen Code get the list in their own names (GEMINI_TOOLS, QWEN_TOOLS), OpenCode a denied edit or bash permission for what the tools leave out,
-// Codex a read-only sandbox for an agent that only reads. The comment
+// Qwen Code get the list in their own names (GEMINI_TOOLS, QWEN_TOOLS), OpenCode a denied edit, bash or web permission for
+// what the tools leave out, Codex a read-only sandbox for an agent that only reads; conversionReport says before an
+// install what carries over, what is left out and what a role may do there beyond its list. The comment
 // lines of the frontmatter (the kit's license notice, which asks to be kept) are kept. Pure.
 
 export const AGENT_FORMATS = Object.freeze(['gemini', 'qwen', 'opencode', 'codex']);
 // Raised whenever convertAgent writes another text for the same source: installed copies are then updated
 // (install.mjs keeps it with the source's hash)
-export const AGENT_FORMAT_VERSION = 6;
+export const AGENT_FORMAT_VERSION = 7;
 // A Claude Code tool by its bare name in lower case: a permission rule such as Bash(git:*) is the Bash tool
 const toolKey = (t) => String(t).replace(/\(.*$/, '').trim().toLowerCase();
 // Claude Code tools by their Gemini CLI names (the *_TOOL_NAME constants of Gemini CLI 0.63.0, whose agent schema takes
@@ -28,10 +29,12 @@ const GEMINI_TOOLS = Object.freeze({
   read: ['read_file', 'read_many_files'],
   grep: ['grep_search'],
   glob: ['glob', 'list_directory'],
+  ls: ['list_directory'],
   edit: ['replace'],
   multiedit: ['replace'],
   write: ['write_file'],
   bash: ['run_shell_command'],
+  powershell: ['run_shell_command'],
   webfetch: ['web_fetch'],
   websearch: ['google_web_search'],
 });
@@ -55,20 +58,57 @@ const QWEN_TOOLS = Object.freeze({
   task: ['agent'],
   skill: ['skill'],
 });
-// The agent's tool limit in that tool's names (GEMINI_TOOLS or QWEN_TOOLS), or null (no tools line, or a tool it has no
-// name for: then no list, so the defaults apply rather than a limit that is wrong)
+// The agent's tool limit in that tool's names (GEMINI_TOOLS or QWEN_TOOLS), or null (no tools line, or no tool it has a
+// name for: then no list and the tool's defaults apply; conversionReport says so). A tool it has no name for (an MCP
+// tool, TodoWrite in Gemini) is left out: the role does without it, never with more than its list (independent review
+// of 0.19.0 §7.4; before, one such tool dropped the whole list and the role got every default tool)
 function toolNamesIn(map, tools) {
   if (!Array.isArray(tools) || !tools.length) return null;
   const out = [];
-  for (const t of tools) {
-    const names = map[toolKey(t)];
-    if (!names) return null;
-    for (const n of names) if (!out.includes(n)) out.push(n);
-  }
-  return out;
+  for (const t of tools) for (const n of map[toolKey(t)] || []) if (!out.includes(n)) out.push(n);
+  return out.length ? out : null;
 }
 // Claude Code tools that change files or run commands (lower case): an agent with none of them is read-only
 const ACTING_TOOLS = new Set(['edit', 'write', 'multiedit', 'notebookedit', 'bash', 'powershell']);
+// What a role may do, by kind (lower-case Claude Code names): change files, run commands, reach the web
+const CAPS = Object.freeze({ edit: ['edit', 'write', 'multiedit', 'notebookedit'], shell: ['bash', 'powershell'], web: ['webfetch', 'websearch'] });
+const capsOf = (tools) => Object.keys(CAPS).filter((c) => tools.some((t) => CAPS[c].includes(toolKey(t))));
+
+// What carries over when an agent is written for that tool, before it is installed (independent review of 0.19.0 §7.4:
+// a conversion is a lossy transfer of what a role may do; a file that loads is no proof it may do the same). Pure.
+//   limits   'none'          the agent has no tools line: every tool there as here, nothing to carry
+//            'kept'          its limits hold there (in that tool's names or permissions)
+//            'defaults'      no tool of its list has a name there: the tool's defaults apply
+//            'instructions'  the tool takes no tool list for a role (Codex outside its read-only sandbox): the limits
+//                            are in the role's instructions only, the session's sandbox applies
+//   wider    what the role may do there that its list does not give it: 'edit', 'shell', 'web'
+//   left     tools of its list with no name there: the role does without them (never with more)
+//   whole    permission rules such as Bash(git:*): the whole tool there, the narrower rule does not carry
+//   readOnly Codex's read-only sandbox (it can run commands that read, never change files: wider holds 'shell')
+export function conversionReport(text, format) {
+  const a = parseAgent(text);
+  if (!a || !AGENT_FORMATS.includes(format)) return null;
+  const tools = Array.isArray(a.tools) ? a.tools : [];
+  const whole = tools.filter((t) => /\(/.test(String(t)));
+  const out = { format, limits: 'kept', wider: /** @type {string[]} */ ([]), left: /** @type {string[]} */ ([]), whole, readOnly: false };
+  if (!tools.length) return { ...out, limits: 'none' };
+  const has = capsOf(tools);
+  const lacking = Object.keys(CAPS).filter((c) => !has.includes(c));
+  if (format === 'gemini' || format === 'qwen') {
+    const map = format === 'gemini' ? GEMINI_TOOLS : QWEN_TOOLS;
+    out.left = tools.filter((t) => !map[toolKey(t)]);
+    if (!toolNamesIn(map, tools)) return { ...out, limits: 'defaults', wider: lacking };
+    return out;
+  }
+  if (format === 'codex') {
+    out.readOnly = !tools.some((t) => ACTING_TOOLS.has(toolKey(t)));
+    // Outside the read-only sandbox a Codex role may change files and run commands whatever its list says; inside it a
+    // role with no shell tool may still run commands that read (never change files)
+    return out.readOnly ? { ...out, wider: ['shell'] } : { ...out, limits: 'instructions', wider: lacking.filter((c) => c !== 'web') };
+  }
+  // OpenCode: what the list leaves out of changing files, commands and the web is denied (convertAgent)
+  return out;
+}
 export const agentFileName = (name, format) => `${name}${format === 'codex' ? '.toml' : '.md'}`;
 
 // { name, description, comments: [lines], body } of a Markdown agent, or null when it has no frontmatter
@@ -152,11 +192,11 @@ export function convertAgent(text, format, name = '') {
   const fields = format === 'opencode' ? [`description: ${q(description)}`, 'mode: subagent'] : [`name: ${q(slug)}`, `description: ${q(description)}`];
   const named = format === 'gemini' ? toolNamesIn(GEMINI_TOOLS, a.tools) : format === 'qwen' ? toolNamesIn(QWEN_TOOLS, a.tools) : null;
   if (named) fields.push(`tools: [${named.map(q).join(', ')}]`);
-  // OpenCode: what the Claude Code tools leave out is denied (OpenCode 1.18.35 reads permission.edit and .bash from the
-  // agent file: opencode agent list shows the rules, 2026-10-09)
+  // OpenCode: what the Claude Code tools leave out is denied (OpenCode 1.18.35 reads permission.edit, .bash, .webfetch and
+  // .websearch from the agent file: opencode agent list shows the rules, 2026-10-09 and 2026-10-16)
   if (format === 'opencode' && Array.isArray(a.tools) && a.tools.length) {
-    const has = (set) => a.tools.some((t) => set.includes(toolKey(t)));
-    const deny = [...(has(['edit', 'write', 'multiedit', 'notebookedit']) ? [] : ['  edit: deny']), ...(has(['bash', 'powershell']) ? [] : ['  bash: deny'])];
+    const has = capsOf(a.tools);
+    const deny = [...(has.includes('edit') ? [] : ['  edit: deny']), ...(has.includes('shell') ? [] : ['  bash: deny']), ...(has.includes('web') ? [] : ['  webfetch: deny', '  websearch: deny'])];
     if (deny.length) fields.push('permission:', ...deny);
   }
   return `---\n${note.join('\n')}\n${fields.join('\n')}\n---\n\n${body}`;

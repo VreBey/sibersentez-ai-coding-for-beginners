@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { treeFingerprint, pointsDir, createPoint, RESTORE_LIMITS } from '../server/restore.mjs';
-import { observeTeam, observeTeamAnswer, listJobResults, writeJobResult, projectJobResult, jobResultRecord, JOB_RESULTS_FILE, JOB_RESULTS_KEEP, OBSERVE_RETRY_MS } from '../server/jobResults.mjs';
+import { observeTeam, observeTeamAnswer, listJobResults, writeJobResult, projectJobResult, jobResultRecord, JOB_RESULTS_FILE, JOB_RESULTS_KEEP, OBSERVE_RETRY_MS, writeTried } from '../server/jobResults.mjs';
 import { reviewFileTime } from '../server/team.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-job-results-'));
@@ -171,7 +171,7 @@ test('a fingerprint that failed or could not read a file: said in the record, an
   const { hub, dir } = setup('retry');
   write(dir, 'a.txt', 'x');
   const thrown = await observeTeam({ hubDir: hub, projectId: 'p', dir, team: team(J), now, fingerprint: async () => Promise.reject(new Error('boom')), reviewTime: () => null });
-  assert.deepEqual(Object.keys(thrown.record.tree), ['problem', 'at']);
+  assert.deepEqual(Object.keys(thrown.record.tree), ['problem', 'at', 'tries']);
   assert.equal(thrown.record.tree.problem, 'unreadable');
   const { hub: hub2, dir: dir2 } = setup('retry2');
   write(dir2, 'a.txt', 'x');
@@ -184,6 +184,85 @@ test('a fingerprint that failed or could not read a file: said in the record, an
   assert.equal(again.status, 'written');
   assert.match(again.record.tree.digest, /^[0-9a-f]{64}$/);
   assert.equal(again.record.verdict.seenAt, first.record.verdict.seenAt, 'the same verdict, its fingerprint completed');
+});
+
+test('a fingerprint that failed whole is tried again, and recovers once the cause is gone (independent review N02)', async () => {
+  const { hub, dir } = setup('retry-whole');
+  write(dir, 'a.txt', 'x');
+  let calls = 0;
+  let broken = true;
+  const fingerprint = (d, o) => (calls++, broken ? Promise.reject(new Error('EIO')) : treeFingerprint(d, o));
+  let t = Date.now() - 3 * 3600000;
+  const at = () => t;
+  const look = (extra = {}) => observeTeam({ hubDir: hub, projectId: 'p', dir, team: team(J), now: at, fingerprint, reviewTime: () => null, ...extra });
+  const first = await look();
+  assert.deepEqual([first.record.tree.problem, first.record.tree.tries], ['unreadable', 1]);
+  t += OBSERVE_RETRY_MS - 1;
+  assert.deepEqual([(await look()).status, calls], ['none', 1], 'not due yet: a new answer does not cut the wait short');
+  t += 1;
+  const second = await look();
+  assert.deepEqual([second.status, second.record.tree.problem, second.record.tree.tries, calls], ['written', 'unreadable', 2, 2], 'still failing: tried, counted');
+  t += 2 * OBSERVE_RETRY_MS - 1;
+  assert.equal((await look()).status, 'none', 'the second wait is twice the first');
+  t += 1;
+  broken = false;
+  const healed = await look();
+  assert.equal(healed.status, 'written');
+  assert.match(healed.record.tree.digest, /^[0-9a-f]{64}$/);
+  assert.equal(healed.record.verdict.seenAt, first.record.verdict.seenAt, 'the verdict keeps the time it was first seen');
+  t += 24 * 3600000;
+  assert.equal((await look()).status, 'none', 'complete: no more looks');
+  assert.equal(calls, 3);
+  // The real fingerprint: a project too deep, then made plain again
+  const deep = setup('retry-deep');
+  write(deep.dir, `${Array.from({ length: 17 }, (_, i) => `d${i}`).join('/')}/x.txt`, 'deep');
+  const tooDeep = await observeTeam({ hubDir: deep.hub, projectId: 'p', dir: deep.dir, team: team(J), now: at, reviewTime: () => null });
+  assert.equal(tooDeep.record.tree.problem, 'too-deep');
+  fs.rmSync(path.join(deep.dir, 'd0'), { recursive: true });
+  write(deep.dir, 'index.html', 'plain');
+  t += OBSERVE_RETRY_MS;
+  const plain = await observeTeam({ hubDir: deep.hub, projectId: 'p', dir: deep.dir, team: team(J), now: at, reviewTime: () => null });
+  assert.deepEqual([plain.record.tree.problem, plain.record.tree.files], [undefined, 1]);
+  assert.equal(jobResultRecord({ jobId: J, verdict: { value: 'APPROVE', seenAt: 1 }, tree: { problem: 'too-deep', at: 1 } }).tree.tries, 1, 'a record written before the count: one try');
+});
+
+test('after a /team answer: a fingerprint that failed whole keeps being looked at, each wait longer, up to a cap', async () => {
+  const { catalog } = setup('answer-backoff');
+  const calls = [];
+  const memo = new Map();
+  let t = 1000;
+  let tries = 0;
+  const observe = async () => (calls.push(t), { status: 'written', record: { tree: { problem: 'too-deep', at: t, tries: ++tries } } });
+  const run = () => observeTeamAnswer({ catalog, projectId: 'p', team: team(J, { updatedAt: 5 }), now: () => t, schedule: (fn) => fn(), memo, observe });
+  const flush = () => new Promise((r) => setImmediate(r));
+  run();
+  await flush();
+  assert.equal(calls.length, 1);
+  const waits = [];
+  for (let i = 0; i < 8; i++) {
+    const before = calls.length;
+    let waited = 0;
+    while (calls.length === before) {
+      assert.ok(waited < 24 * 3600000, `look ${i + 2} never came: the failed record is not tried again`);
+      t += 30000;
+      waited += 30000;
+      run();
+      await flush();
+    }
+    waits.push(waited);
+  }
+  assert.deepEqual(waits.slice(0, 4), [60000, 120000, 240000, 480000], 'each wait twice the one before');
+  assert.ok(waits.every((w) => w <= 30 * 60000), 'never longer than half an hour');
+  // Recovered: done, no more looks
+  const healed = async () => (calls.push(t), { status: 'written', record: { tree: { quick: 'q', digest: 'd' } } });
+  t += 30 * 60000;
+  observeTeamAnswer({ catalog, projectId: 'p', team: team(J, { updatedAt: 5 }), now: () => t, schedule: (fn) => fn(), memo, observe: healed });
+  await flush();
+  const n = calls.length;
+  t += 24 * 3600000;
+  observeTeamAnswer({ catalog, projectId: 'p', team: team(J, { updatedAt: 5 }), now: () => t, schedule: (fn) => fn(), memo, observe: healed });
+  await flush();
+  assert.equal(calls.length, n, 'a complete record: nothing to try again');
 });
 
 test('one look per project at a time: a second one meanwhile is busy, and the next look catches up', async () => {
@@ -258,9 +337,9 @@ test('the file: newest first, one per job, at most a few; only known fields and 
   const list = listJobResults({ hubDir: hub, projectId: 'p' });
   assert.equal(list.length, JOB_RESULTS_KEEP);
   assert.equal(list[0].jobId, 'J' + (JOB_RESULTS_KEEP + 2).toString(16).padStart(32, '0'));
-  assert.deepEqual(list[0].tree, { problem: 'too-large', at: 1000 + JOB_RESULTS_KEEP + 2 });
+  assert.deepEqual(list[0].tree, { problem: 'too-large', at: 1000 + JOB_RESULTS_KEEP + 2, tries: 1 }, 'a record written before the count: one try');
   assert.equal(jobResultRecord({ jobId: 'x' }), null);
-  assert.deepEqual(jobResultRecord({ jobId: J, verdict: { value: 'MAYBE', seenAt: 1 }, tree: { quick: 'x' }, extra: '<b>' }), { jobId: J, verdict: null, tree: null, reviewers: null, acceptedSeenAt: null });
+  assert.deepEqual(jobResultRecord({ jobId: J, verdict: { value: 'MAYBE', seenAt: 1 }, tree: { quick: 'x' }, extra: '<b>' }), { jobId: J, verdict: null, tree: null, reviewers: null, acceptedSeenAt: null, tried: null });
   assert.equal(writeJobResult({ hubDir: hub, projectId: 'p', record: { jobId: 'bad' } }), false);
   const file = path.join(pointsDir(hub, 'p'), JOB_RESULTS_FILE);
   const keep = fs.readFileSync(file, 'utf8');
@@ -371,4 +450,53 @@ test('pruning the restore points keeps the record and removes a record left half
   assert.equal(createPoint({ hubDir: hub, projectId: 'p', dir, reuse: false }).ok, true);
   assert.equal(fs.existsSync(path.join(base, `.${JOB_RESULTS_FILE}.0123abcd.tmp`)), false);
   assert.equal(listJobResults({ hubDir: hub, projectId: 'p' }).length, 1);
+});
+
+test('the person\'s marks (independent review of 0.19.0 §8, §11): kept with the job and the files\' quick fingerprint; a look of the verdict keeps them; whether files were written since', async () => {
+  const { hub, dir, catalog } = setup('tried');
+  write(dir, 'index.html', 'menu');
+  const marks = { '0a1b2c3d': 'ok', '0a1b2c3e': 'no' };
+  const items = ['0a1b2c3d', '0a1b2c3e'];
+  // No record yet: one is made, without a verdict, only for the job of the project's plan
+  assert.deepEqual(await writeTried({ hubDir: hub, projectId: 'p', dir, jobId: J, marks, items, planJob: () => K }), { ok: false, problem: 'not-this-job' });
+  assert.deepEqual(await writeTried({ hubDir: hub, projectId: 'p', dir, jobId: J, marks, items }), { ok: false, problem: 'not-this-job' }, 'no plan at all');
+  assert.deepEqual(listJobResults({ hubDir: hub, projectId: 'p' }), []);
+  let r = await writeTried({ hubDir: hub, projectId: 'p', dir, jobId: J, marks, items, now: () => 5000, planJob: () => J });
+  assert.equal(r.ok, true);
+  assert.deepEqual({ ...r.tried, quick: typeof r.tried.quick }, { marks, items, at: 5000, quick: 'string' });
+  assert.equal(listJobResults({ hubDir: hub, projectId: 'p' })[0].verdict, null);
+  for (const bad of [{ marks: { x: 'ok' } }, { marks: { '0a1b2c3d': 'yes' } }, { items: 'x' }, { jobId: 'J1' }, { marks: Object.fromEntries(Array.from({ length: 41 }, (_, i) => [i.toString(16).padStart(8, '0'), 'ok'])) }]) {
+    assert.deepEqual(await writeTried({ hubDir: hub, projectId: 'p', dir, jobId: J, marks, items, ...bad }), { ok: false, problem: 'bad-marks' }, JSON.stringify(bad).slice(0, 40));
+  }
+  // The verdict's look awaits its fingerprint while the person marks again: both are kept
+  const reviewAt = await moment();
+  const slow = async (d, o) => {
+    await writeTried({ hubDir: hub, projectId: 'p', dir, jobId: J, marks: { '0a1b2c3d': 'no' }, items, now: () => 6000 });
+    return treeFingerprint(d, o);
+  };
+  const o = await observeTeam({ hubDir: hub, projectId: 'p', dir, team: team(J), now: () => Date.now(), reviewTime: () => reviewAt, fingerprint: slow });
+  assert.equal(o.status, 'written');
+  let rec = listJobResults({ hubDir: hub, projectId: 'p' })[0];
+  assert.equal(rec.verdict.value, 'APPROVE');
+  assert.deepEqual([rec.tried.marks, rec.tried.at], [{ '0a1b2c3d': 'no' }, 6000], 'the newer marks, not those the look began with');
+  // Marking again keeps the verdict's part
+  await writeTried({ hubDir: hub, projectId: 'p', dir, jobId: J, marks, items, now: () => 7000 });
+  rec = listJobResults({ hubDir: hub, projectId: 'p' })[0];
+  assert.equal(rec.verdict.value, 'APPROVE');
+  assert.ok(rec.tree.quick);
+  // Whether files were written after the last mark
+  const ask = () => projectJobResult({ catalog, projectId: 'p', jobId: J });
+  assert.equal((await ask()).body.triedFresh, 'same');
+  await settle();
+  write(dir, 'index.html', 'menu with prices', null);
+  assert.equal((await ask()).body.triedFresh, 'changed');
+  // No marks: nothing said; an empty set clears them
+  await writeTried({ hubDir: hub, projectId: 'p', dir, jobId: J, marks: {}, items, now: () => 8000 });
+  r = await ask();
+  assert.equal(r.body.record.tried, null);
+  assert.equal('triedFresh' in r.body, false);
+  // A fingerprint that could not be taken: kept without one, said as unknown
+  await writeTried({ hubDir: hub, projectId: 'p', dir, jobId: K, marks, items, planJob: () => K, fingerprint: async () => ({ ok: false, problem: 'too-deep' }) });
+  const k = await projectJobResult({ catalog, projectId: 'p', jobId: K });
+  assert.deepEqual([k.body.record.tried.quick, k.body.triedFresh], [null, 'unknown']);
 });

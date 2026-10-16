@@ -89,7 +89,7 @@ test('language from Settings: settings.json keeps every other key; auto removes 
   assert.ok(!settingsHtml({ lang: 'tr', canLang: false }).includes('data-set-lang'));
 });
 
-test('Today: the three most urgent or recent projects (never an other folder), each opening its detail; empty says how to start', () => {
+test('Today: the three most urgent or recent projects (never an other folder), each opening its detail; nothing before a project of ones own', () => {
   const now = Date.parse('2026-09-29T12:00:00Z');
   const p = (id, lastActivity, extra = {}) => ({ id, name: id.toUpperCase(), kind: 'registered', lastActivity, ...extra });
   const byProject = new Map([['b', [{ projectId: 'b', live: { status: 'busy', updatedAt: now - 1000, since: now - 5000 } }]]]);
@@ -99,11 +99,11 @@ test('Today: the three most urgent or recent projects (never an other folder), e
     assert.deepEqual([...h.matchAll(/data-today-open="([a-z]+)"/g)].map((m) => m[1]), ['b', 'a', 'c'], lang);
     assert.equal((h.match(/class="tr-card /g) || []).length, RECENT_COUNT);
     assert.ok(h.includes(S.todayAllProjects) && h.includes('data-today-all'));
-    const empty = todayRecentHtml([], new Map(), now);
-    assert.ok(empty.includes(S.todayRecentEmpty.replace(/'/g, '&#39;')) && !empty.includes('tr-card'));
+    // No project of the person's own: nothing to pick up, the start card above is the way in
+    assert.equal(todayRecentHtml([], new Map(), now), '');
     // A project there but no work yet: the job box, never "no project yet"
     const idle = todayRecentHtml([p('new', 0)], new Map(), now);
-    assert.ok(idle.includes(S.todayRecentNoWork.replace(/'/g, '&#39;')) && !idle.includes(S.todayRecentEmpty.replace(/'/g, '&#39;')), lang);
+    assert.ok(idle.includes(S.todayRecentNoWork.replace(/'/g, '&#39;')), lang);
   });
   assert.ok(!todayRecentHtml([p('<x>', now)], new Map(), now).includes('<x>'), 'names are escaped');
 });

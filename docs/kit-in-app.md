@@ -116,11 +116,32 @@ the job box as "Earlier jobs (N)". Read only.
 
 When the job is finished, the result card adds "Try it yourself" (`public/js/acceptGuide.js`): the plan's "Done when"
 points (`PLAN.md`; a Turkish heading is read too), or one general point ("Open the result and try what you asked
-for") when the plan lists none. The person marks each one "Works" or "Not as asked" after trying it; the marks are kept
-in this browser only (per project and job), never sent and never written into the project, and the app does not check
-them. "Ask for a change about these" puts the points marked "Not as asked" into a change request (cut to the AI tab's
+for") when the plan lists none. The person marks each one "Works" or "Not as asked" after trying it. Since 2026-10-16
+(independent review of 0.19.0 §8, §11) the app keeps the marks in its own record of the job in the hub
+(`restore/<key>/job-results.json`, field `tried`: the marks, the points the person saw, when they last marked and a
+quick fingerprint of the project's files then), written by the `accept-marks` action with actions On; with actions
+not On they are kept in this browser only, and the card says which. While the hub's record is still being read the
+buttons wait, so a click never overwrites the marks the hub keeps; the job of the project's plan is the only one that
+gets a new record. Marks an earlier version kept in the
+browser are moved into the hub once. The card says when files were written after the last mark ("try again what
+matters to you") and when the plan's list changed after it. The marks are never written into the project, never
+reach the AI by themselves, and the app does not check them: they are the person's record, not a test and not a
+release gate. "Ask for a change about these" puts the points marked "Not as asked" into a change request (cut to the AI tab's
 draft limit) in the AI's terminal tab, or in the job box when no tab takes it; the person reads it and sends it.
 Tests: `test/accept-guide.test.mjs`.
+
+## The result card's first view (2026-10-16, independent review of 0.19.0 §8)
+
+The card had grown dense (the review's word, the reviewer agents, the commands, the freshness, the acceptance, the
+files, how to run it and going back all at once). Its first view now holds the decision: what was asked, the review's
+word and whether the files are still those it was about, anything that stands in the way (a review asking for changes,
+files written after it with "Ask for a new review", a reviewer agent whose own answer said otherwise, commands that
+ended with an error and were not run again), the counts of what changed and the files that could not be read, then
+"Try it yourself" and the ways (open, change, accept, explain, go back) and the way to the job's AI session. The rest
+is under "Details" (a `<details>` that keeps its state per project across redraws): the files' names, every check
+(with "SiberSentez itself ran nothing"), the cost, the tips, how to open it and where going back goes; once the job is
+accepted, the guide too. A blocker or something not known is never only in the fold
+(`public/js/jobResult.js jobResultHtml`, `test/job-result.test.mjs`).
 
 ## The app's own record of a result (2026-10-09, independent review §7.1)
 

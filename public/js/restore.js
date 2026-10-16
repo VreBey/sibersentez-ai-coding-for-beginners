@@ -167,8 +167,12 @@ export function scopeHtml(scope, { open = false } = {}) {
   const skipped = (Array.isArray(scope.skipped) ? scope.skipped : []).filter((d) => d && typeof d.name === 'string' && SCOPE_WHYS.includes(d.why));
   const big = lean ? (Array.isArray(scope.big) ? scope.big : []).filter((b) => b && typeof b.rel === 'string') : [];
   const moreDirs = Number.isInteger(scope.moreDirs) && scope.moreDirs > 0 ? `<li class="muted">${esc(t('rstScopeMoreDirs', { count: num(scope.moreDirs) }))}</li>` : '';
-  if (!skipped.length && !big.length) return `<p class="small muted job-scope">${esc(line)}</p>`;
+  // Folders the scan could not read (independent review N01): a gap, not a choice, so said first with the fold open
+  const unread = (Array.isArray(scope.unread) ? scope.unread : []).filter((n) => typeof n === 'string' && n);
+  const moreUnread = unread.length && Number.isInteger(scope.moreUnread) && scope.moreUnread > 0 ? scope.moreUnread : 0;
+  if (!skipped.length && !big.length && !unread.length) return `<p class="small muted job-scope">${esc(line)}</p>`;
   const code = (n) => `<code translate="no" title="${esc(n)}">${esc(n)}</code>`;
+  const unreadRow = unread.length ? `<li class="job-scope-unread warn">${esc(t('rstScopeUnread', { count: num(unread.length + moreUnread) }))} ${unread.map(code).join(', ')}${moreUnread ? ` <span class="muted">${esc(t('rstUnreadMore', { count: num(moreUnread) }))}</span>` : ''}</li>` : '';
   const rows = SCOPE_WHYS.map((why) => {
     const names = skipped.filter((d) => d.why === why).map((d) => d.name);
     return names.length ? `<li>${names.map(code).join(', ')} <span class="muted">${esc(t(`rstScopeWhy_${why}`))}</span></li>` : '';
@@ -176,7 +180,7 @@ export function scopeHtml(scope, { open = false } = {}) {
   const bigRow = big.length
     ? `<li>${esc(t('rstScopeBig', { count: num(left), size: sizeText(scope.leftBytes || 0) }))}<ul class="job-scope-big">${big.map((b) => `<li>${code(b.rel)} <span class="muted">${esc(sizeText(b.size))}</span></li>`).join('')}${left > big.length ? `<li class="muted">${esc(t('rstMore', { count: left - big.length }))}</li>` : ''}</ul></li>`
     : '';
-  return `<details class="job-scope"${open ? ' open' : ''}><summary class="small muted">${esc(line)} <span class="job-scope-more">${esc(t('rstScopeMore'))}</span></summary><ul class="small job-scope-list">${rows}${moreDirs}${bigRow}</ul><p class="small muted">${esc(t('rstScopeNever'))}</p></details>`;
+  return `<details class="job-scope"${open || unread.length ? ' open' : ''}><summary class="small muted">${esc(line)} <span class="job-scope-more">${esc(t('rstScopeMore'))}</span></summary><ul class="small job-scope-list">${unreadRow}${rows}${moreDirs}${bigRow}</ul><p class="small muted">${esc(t('rstScopeNever'))}</p></details>`;
 }
 
 const REASONS = new Set(['ai-start', 'before-restore', 'manual']);
@@ -203,10 +207,21 @@ const KINDS = [['changed', 'rstChanged'], ['missing', 'rstMissing'], ['added', '
 // What going back would do, in plain words: the project's own files in three short lists, the team's notes (plan,
 // tasks, review) folded under one line (the server counts them apart, plan.notes; seen when using the app, 2026-10-08:
 // style.css was one line among eleven notes). An older server without the counts: every file as before.
+// Folders going back leaves alone because they could not be read (independent review N01): said apart, whatever else
+// the plan does, so nobody takes going back for the whole project
+function unreadHtml(plan) {
+  const names = (Array.isArray(plan?.unread) ? plan.unread : []).filter((n) => typeof n === 'string' && n);
+  if (!names.length) return '';
+  const count = Math.max(names.length, Number(plan.counts?.unread) || 0);
+  const shown = names.slice(0, NAMES_SHOWN).map((n) => `<li><code translate="no" title="${esc(n)}">${esc(n)}</code></li>`).join('');
+  const rest = count - Math.min(names.length, NAMES_SHOWN);
+  return `<div class="rst-unread" role="note"><p class="small warn">${esc(t('rstUnread', { count: num(count) }))}</p><ul class="rst-names">${shown}${rest > 0 ? `<li class="muted">${esc(t('rstUnreadMore', { count: num(rest) }))}</li>` : ''}</ul></div>`;
+}
+
 export function planHtml(plan) {
   const c = plan?.counts || {};
   const total = (c.changed || 0) + (c.missing || 0) + (c.added || 0);
-  if (!total) return `<p class="small">${esc(t('rstNothing'))}</p>`;
+  if (!total) return `<p class="small">${esc(t('rstNothing'))}</p>${unreadHtml(plan)}`;
   const split = !!plan.notes && typeof plan.notes === 'object';
   const noteOf = (key) => (split ? Math.max(0, Number(plan.notes[key]) || 0) : 0);
   const own = (key) => Math.max(0, (c[key] || 0) - noteOf(key));
@@ -216,7 +231,7 @@ export function planHtml(plan) {
   const noteNames = split ? KINDS.flatMap(([key]) => (plan[key] || []).filter(isNote)) : [];
   const notes = noteCount ? `<details class="rst-notes"><summary class="small">${esc(t('rstNotes', { count: noteCount }))}</summary>${nameList('', noteNames, noteCount)}</details>` : '';
   const ownTotal = KINDS.reduce((a, [key]) => a + own(key), 0);
-  return `<div class="rst-plan">${ownTotal ? lists : `<p class="small">${esc(t('rstOnlyNotes'))}</p>`}${notes}</div>`;
+  return `<div class="rst-plan">${ownTotal ? lists : `<p class="small">${esc(t('rstOnlyNotes'))}</p>`}${notes}${unreadHtml(plan)}</div>`;
 }
 
 // The section (pure). p: the project; data: the /restore answer or null while it is asked; opts: { mode ('off' |

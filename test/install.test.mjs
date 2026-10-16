@@ -717,7 +717,7 @@ test('trial cleanup: only real trial folders with the marker and older than 7 da
 
 // ---------------- action surface ----------------
 test('actions: the skill actions (skills-apply from docs/auto-skills.md, then the restore points of docs/restore.md) are listed with the launch actions; off -> 404 for every one, no file written', async () => {
-  assert.deepEqual([...SKILL_ACTIONS], ['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'project-relink', 'project-unlink']);
+  assert.deepEqual([...SKILL_ACTIONS], ['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'project-relink', 'project-unlink', 'accept-marks']);
   // start-ai (docs/ai-start.md) follows the skill actions; the GitHub import's actions come last (docs/github-import.md)
   assert.deepEqual([...ACTION_NAMES], [...LAUNCH_ACTIONS, ...SKILL_ACTIONS, 'start-ai', 'github-fetch', 'github-import', 'github-discard', 'github-check-update']);
   const w = world();
@@ -1421,7 +1421,7 @@ test('restore points: preview and a dry apply write nothing; live goes back afte
     const pre = await dry.post({ action: 'restore-preview', projectId: 'cc', pointId: point.id });
     assert.equal(pre.status, 200, JSON.stringify(pre.json));
     assert.deepEqual([pre.json.changed, pre.json.missing, pre.json.added], [['index.html'], [], ['extra.js']]);
-    assert.deepEqual(pre.json.counts, { changed: 1, missing: 0, added: 1 });
+    assert.deepEqual(pre.json.counts, { changed: 1, missing: 0, added: 1, unread: 0 });
     assert.deepEqual(pre.json.result, { executed: false });
     dry.tick();
     const d = await dry.post({ action: 'restore-apply', projectId: 'cc', pointId: point.id });

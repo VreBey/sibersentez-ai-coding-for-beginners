@@ -571,6 +571,9 @@ test('the page and the server agree on every action and on the fields each one m
       open: 'index.html',
       folder: DIR_B,
       from: 'beta',
+      jobId: 'J0123456789abcdef0123456789abcdef',
+      marks: { '0a1b2c3d': 'ok' },
+      itemKeys: ['0a1b2c3d'],
     })[k];
   const universe = [...new Set(Object.values(CLIENT_ACTION_FIELDS).flat())];
   const refused = (r) => r.status === 400 && /^(unexpected-field|beklenmeyen alan)/.test(String(r.json?.error));
@@ -1180,6 +1183,56 @@ test('explorer open: only the literal index.html, a plain file at the project ro
     assert.equal(env.spawnCalls.length, 0, 'dry mode: nothing started');
   } finally {
     fs.rmSync(page, { recursive: true, force: true });
+    await env.close();
+  }
+});
+
+test('accept-marks: the person\'s marks into the hub\'s record of the job in live mode, nothing in dry mode; only marks of items they saw', async () => {
+  const { listJobResults } = await import('../server/jobResults.mjs');
+  const J = 'J' + 'abcdef0123456789'.repeat(2);
+  const body = { action: 'accept-marks', projectId: 'alpha', jobId: J, marks: { '0a1b2c3d': 'ok', '0a1b2c3e': 'no' }, itemKeys: ['0a1b2c3d', '0a1b2c3e', '0a1b2c3f'] };
+  const dry = await startServer({ mode: 'dry' });
+  try {
+    const r = await dry.post(body);
+    assert.deepEqual([r.status, r.json.result.executed, r.json.marked], [200, false, 2]);
+    assert.deepEqual(listJobResults({ hubDir: HUB, projectId: 'alpha' }).filter((x) => x.jobId === J), [], 'dry mode: nothing written');
+  } finally {
+    await dry.close();
+  }
+  const env = await startServer({ mode: 'live' });
+  const plan = path.join(DIR_A, '.sibersentez');
+  try {
+    // Only the job of the project's plan gets a record of its own
+    const none = await env.post(body);
+    assert.deepEqual([none.status, none.json.error], [409, 'not-this-job']);
+    fs.mkdirSync(plan, { recursive: true });
+    fs.writeFileSync(path.join(plan, 'PLAN.md'), `# Plan: Menu\n\nJob-ID: ${J}\n`);
+    env.tick(5000);
+    const r = await env.post(body);
+    assert.deepEqual([r.status, r.json.result.executed], [200, true]);
+    const rec = listJobResults({ hubDir: HUB, projectId: 'alpha' }).find((x) => x.jobId === J);
+    assert.deepEqual(rec.tried.marks, body.marks);
+    assert.deepEqual(rec.tried.items, body.itemKeys);
+    assert.match(rec.tried.quick, /^[0-9a-f]{64}$/, 'the files\' quick fingerprint with the mark');
+    assert.equal(rec.verdict, null, 'a record without a verdict yet');
+    assert.deepEqual(r.json.tried, rec.tried);
+    for (const [bad, error] of [
+      [{ marks: { '0a1b2c3d': 'maybe' } }, 'bad-marks'],
+      [{ marks: { '<b>': 'ok' } }, 'bad-marks'],
+      [{ marks: { 'ffffffff': 'ok' } }, 'bad-marks'],
+      [{ itemKeys: 'x' }, 'bad-marks'],
+      [{ jobId: 'J1' }, 'bad-job'],
+    ]) {
+      const x = await env.post({ ...body, ...bad });
+      assert.deepEqual([x.status, x.json.error], [400, error], JSON.stringify(bad));
+    }
+    // An empty set clears them (after the repeat guard's moment)
+    env.tick(5000);
+    const c = await env.post({ ...body, marks: {} });
+    assert.equal(c.status, 200);
+    assert.equal(listJobResults({ hubDir: HUB, projectId: 'alpha' }).find((x) => x.jobId === J).tried, null);
+  } finally {
+    fs.rmSync(plan, { recursive: true, force: true });
     await env.close();
   }
 });

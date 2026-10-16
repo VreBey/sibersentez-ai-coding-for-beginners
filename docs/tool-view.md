@@ -100,14 +100,29 @@ shape; `server/agentFormats.mjs` converts a Claude Code agent for each, checked 
 |---|---|---|
 | Gemini CLI 0.63 | `.gemini/agents/<name>.md` | name (a slug), description, `tools` in Gemini names; its schema is strict, so license and metadata are left out |
 | Qwen Code 0.25 | `.qwen/agents/<name>.md` | name, description, `tools` in Qwen names (`read_file`, `run_shell_command`, ...) |
-| OpenCode 1.18 | `.opencode/agents/<name>.md` | description, `mode: subagent`, `permission: edit/bash: deny` for what the tools leave out (its `tools` is a map, not Claude's list) |
+| OpenCode 1.18 | `.opencode/agents/<name>.md` | description, `mode: subagent`, `permission: edit/bash/webfetch/websearch: deny` for what the tools leave out (its `tools` is a map, not Claude's list) |
 | Codex 0.160 | `.codex/agents/<name>.toml` | name, description, `developer_instructions` (Codex says it must define it), `sandbox_mode = "read-only"` for an agent that neither changes files nor runs commands |
 
 A Claude Code agent's tool limit is kept in each tool's own terms (2026-10-09, independent review §7.2), checked in
 the installed tool: Gemini CLI's own loader, `opencode agent list`, Codex's subagent page, Qwen Code's `ToolNames` and
 its loader, which matches a subagent's tools by a tool's name or display name only (`Read`, `Write` and `Bash` are
-names of no tool there). An agent naming a tool with no name in Gemini or Qwen (an MCP tool) gets no list: the tool's
-defaults apply rather than a wrong limit. The comment lines
+names of no tool there). A tool with no name in Gemini or Qwen (an MCP tool, TodoWrite in Gemini) is left out of the
+list, so the role does without it; only an agent none of whose tools has a name there gets no list and the tool's
+defaults (until 2026-10-16 one such tool dropped the whole list, so a read-only role got every default tool:
+independent review of 0.19.0 §7.4).
+
+**What carries over is said before the roles are used (2026-10-16, review §7.4).** `conversionReport` gives, per agent
+and tool: whether its limits hold (`kept`), the tool's defaults apply (`defaults`) or the limits are in its
+instructions only (`instructions`: Codex outside its read-only sandbox), what the role may do there beyond its list
+(`wider`: change files, run commands, use the web), the tools left out (`left`) and the permission rules that become
+the whole tool (`whole`, Bash(git:*) is the whole shell everywhere). The install plan carries it on each converted
+entry (`conversion`). The job box says before Start what the kit's team may do in Codex (the reviewer can change
+files, the planner can run commands: Codex applies the session's sandbox to a role that changes files or runs
+commands), and after the helpers are set up a notice names those that carry over in part. A test computes the report
+for every kit agent and tool: only Codex widens, for seven roles (every one that cannot both change files and run
+commands: the scout only to commands that read). OpenCode 1.18.35 was
+checked again for `webfetch` and `websearch` (`opencode agent list` shows both denied). A file that loads is no proof
+that a role may do the same as in Claude Code. The comment lines
 of the frontmatter (the kit's license notice) are kept; the body is the agent's prompt. `server/install.mjs` has the
 four as agent-only targets: an agent goes to `.claude` always and to the converted target asked for; the converted
 text is written under a staging name in the tool folder and placed like any copy; the record keeps the source's hash

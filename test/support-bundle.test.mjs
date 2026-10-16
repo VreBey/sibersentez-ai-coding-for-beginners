@@ -16,6 +16,18 @@ const HOME = String.raw`C:\Users\Ayşe`;
 const ORIGIN = 'http://127.0.0.1:47700';
 const PANEL = { mainWindow: true, frame: { top: true, url: `${ORIGIN}/?lang=tr` }, origin: ORIGIN };
 
+test('a long log line is masked before it is cut: a quoted secret at the cut never shows (independent review N03)', () => {
+  for (const secret of ['password="Demo 1234"', "password='Demo 1234'", 'token: "Demo 1234"']) {
+    // 481 harmless characters before it is the reviewer's case; every cut position around it is tried
+    for (let n = 470; n <= 505; n++) {
+      const out = maskLine(`${'-'.repeat(n)} ${secret} more context after the secret`, HOME);
+      assert.ok(!/Demo|1234/.test(out), `cut at ${n}: ${out.slice(-50)}`);
+      assert.ok(out.endsWith(' …(cut)') && out.length <= 500 + ' …(cut)'.length, `still cut short at ${n}`);
+    }
+  }
+  assert.equal(maskLine('password="Demo 1234" ok', HOME), 'password=••• ok');
+});
+
 test('a log line: keys and e-mail masked, the home folder ~, every folder path <path> whole (to its quote or the line end); addresses, versions and the default hub stay', () => {
   assert.equal(maskLine(String.raw`hub: C:\Users\Ayşe\SiberSentez · already present`, HOME), String.raw`hub: ~\SiberSentez · already present`);
   assert.equal(maskLine(String.raw`hub: C:\Users\Ayşe\SiberSentez`, HOME), String.raw`hub: ~\SiberSentez`);

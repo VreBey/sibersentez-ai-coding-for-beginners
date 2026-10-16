@@ -34,6 +34,8 @@ export const ACTION_FIELDS = Object.freeze({
   'restore-apply': Object.freeze(['projectId', 'pointId', 'planId']),
   'project-relink': Object.freeze(['projectId', 'folder', 'from', 'plan', 'planId']),
   'project-unlink': Object.freeze(['projectId', 'plan']),
+  // The person's marks while trying a job's result (acceptGuide.js), kept in the hub: the whole set each time
+  'accept-marks': Object.freeze(['projectId', 'jobId', 'marks', 'itemKeys']),
   // An AI tool in a terminal (docs/ai-start.md): a tool id and whether the saved idea becomes its first message
   'start-ai': Object.freeze(['projectId', 'sessionId', 'tool', 'withIdea', 'resume', 'job', 'inDock']),
   // GitHub import (docs/github-import.md §6): a link, a download id, import picks, library items to check
@@ -204,6 +206,13 @@ export function actionBody(b) {
     } else if (k === 'inDock') {
       // start-ai: run in the window's own terminal (the dock); dropping it sent every start to Windows Terminal
       if (v === true) out.inDock = true;
+    } else if (k === 'jobId') {
+      if (typeof v === 'string' && v) out.jobId = v;
+    } else if (k === 'marks') {
+      // accept-marks: { itemKey: 'ok' | 'no' } (an empty set clears them; the server checks every key)
+      if (v && typeof v === 'object' && !Array.isArray(v)) out.marks = Object.fromEntries(Object.entries(v).filter(([, m]) => m === 'ok' || m === 'no').map(([key, m]) => [String(key), m]));
+    } else if (k === 'itemKeys') {
+      if (Array.isArray(v)) out.itemKeys = v.map(String);
     } else if (k === 'job') {
       // start-ai: "Do a job", the job the person typed (the server cleans it and keeps at most 300 characters)
       if (typeof v === 'string' && v.trim()) out.job = v.slice(0, 1200);

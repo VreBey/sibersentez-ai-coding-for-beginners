@@ -294,7 +294,8 @@ export function createHandler({ ingest, catalog, clients, port, publicDir, actio
       // for every answer, so an acceptance seen meanwhile shows at once
       const recordNow = () => (catalog?.hubDir && catalog.getProject?.(projectId) ? listJobResults({ hubDir: catalog.hubDir, projectId }).find((r) => r.jobId === jobId) || null : null);
       const rec = recordNow();
-      const key = `${projectId}|${jobId}|${rec?.verdict?.seenAt || 0}|${rec?.tree?.at || 0}`;
+      // The person's last mark too: its comparison (triedFresh) is made with the files' fingerprint of that mark
+      const key = `${projectId}|${jobId}|${rec?.verdict?.seenAt || 0}|${rec?.tree?.at || 0}|${rec?.tried?.at || 0}`;
       jobResultCache({ catalog, projectId, jobId, homeDir, claudeDir, key }).then(
         // The commands the job's AI ran, as its log shows them (server/jobCommands.mjs, plan E3), and its reviewer agents
         // (jobReviewers.mjs, plan E4; an answer said after REVIEW.md was written is a later round's): from memory, every answer

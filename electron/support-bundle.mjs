@@ -58,13 +58,14 @@ function maskPaths(s) {
 }
 
 // One log line as the bundle shows it: secrets masked, the home folder '~', every other folder path '<path>', e-mail
-// addresses '<email>', cut short
+// addresses '<email>', cut short. Masked first, cut after: a cut through a secret would hide it from the patterns
+// (a quoted password losing its closing quote; independent review N03).
 export function maskLine(line, homeDir) {
   let s = String(line ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, ' ');
-  if (s.length > LINE_MAX) s = `${s.slice(0, LINE_MAX)} …(cut)`;
   s = redactHome(redact(s), homeDir).replace(EMAIL_RE, '<email>');
   s = maskPaths(s.replace(KEPT_HUB, HUB_MARK));
-  return s.replace(/\u0001hub([\\/])\u0001/g, '~$1SiberSentez');
+  s = s.replace(/\u0001hub([\\/])\u0001/g, '~$1SiberSentez');
+  return s.length > LINE_MAX ? `${s.slice(0, LINE_MAX)} …(cut)` : s;
 }
 
 // The last lines of a file: at most maxBytes read from its end, a first line cut by that start dropped. Returns

@@ -16,7 +16,7 @@ documents point here. "Tried" names what was done and when; a row with no date w
 | Test suite | every push (CI) and on the owner's computer | every push (CI, Ubuntu); Ubuntu 26.04 in WSL 2, 2026-10-09 | every push (CI), a failure allowed |
 | Packaged app, hidden checks | every release (`tools/electron-qa.ps1`) | Ubuntu in WSL 2, 2026-10-09 (`tools/linux-qa.sh`); the Packaged QA workflow | never |
 | Used by hand in the window | on the owner's own computer, where it is built | WSLg, a fresh hub, 2026-10-09 (below) | never |
-| A real job end to end, signed in | Claude Code, 2026-10-08 (docs/internal/evidence-2026-10-08.md) | Claude Code 2.1.295, 2026-10-09 (below) | never |
+| A real job end to end, signed in | Claude Code, 2026-10-08 (the maintainer; the notes are not published) | Claude Code 2.1.295, 2026-10-09 (below) | never |
 | Other AI tools | found and their logs read by the app; their agent formats checked with the installed CLI (Gemini CLI 0.63, OpenCode 1.18.35, Qwen Code 0.25, Codex 0.160), 2026-10-09; a start and a whole job with them not recorded | install commands from their docs, 2026-10-09; never signed in | never |
 | Install, upgrade, uninstall on a clean system | Windows Sandbox, 0.16.0 to 0.17.0-rc.1, 2026-10-08 | not tried (an AppImage is one file) | never |
 | Desktop parts: tray, notifications, start at login | yes | written for it; not tried on a real desktop (WSLg has none) | never |

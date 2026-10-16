@@ -13,7 +13,7 @@ test('while the result waits: the four ways first, Open leads; the AI button sta
   setLanguage('tr');
   try {
     const h = jobResultHtml({ team: team('finish'), changes: { basis: 'no-record' }, point: { id: 'R20261009090001aaaa', available: true }, go: { session: 'S', tab: false } });
-    assert.ok(h.indexOf('data-jr-act="open"') < h.indexOf('jr-checks'), 'before the checks');
+    assert.ok(h.indexOf('data-jr-act="open"') < h.indexOf('jr-more'), "before the Details fold (the review's word and its freshness come first: jr-now)");
     assert.match(h, /class="act-btn primary" data-jr-act="open"/);
     for (const a of ['change', 'accept']) assert.match(h, new RegExp(`class="act-btn" data-jr-act="${a}"`));
     assert.match(h, /data-rst-act="preview" data-rst-id="R20261009090001aaaa"/);

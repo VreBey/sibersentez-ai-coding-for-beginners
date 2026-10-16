@@ -17,7 +17,7 @@ import { validJobId } from './job-id.mjs';
 import { writeFileAtomic } from './atomic.mjs';
 import { resolveProject } from './install.mjs';
 import { isLegacyHub } from './library.mjs';
-import { reviewFileTime } from './team.mjs';
+import { reviewFileTime, teamFacts } from './team.mjs';
 
 export const JOB_RESULTS_FILE = 'job-results.json';
 export const JOB_RESULTS_KEEP = 20;
@@ -27,15 +27,20 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const PROBLEM_RE = /^[a-z][a-z0-9-]{0,40}$/;
 // A look that could not finish (the record not written, a file locked) is tried again after this long, not on every poll
 export const OBSERVE_RETRY_MS = 60000;
+// A fingerprint that failed whole (problem: too deep, a folder unreadable) is tried again, each wait twice the one
+// before, up to this long: the record heals once the cause is gone (independent review N02)
+export const OBSERVE_RETRY_MAX_MS = 30 * 60000;
+// The wait after `tries` failed looks in a row: 1 min, 2, 4, ... up to the cap
+export const retryWait = (tries) => Math.min(OBSERVE_RETRY_MAX_MS, OBSERVE_RETRY_MS * 2 ** Math.min(20, Math.max(0, tries - 1)));
 
 const count = (x) => (Number.isInteger(x) && x >= 0 ? x : 0);
 const time = (x) => (Number.isFinite(x) && x > 0 ? Math.floor(x) : null);
 
 // The fingerprint part of a record: { files, bytes, scope, quick, digest (or null), writtenAfterReview, at } or
-// { problem, at }
+// { problem, at, tries } (tries: looks that failed in a row; a record written before the count is one)
 function treeOf(t) {
   if (!t || typeof t !== 'object' || !time(t.at)) return null;
-  if (typeof t.problem === 'string') return PROBLEM_RE.test(t.problem) ? { problem: t.problem, at: time(t.at) } : null;
+  if (typeof t.problem === 'string') return PROBLEM_RE.test(t.problem) ? { problem: t.problem, at: time(t.at), tries: Math.max(1, count(t.tries)) } : null;
   if (!HEX64.test(t.quick)) return null;
   return { files: count(t.files), bytes: count(t.bytes), scope: t.scope === 'lean' ? 'lean' : 'full', quick: t.quick, digest: HEX64.test(t.digest) ? t.digest : null, writtenAfterReview: count(t.writtenAfterReview), at: time(t.at) };
 }
@@ -51,13 +56,43 @@ function reviewersOf(x) {
   return { agents: count(x.agents), types: list(x.types, TYPE_RE, 3), said, saidAt: said ? time(x.saidAt) : null, lastAt: time(x.lastAt), unknownTools: list(x.unknownTools, TOOL_RE, 8), at: time(x.at) };
 }
 
+// What the person marked while trying the result (public/js/acceptGuide.js; independent review of 0.19.0 §8, §11): the
+// plan's Done-when items they saw (keys of their text), each one marked 'ok' or 'no', when they last marked, and the
+// quick fingerprint of the project's files then (restore.mjs treeFingerprint without the digest; null when it could
+// not be taken). The person's own record, kept by the app: never a test, never the app's check.
+export const TRIED_ITEMS_MAX = 40;
+const ITEM_KEY = /^[0-9a-f]{8}$/;
+export function triedMarks(m) {
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return null;
+  const out = {};
+  for (const [k, v] of Object.entries(m)) {
+    if (!ITEM_KEY.test(k) || (v !== 'ok' && v !== 'no')) return null;
+    out[k] = v;
+  }
+  return Object.keys(out).length <= TRIED_ITEMS_MAX ? out : null;
+}
+export function triedItems(a) {
+  if (!Array.isArray(a) || a.length > TRIED_ITEMS_MAX || !a.every((k) => typeof k === 'string' && ITEM_KEY.test(k))) return null;
+  return [...new Set(a)];
+}
+function triedOf(x) {
+  if (!x || typeof x !== 'object' || !time(x.at)) return null;
+  const marks = triedMarks(x.marks);
+  const items = triedItems(x.items);
+  if (!marks || !items || !Object.keys(marks).length) return null;
+  return { marks, items, at: time(x.at), quick: HEX64.test(x.quick) ? x.quick : null };
+}
+
 // One record, only known fields of known shapes (it reaches the page)
 export function jobResultRecord(r) {
   if (!r || typeof r !== 'object' || !validJobId(r.jobId)) return null;
   const v = r.verdict;
   const verdict = v && typeof v === 'object' && (v.value === 'APPROVE' || v.value === 'REVISE') && time(v.seenAt) ? { value: v.value, blockers: count(v.blockers), nits: count(v.nits), reviewAt: time(v.reviewAt), seenAt: time(v.seenAt) } : null;
-  return { jobId: r.jobId, verdict, tree: verdict ? treeOf(r.tree) : null, reviewers: verdict ? reviewersOf(r.reviewers) : null, acceptedSeenAt: time(r.acceptedSeenAt) };
+  return { jobId: r.jobId, verdict, tree: verdict ? treeOf(r.tree) : null, reviewers: verdict ? reviewersOf(r.reviewers) : null, acceptedSeenAt: time(r.acceptedSeenAt), tried: triedOf(r.tried) };
 }
+
+// A fingerprint to take again: a file could not be read (no digest), or the whole look failed (problem)
+const unfinished = (t) => !!t && (('quick' in t && !t.digest) || typeof t.problem === 'string');
 
 export function listJobResults({ hubDir, projectId }) {
   if (!hubDir) return [];
@@ -114,7 +149,9 @@ export async function observeTeam({ hubDir, projectId, dir, team, now = Date.now
   const old = listJobResults({ hubDir, projectId }).find((r) => r.jobId === jobId) || null;
   const reviewAt = whole ? reviewTime(dir) : null;
   const newVerdict = !!whole && (!old?.verdict || old.verdict.value !== whole.verdict || old.verdict.blockers !== count(whole.blockers) || old.verdict.nits !== count(whole.nits) || (reviewAt !== null && old.verdict.reviewAt !== reviewAt));
-  const retryTree = !!whole && !newVerdict && !!old?.tree && 'quick' in old.tree && !old.tree.digest;
+  // A failed whole look waits its turn here too: a new answer (a team file written) does not cut the wait short
+  const due = typeof old?.tree?.problem !== 'string' || old.tree.at + retryWait(old.tree.tries) <= now();
+  const retryTree = !!whole && !newVerdict && unfinished(old?.tree) && due;
   const newAccept = isAccepted(team) && !old?.acceptedSeenAt;
   // The reviewer agents not known when the verdict was seen (the app's log reading still starting): kept on a later look
   let reviewersNow = null;
@@ -126,7 +163,7 @@ export async function observeTeam({ hubDir, projectId, dir, team, now = Date.now
   if (!newVerdict && !retryTree && !newAccept && !reviewersNow) return { status: 'none', record: old };
   busy.add(projectId);
   try {
-    const record = { jobId, verdict: old?.verdict || null, tree: old?.tree || null, reviewers: old?.reviewers || null, acceptedSeenAt: old?.acceptedSeenAt || null };
+    const record = { jobId, verdict: old?.verdict || null, tree: old?.tree || null, reviewers: old?.reviewers || null, acceptedSeenAt: old?.acceptedSeenAt || null, tried: old?.tried || null };
     if ((newVerdict || retryTree) && whole) {
       const at = now();
       if (newVerdict) {
@@ -145,15 +182,52 @@ export async function observeTeam({ hubDir, projectId, dir, team, now = Date.now
       } catch {
         fp = { ok: false, problem: 'unreadable' };
       }
-      record.tree = fp.ok ? { files: fp.files, bytes: fp.bytes, scope: fp.scope, quick: fp.quick, digest: fp.digest ?? null, writtenAfterReview: since === null ? 0 : fp.writtenSince, at } : { problem: fp.problem, at };
+      // A failure again for the same verdict counts on (the answer's waits grow with it); the verdict keeps its seenAt
+      const tries = !newVerdict && typeof old?.tree?.problem === 'string' ? Math.max(1, count(old.tree.tries)) + 1 : 1;
+      record.tree = fp.ok ? { files: fp.files, bytes: fp.bytes, scope: fp.scope, quick: fp.quick, digest: fp.digest ?? null, writtenAfterReview: since === null ? 0 : fp.writtenSince, at } : { problem: fp.problem, at, tries };
     }
     if (newAccept) record.acceptedSeenAt = now();
     if (reviewersNow) record.reviewers = { ...reviewersNow, at: now() };
+    // The person's marks may have been written while the fingerprint was taken: the newest are kept (read and written
+    // in one synchronous step, as writeTried does)
+    record.tried = listJobResults({ hubDir, projectId }).find((r) => r.jobId === jobId)?.tried || null;
     if (!writeJobResult({ hubDir, projectId, record })) return { status: 'failed', record: old };
     return { status: 'written', record: jobResultRecord(record) };
   } finally {
     busy.delete(projectId);
   }
+}
+
+// The person's marks for a job (the accept-marks action, server/actions.mjs): the whole set each time (marks and the
+// items they saw), with the quick fingerprint of the files now. An empty set removes them. The job's record is made when
+// there is none yet (the verdict comes later or never), but only for the job of the project's plan: a page could
+// otherwise push the verdicts' records out of the JOB_RESULTS_KEEP kept with made-up jobs. The quick fingerprint reads
+// every file's times (synchronously, as the job-result answer's own quick look): one look per saved set, the page sends
+// a set 400 ms after the last click. Never throws: { ok, tried } or { ok: false, problem }.
+export async function writeTried({ hubDir, projectId, dir, jobId, marks, items, now = Date.now, fingerprint = treeFingerprint, planJob = (d) => teamFacts(d)?.plan?.jobId ?? null }) {
+  const m = triedMarks(marks);
+  const list = triedItems(items);
+  if (!hubDir || !validJobId(jobId) || !m || !list) return { ok: false, problem: 'bad-marks' };
+  if (!listJobResults({ hubDir, projectId }).some((r) => r.jobId === jobId)) {
+    let current = null;
+    try {
+      current = planJob(dir);
+    } catch {}
+    if (current !== jobId) return { ok: false, problem: 'not-this-job' };
+  }
+  let quick = null;
+  if (Object.keys(m).length) {
+    try {
+      const fp = /** @type {any} */ (await fingerprint(dir, { hubDir, withDigest: false }));
+      quick = fp?.ok && HEX64.test(fp.quick) ? fp.quick : null;
+    } catch {}
+  }
+  // Read and written in one synchronous step: a look of observeTeam that awaits meanwhile keeps these (it reads them again)
+  const old = listJobResults({ hubDir, projectId }).find((r) => r.jobId === jobId) || null;
+  const tried = Object.keys(m).length ? { marks: m, items: list, at: now(), quick } : null;
+  const record = { jobId, verdict: old?.verdict || null, tree: old?.tree || null, reviewers: old?.reviewers || null, acceptedSeenAt: old?.acceptedSeenAt || null, tried };
+  if (!writeJobResult({ hubDir, projectId, record })) return { ok: false, problem: 'record-write-failed' };
+  return { ok: true, tried: jobResultRecord(record)?.tried || null };
 }
 
 // The gate the app's other project writers pass (install.mjs resolveProject, the hub there and of the new layout)
@@ -191,8 +265,10 @@ export function observeTeamAnswer({ catalog, projectId, team, homeDir = null, cl
         // A newer answer took over meanwhile: its own look decides
         if (memo.get(projectId)?.sig !== sig) return;
         // Done when nothing is left to retry: written (with every file read), or nothing new
-        const unread = r.record?.tree && 'quick' in r.record.tree && !r.record.tree.digest;
-        if (r.status === 'none' || (r.status === 'written' && !unread)) memo.set(projectId, { sig, retryAt: null });
+        const tree = r.record?.tree;
+        if (r.status === 'none' || (r.status === 'written' && !unfinished(tree))) memo.set(projectId, { sig, retryAt: null });
+        // The whole fingerprint failed: looked at again later, each wait twice the one before (up to a cap)
+        else if (r.status === 'written' && typeof tree.problem === 'string') memo.set(projectId, { sig, retryAt: now() + retryWait(count(tree.tries)) });
         // Another look of the project was running: the next poll looks again
         else if (r.status === 'busy') memo.delete(projectId);
       },
@@ -217,12 +293,28 @@ export function observeTeamAnswer({ catalog, projectId, team, homeDir = null, cl
 // written no file is read again (the page asks every 15 s while the result card shows).
 export const JOB_RESULT_TTL_MS = 15000;
 const lastFull = new Map(); // `${projectId}|${jobId}|${tree.at}` -> { quick, answer }
+//
+// triedFresh (only with the person's marks in the record): 'same' when the files' quick fingerprint is the one taken
+// with their last mark, 'changed' when files were written since (they may want to try again), 'unknown' when either
+// could not be taken. Written, not necessarily changed: the quick fingerprint holds sizes and times, not content.
 export async function projectJobResult({ catalog, projectId, jobId, homeDir = null, claudeDir = null, fingerprint = treeFingerprint }) {
   if (!catalog?.getProject?.(projectId)) return { status: 404, body: { error: 'not-a-project' } };
   if (!validJobId(jobId)) return { status: 400, body: { error: 'bad-job' } };
-  const body = { project: projectId, jobId };
   const hubDir = catalog.hubDir || null;
   const record = hubDir ? listJobResults({ hubDir, projectId }).find((r) => r.jobId === jobId) || null : null;
+  // One quick look of the files per answer, shared by both comparisons
+  let quickNow = null;
+  const quickOf = (dir) => (quickNow ??= Promise.resolve(fingerprint(dir, { hubDir, after: record?.tree?.at ?? null, withDigest: false })).catch(() => ({ ok: false, problem: 'unreadable' })));
+  const r = await verdictFresh({ catalog, projectId, jobId, homeDir, claudeDir, fingerprint, hubDir, record, quickOf });
+  if (r.status !== 200 || !record?.tried) return r;
+  const g = record.tried.quick ? projectDir({ catalog, projectId, homeDir, claudeDir }) : null;
+  const now = g ? /** @type {any} */ (await quickOf(g.dir)) : null;
+  const triedFresh = !now?.ok ? 'unknown' : now.quick === record.tried.quick ? 'same' : 'changed';
+  return { status: 200, body: { ...r.body, triedFresh } };
+}
+
+async function verdictFresh({ catalog, projectId, jobId, homeDir, claudeDir, fingerprint, hubDir, record, quickOf }) {
+  const body = { project: projectId, jobId };
   const unknown = (reason, more = {}) => ({ status: 200, body: { ...body, record, fresh: 'unknown', reason, ...more } });
   const tree = record?.tree;
   if (!record || !tree) return unknown('no-record');
@@ -232,7 +324,7 @@ export async function projectJobResult({ catalog, projectId, jobId, homeDir = nu
   if (!tree.digest) return unknown('unreadable');
   const g = projectDir({ catalog, projectId, homeDir, claudeDir });
   if (!g) return unknown('folder');
-  const quick = /** @type {any} */ (await fingerprint(g.dir, { hubDir, after: tree.at, withDigest: false }));
+  const quick = /** @type {any} */ (await quickOf(g.dir));
   if (!quick.ok) return unknown(quick.problem);
   if (quick.quick === tree.quick) return { status: 200, body: { ...body, record, fresh: 'same' } };
   const key = `${projectId}|${jobId}|${tree.at}`;

@@ -159,6 +159,13 @@ textarea.job-text { resize: vertical; min-height: 4.6em; max-height: 20em; line-
 .ag-btns .ag-ok.on { border-color: var(--teal); color: var(--text); background: rgba(var(--teal-rgb), 0.14); }
 .ag-btns .ag-no.on { border-color: var(--warn-ink); color: var(--warn-ink); }
 .ag-item.ag-no .ag-text { color: var(--warn-ink); }
+.ag-stale { color: var(--warn-ink); margin: 4px 0 0; }
+/* The result card: its first view, then the Details fold (independent review of 0.19.0 §8) */
+.jr-now { margin: 6px 0; }
+.jr-now .jr-stale b, .jr-now .jr-stale { color: var(--warn-ink); }
+.jr-more { margin-top: 12px; padding-top: 8px; }
+.jr-more > summary { font-size: 13px; color: var(--muted); }
+.jr-more[open] > summary { margin-bottom: 6px; }
 .ag .act-btn { margin: 4px 0 2px; }
 .jr-checks .jr-stale .act-btn { display: flex; width: fit-content; margin: 6px 0 2px; }
 .jr-go { margin: 4px 0 10px; }

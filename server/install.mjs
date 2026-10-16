@@ -19,7 +19,7 @@ import { normPath } from './util.mjs';
 import { isLocalPath } from './fsutil.mjs';
 import { codeError, lstat, isLink, isRealDir, findLibraryItem, treeHash, measureTree, sizeProblem, sameHash, placeCopy, copyTree, writeJsonAtomic, within, withinReal, isLegacyHub, realPath, hasStreamColon, isDriveRoot, sweepStaging, libraryStageDirs, LIMITS } from './library.mjs';
 import { readKit, findKitItem, defaultKitDir, KIT_SOURCE } from './kit.mjs';
-import { AGENT_FORMATS, AGENT_FORMAT_VERSION, agentFileName, convertAgent } from './agentFormats.mjs';
+import { AGENT_FORMATS, AGENT_FORMAT_VERSION, agentFileName, convertAgent, conversionReport } from './agentFormats.mjs';
 import crypto from 'node:crypto';
 import { PLATFORM, normalizeDir, isSystemFolder } from './platform.mjs';
 
@@ -237,7 +237,10 @@ export function planInstall({ project, dir, items, targets, library, installs, l
       if (converted(target)) {
         let text = null;
         try {
-          text = convertAgent(fs.readFileSync(lib.path, 'utf8'), target, it.name);
+          const source = fs.readFileSync(lib.path, 'utf8');
+          text = convertAgent(source, target, it.name);
+          // What carries over, said before the install (independent review of 0.19.0 §7.4)
+          if (text) e.conversion = conversionReport(source, target);
         } catch {
           text = null;
         }

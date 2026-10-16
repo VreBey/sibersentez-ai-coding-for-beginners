@@ -24,7 +24,7 @@ import { createJobResult, jobTips } from '../jobResult.js';
 import { apiErrorHtml, projectApiError, liveApiError } from '../apiError.js';
 import { permModeChip, permModeLine } from '../permMode.js';
 import { q, activeEl } from '../dom.js';
-import { acceptGuideHtml, readMarks, writeMark, changeDraft, guideItems } from '../acceptGuide.js';
+import { acceptGuideHtml, createMarks, changeDraft, guideItems } from '../acceptGuide.js';
 import { relinkCandidates, relinkOfferHtml, relinkedHtml, relinkErrorText } from '../relink.js';
 import { fitView, fitRequestBody, fitRequestKey, fitOutcome, ideaWith, fitSectionHtml, offBannerHtml, startNextHtml, fitBusyText, cleanIdea, planList, targetPicker } from './drawerFit.js';
 // The fit view and the idea box live in drawerFit.js (docs/internal/module-split-plan.md D1); tests import them from here
@@ -58,6 +58,14 @@ const publish = createPublishCheck({ onData: (projectId) => rerenderUsage(projec
 const restore = createRestore({ onData: (projectId) => rerenderUsage(projectId) });
 // "This job's result" (jobResult.js): what changed since the job's own start copy, the checks apart, going back
 const jobResult = createJobResult({ onData: (projectId) => rerenderUsage(projectId) });
+// The person's marks while trying a result (acceptGuide.js): kept with the job in the hub (actions On), else this window
+const acceptMarks = createMarks({ send: runAction, mode: () => actionsState().mode, onChange: (projectId) => rerenderUsage(projectId) });
+// The hub's record of the job as the result card asked for it: its marks (undefined while still asked) and the answer
+function triedOf(projectId, jobId) {
+  const r = jobId ? jobResult.getRecord(projectId, jobId) : null;
+  if (!r || r.failed) return { tried: undefined, answer: null, failed: !!r?.failed };
+  return { tried: r.record?.tried ?? null, answer: r };
+}
 // What a job uses, before and after (jobCost.js, plan B5): the same way
 const jobCosts = createJobCosts({ onData: (projectId) => rerenderUsage(projectId) });
 // What the copy a job's start takes would hold, shown under Start (restore.js scopeHtml, docs/restore.md §12); its
@@ -251,13 +259,14 @@ export function createDrawer(drawerEl, scrimEl, { toast = undefined, openActions
     if (!jobId) return;
     const key = btn.dataset.agKey;
     const value = btn.getAttribute('aria-pressed') === 'true' ? null : btn.dataset.ag;
-    writeMark(projectId, jobId, key, value);
+    acceptMarks.mark(projectId, jobId, key, value, guideItems(d), triedOf(projectId, jobId).tried);
     rerender();
     q(body, `[data-ag="${btn.dataset.ag}"][data-ag-key="${key}"]`)?.focus({ preventScroll: true });
   }
   function acceptChange(projectId) {
     const d = acceptJob(projectId);
-    const text = changeDraft(guideItems(d), readMarks(projectId, d?.plan?.jobId));
+    const jobId = d?.plan?.jobId;
+    const text = changeDraft(guideItems(d), acceptMarks.view(projectId, jobId, triedOf(projectId, jobId).tried, guideItems(d)).marks);
     if (!text) return;
     const r = askAiDraft(projectId, text);
     if (r?.ok || r?.reason === 'asks') return;
@@ -1561,9 +1570,17 @@ function jobResultSection(p) {
   const tips = jobTips(label);
   const rst = restore.ui(p.id).step;
   const backOpts = { mode: actionsState().mode, busy: rst === 'loading' || rst === 'busy' };
-  // Try it yourself (acceptGuide.js): the plan's Done-when items, the person's own marks from this browser
-  const guide = acceptGuideHtml(d, readMarks(p.id, jobId));
-  return jobResult.html(p, d, startPoint, waiting ? { steps: stepsHtml(d, { offline: store.lost }), go, cost, tips, back: backOpts, guide } : { cost, tips, back: backOpts, guide });
+  // Try it yourself (acceptGuide.js): the plan's Done-when items, the person's own marks (kept with the job in the hub)
+  const items = guideItems(d);
+  const { tried, answer, failed } = d?.step === 'finish' || d?.step === 'done' ? triedOf(p.id, jobId) : { tried: undefined, answer: null, failed: false };
+  const marks = acceptMarks.view(p.id, jobId, tried, items);
+  const listChanged = !!tried && (tried.items.length !== items.length || items.some((x) => !tried.items.includes(x.key)));
+  // The record could not be read (its last look failed, none before): said, the buttons still wait
+  const state = marks.state === 'loading' && failed ? 'unread' : marks.state;
+  const guide = acceptGuideHtml(d, marks.marks, { ...marks, state, triedFresh: answer?.triedFresh, listChanged });
+  // The card's Details fold keeps its state across redraws, per project (the toggle listener's moreOpen)
+  const more = moreOpen.has(`jr:${p.id}`);
+  return jobResult.html(p, d, startPoint, waiting ? { steps: stepsHtml(d, { offline: store.lost }), go, cost, tips, back: backOpts, guide, more } : { cost, tips, back: backOpts, guide, more });
 }
 
 // The session that can go on with the project's job: the Building's own answer (job.js resumeCandidate)

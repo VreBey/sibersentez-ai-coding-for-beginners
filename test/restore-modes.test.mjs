@@ -116,7 +116,7 @@ test('F02: a point taken before permissions were kept (manifest version 1) is st
   assert.equal(fs.readFileSync(w.file('run.sh'), 'utf8'), 'v1');
   if (unix) assert.equal(w.modeOf(w.file('run.sh')), 0o750, 'no permissions in the point: the file\'s own stay');
   // A version this app does not know, or permissions that are not permissions, make no point
-  w.editManifest(p.id, (m) => ({ ...m, version: 3 }));
+  w.editManifest(p.id, (m) => ({ ...m, version: 4 }));
   assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).some((x) => x.id === p.id), false);
   w.editManifest(p.id, (m) => ({ ...m, version: 2, files: m.files.map((f) => ({ ...f, mode: 0o4755 })) }));
   assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).some((x) => x.id === p.id), false, 'a set-user-id bit is never put back');

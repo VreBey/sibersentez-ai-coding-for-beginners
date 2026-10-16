@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setLanguage, STRINGS } from '../public/js/i18n.js';
-import { nextFor, NEXT_KEYS, jobSectionHtml, teamSectionHtml, jobNowText, stepsHtml, aiIdleIn, aiStateIn, NOT_KNOWN_RECENT_MS, teamInstalled, teamUpdates, createJob, preferredTool, jobKeys, giveJob, TEAM_KEYS, TEAM_ITEMS, JOB_MAX, KEYS_MAX } from '../public/js/views/job.js';
+import { nextFor, NEXT_KEYS, jobSectionHtml, teamSectionHtml, jobNowText, stepsHtml, aiIdleIn, aiStateIn, NOT_KNOWN_RECENT_MS, teamInstalled, teamUpdates, createJob, preferredTool, jobKeys, giveJob, conversionNotes, TEAM_LIMITS, TEAM_KEYS, TEAM_ITEMS, JOB_MAX, KEYS_MAX } from '../public/js/views/job.js';
 import { jobOf } from '../public/js/hq-live.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -345,4 +345,23 @@ test('a job of several lines (review U06): the server keeps its lines and cuts a
   assert.ok(drawer.includes("if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;"));
   const ws = fs.readFileSync(path.join(ROOT, 'public', 'js', 'views', 'workshop.js'), 'utf8');
   assert.ok(ws.includes('<textarea id="wsGiveText"') && ws.includes("$('give').requestSubmit();"));
+});
+
+test("what the team may do in the job's tool (independent review of 0.19.0 §7.4): said before Start where the kit's limits do not carry over; the helpers set up that carry over in part are named", () => {
+  const codexOnly = { status: 'ready', tools: [{ id: 'codex', name: 'Codex CLI', installed: true, ready: 'yes', planNow: false }] };
+  assert.ok(jobSectionHtml(P, null, { mode: 'live', tools: codexOnly }).includes(`<p class="small muted job-limits">${S.jobTeamLimits_codex}</p>`));
+  assert.ok(!jobSectionHtml(P, null, { mode: 'live', tools: TOOLS }).includes('job-limits'), "Claude Code: the kit's own lists");
+  assert.ok(!jobSectionHtml(P, null, { mode: 'dry', tools: codexOnly }).includes('job-limits'), 'Preview starts nothing');
+  assert.deepEqual([...TEAM_LIMITS], ['codex']);
+  const conv = (over) => ({ format: 'codex', limits: 'kept', wider: [], left: [], whole: [], readOnly: false, ...over });
+  const plan = [
+    { op: 'copy', kind: 'agent', name: 'reviewer', target: 'codex', conversion: conv({ limits: 'instructions', wider: ['edit'] }) },
+    { op: 'update', kind: 'agent', name: 'helper', target: 'codex', conversion: conv({ left: ['TodoWrite'], whole: ['Bash(git:*)'] }) },
+    { op: 'skip', kind: 'agent', name: 'planner', target: 'codex', conversion: conv({ wider: ['shell'] }) },
+    { op: 'copy', kind: 'agent', name: 'scout', target: 'codex', conversion: conv({ readOnly: true }) },
+    { op: 'copy', kind: 'agent', name: 'reviewer', target: 'claude' },
+  ];
+  assert.equal(conversionNotes(plan, 'Codex CLI'), 'In Codex CLI these helpers can do more than their lists allow: reviewer. In Codex CLI these helpers do without some of their tools: helper. In Codex CLI these helpers get a whole tool where their lists allowed only part of it: helper.');
+  assert.equal(conversionNotes([plan[3], plan[4]], 'Codex CLI'), '');
+  assert.equal(conversionNotes(null, 'x'), '');
 });

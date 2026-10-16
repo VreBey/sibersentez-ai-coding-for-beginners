@@ -299,13 +299,16 @@ export function jobSectionHtml(p, data, { mode = 'off', tools = toolsState(), te
   // server/tools.mjs; an older server says nothing of it): Codex and OpenCode have none here (ui-states-plan U2)
   const noPlan = tool?.planNow === false ? 'NoPlan' : '';
   const why = !tool ? '' : mode === 'live' ? t(`${noCopy ? 'jobGoWithNoCopy' : 'jobGoWith'}${noPlan}`, { tool: tool.name }) : mode === 'dry' ? t('jobWhyDry') : oneStep ? t('jobWhyOffOne') : t('jobWhyOff');
+  // What the team's roles may do in that tool, before Start (independent review of 0.19.0 §7.4): only where the kit's
+  // limits do not carry over (server/agentFormats.mjs conversionReport; test/agent-formats.test.mjs checks the kit)
+  const limits = tool && TEAM_LIMITS.has(tool.id) && (mode === 'live' || oneStep) ? `<p class="small muted job-limits">${esc(t(`jobTeamLimits_${tool.id}`))}</p>` : '';
   // "Turn actions on and start?": the switch's own title, what On means for this job, yes / cancel
   const ask = oneStep && asking
     ? `<div class="flow-confirm" role="group" aria-labelledby="jobQ"><p id="jobQ"><b>${esc(t('actionsSwitchConfirmTitle'))}</b> ${esc(t('jobTurnOnAsk', { tool: tool.name }))}</p><div class="flow-btns"><button type="button" class="act-btn primary" data-job-act="start-on" data-fk="job:start-on">${esc(t('jobTurnOnYes'))}</button><button type="button" class="act-btn" data-job-act="start-no" data-fk="job:start-no">${esc(t('jobTeamNo'))}</button></div></div>`
     : '';
   const follow = data?.step === 'done' ? nextHtml(next) : '';
   const steps = asNew ? '' : stopped && data && STEPS.includes(data.step) && mode === 'live' ? stoppedStepsHtml(data, stopped) : `${stepsHtml(data, { idle, unknown, offline })}${offline ? '' : planActsHtml(data)}`;
-  return `<section class="dr-sec job" data-sec="job" aria-labelledby="jobH"><h3 id="jobH">${icon('spark')} ${esc(t(asNew ? 'jobAskNew' : 'jobAsk'))}</h3>${steps}${follow}<div class="job-row">${input}${btn}</div>${ask}${why && !ask ? `<p class="small muted flow-why" id="jobWhy">${esc(why)}</p>` : ''}${cost && tool && !ask ? `<p class="small muted job-cost">${esc(cost)}</p>` : ''}${backup && tool && !ask && !offline && (mode === 'live' || oneStep) ? backup : ''}${historyHtml(data?.history)}</section>`;
+  return `<section class="dr-sec job" data-sec="job" aria-labelledby="jobH"><h3 id="jobH">${icon('spark')} ${esc(t(asNew ? 'jobAskNew' : 'jobAsk'))}</h3>${steps}${follow}<div class="job-row">${input}${btn}</div>${ask}${why && !ask ? `<p class="small muted flow-why" id="jobWhy">${esc(why)}</p>` : ''}${ask ? '' : limits}${cost && tool && !ask ? `<p class="small muted job-cost">${esc(cost)}</p>` : ''}${backup && tool && !ask && !offline && (mode === 'live' || oneStep) ? backup : ''}${historyHtml(data?.history)}</section>`;
 }
 
 // Earlier jobs of the project (server/team.mjs jobHistory), folded: what was done before, newest first (pure)
@@ -349,6 +352,24 @@ export function teamSectionHtml(p, { mode = 'off', team = null, teamUi = '', upd
 // Its agents go to .claude always (Claude Code, Copilot CLI and Cursor CLI read it) and, converted, to the agents folder
 // of Gemini CLI, Qwen Code, OpenCode or Codex when the job runs with one of them (server/agentFormats.mjs).
 const AGENT_TARGET = Object.freeze({ gemini: 'gemini', qwen: 'qwen', opencode: 'opencode', codex: 'codex' });
+// The tools where some of the kit's roles may do more than their tool lists (conversionReport: Codex keeps the session's
+// sandbox for a role that changes files or runs commands)
+export const TEAM_LIMITS = new Set(['codex']);
+
+// What the helpers set up for a job carry over to its tool (pure): the skills-apply answer's plan entries with their
+// conversion (server/install.mjs, agentFormats.mjs conversionReport). '' when everything holds.
+export function conversionNotes(plan, toolName) {
+  const entries = (Array.isArray(plan) ? plan : []).filter((e) => e && e.kind === 'agent' && (e.op === 'copy' || e.op === 'update') && e.conversion);
+  const names = (pick) => [...new Set(entries.filter((e) => pick(e.conversion)).map((e) => e.name))].join(', ');
+  const parts = [];
+  const wider = names((c) => Array.isArray(c.wider) && c.wider.length > 0);
+  const left = names((c) => Array.isArray(c.left) && c.left.length > 0);
+  const whole = names((c) => Array.isArray(c.whole) && c.whole.length > 0);
+  if (wider) parts.push(t('jobConvWider', { tool: toolName, names: wider }));
+  if (left) parts.push(t('jobConvLeft', { tool: toolName, names: left }));
+  if (whole) parts.push(t('jobConvWhole', { tool: toolName, names: whole }));
+  return parts.join(' ');
+}
 export function jobTargets(toolId, via = []) {
   if (!toolId || toolId === 'claude') return ['claude'];
   const out = Array.isArray(via) && via.includes('claude-code') ? ['claude', 'agents'] : ['agents'];
@@ -380,6 +401,9 @@ export async function giveJob(p, text, deps) {
     const count = (Number(r?.result?.copied) || 0) + (Number(r?.result?.updated) || 0);
     // Nothing to copy: the team and its helpers are there already ("0 helpers set up" read like a failure, 2026-10-08)
     toast({ tone: r?.ok ? 'ok' : 'warn', title: t('jobAsk'), body: r?.ok ? (count ? t('jobPrepared', { count }) : t('jobPreparedAlready')) : t('jobPrepareSkipped') });
+    // Helpers that do not carry over whole to this tool: said once they are set up, before the AI starts
+    const notes = r?.ok ? conversionNotes(r.plan, tool.name) : '';
+    if (notes) toast({ tone: 'warn', title: t('jobAsk'), body: notes });
   }
   const it = { id: `start-ai:${tool.id}`, label: t('jobStartWith', { tool: tool.name }), action: 'start-ai', payload: { projectId: p.id, tool: tool.id, job }, name: p.name, toolName: tool.name };
   const openSkills = (x) => openDrawer?.({ ...x, section: 'skills' });

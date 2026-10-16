@@ -31,7 +31,7 @@ import { isLegacyHub, listLibrary, findLibraryItem, scanSource, publicScanItems,
 import { resolveProject, readInstalls, planInstall, executeInstall, planRemove, executeRemove, planTrial, makeTrial } from './install.mjs';
 import { createPointAsync, planRestore, applyRestore, recordJobPoint, listPoints } from './restore.mjs';
 import { planRelink, setRelink, removeRelink } from './relinks.mjs';
-import { listJobResults } from './jobResults.mjs';
+import { listJobResults, writeTried } from './jobResults.mjs';
 import { createFit, planApplyImports } from './fit.mjs';
 // "Start with AI" (docs/ai-start.md)
 import { sharedToolDetector, toolById } from './tools.mjs';
@@ -290,6 +290,8 @@ export function createActions({
         writing = false;
       }
     }
+    // The person's own marks: written in live mode, outside the lock (a restore running does not hold them back)
+    if (action === 'accept-marks') return runSkill(action, ctx, live);
     return runSkill(action, ctx, false);
   }
 
@@ -406,6 +408,7 @@ export function createActions({
       if (action === 'skills-apply') return applySkills(ctx, execute, base);
       if (action === 'restore-preview' || action === 'restore-apply') return await runRestore(action, ctx, execute, base);
       if (action === 'project-relink' || action === 'project-unlink') return runRelink(action, ctx, execute, base);
+      if (action === 'accept-marks') return runAcceptMarks(ctx, execute, base);
       if (action === 'skills-trial') {
         const t = planTrial({ hubDir, projectId: project.id, items: ctx.items, library: listLibrary(hubDir), via: project.via, now: now() });
         const plan = publicPlan(t.plan);
@@ -515,7 +518,7 @@ export function createActions({
     const isNote = (rel) => rel.toLowerCase().startsWith(`${FIRST_DIR}/`);
     const cut = (list) => [...list.filter((r) => !isNote(r)), ...list.filter(isNote)].slice(0, RESTORE_LIST_MAX);
     const notes = (list) => list.filter(isNote).length;
-    const summary = { point: plan.point, planId: plan.planId, changed: cut(plan.changed), missing: cut(plan.missing), added: cut(plan.added), counts: { changed: plan.changed.length, missing: plan.missing.length, added: plan.added.length }, notes: { changed: notes(plan.changed), missing: notes(plan.missing), added: notes(plan.added) } };
+    const summary = { point: plan.point, planId: plan.planId, changed: cut(plan.changed), missing: cut(plan.missing), added: cut(plan.added), unread: plan.unread.slice(0, RESTORE_LIST_MAX), counts: { changed: plan.changed.length, missing: plan.missing.length, added: plan.added.length, unread: plan.unread.length }, notes: { changed: notes(plan.changed), missing: notes(plan.missing), added: notes(plan.added) } };
     if (action === 'restore-preview' || !execute) return { status: 200, body: { ...base, ...summary, result: { executed: false } }, note: action === 'restore-preview' ? 'plan' : 'dry' };
     restoring.add(ctx.project.id);
     let r;
@@ -526,6 +529,18 @@ export function createActions({
     }
     if (!r.ok) return failed(r.problem === 'point-missing' ? 404 : 409, r.problem, 'restore', summary);
     return { status: 200, body: { ...base, ...summary, before: r.before, result: { executed: true, restored: r.restored, removed: r.removed, failed: r.failed.slice(0, RESTORE_LIST_MAX) } }, note: r.failed.length ? 'partial' : 'live' };
+  }
+
+  // The person's marks while trying a job's result (jobResults.mjs writeTried; independent review of 0.19.0 §8): in the
+  // hub's record of the job, never in the project. Preview answers that it would keep them and writes nothing; the page
+  // then holds them for this window only. Not one of the writing actions' lock: one small file, written whole.
+  async function runAcceptMarks(ctx, execute, base) {
+    const { jobId, marks, itemKeys } = ctx.accept;
+    const marked = Object.keys(marks).length;
+    if (!execute) return { status: 200, body: { ...base, jobId, marked, result: { executed: false } }, note: 'dry' };
+    const r = await writeTried({ hubDir, projectId: ctx.project.id, dir: ctx.dir, jobId, marks, items: itemKeys, now });
+    if (!r.ok) return failed(r.problem === 'record-write-failed' ? 500 : 409, r.problem, 'record');
+    return { status: 200, body: { ...base, jobId, marked, tried: r.tried, result: { executed: true } }, note: 'live' };
   }
 
   // A moved project linked to its new folder (docs/internal/project-relink-plan.md, server/relinks.mjs). Dry mode, and

@@ -448,6 +448,22 @@ test('redact (round 2): leaks closed, file names and plain words untouched, long
   assert.ok(long.length <= 4000);
 });
 
+test('redact at its length cap: a secret the cap cuts through is still masked (a quote left open, a key cut short)', () => {
+  // Synthetic values; every cut position around them is tried
+  const key = 'AKIA' + 'Q7ZK2M4P9W3X8B5N';
+  for (const secret of ['password="Demo 1234"', "password='Demo 1234'", 'api_key: "Demo 1234"', `id ${key}`]) {
+    for (let n = 3960; n <= 4010; n++) {
+      const out = redact(`${'-'.repeat(n)} ${secret} tail`);
+      assert.ok(!/Demo|1234|Q7ZK/.test(out), `cut at ${n}: ${secret} -> ${out.slice(-40)}`);
+      assert.ok(out.length <= 4000);
+    }
+  }
+  // A short line is masked as before
+  assert.equal(redact('password="Demo 1234" tail'), 'password=••• tail');
+  // A quote left open (the text ends inside it) is masked to the line end
+  assert.equal(redact('password="Demo 1234\nnext'), 'password=•••\nnext');
+});
+
 test('live session: a PID taken over by another process or a dead process is no ghost; a stale table is checked again', () => {
   const ms = Date.UTC(2026, 8, 27, 10, 0, 0);
   const ft = (t) => String((BigInt(t) + 11644473600000n) * 10000n);

@@ -9,12 +9,14 @@ import { projectState, groupSessions, isOtherFolder } from '../attention.js';
 export const RECENT_COUNT = 3;
 
 // projects: store.sortedProjects(now) (most urgent, then most recent first); byProject: groupSessions(...)
+// '' when the person has no project of their own yet: there is nothing to pick up, and the "Got an idea?" card above is
+// the one way to start (a third "New project" here only repeated it; seen in the 0.19.0 clean-install trial)
 export function todayRecentHtml(projects, byProject, now = Date.now()) {
+  if (!projects.some((p) => !isOtherFolder(p))) return '';
   const list = projects.filter((p) => !isOtherFolder(p) && (p.lastActivity || projectState(p, byProject, now, store.dockAsking?.() || []) !== 'closed')).slice(0, RECENT_COUNT);
   if (!list.length) {
     // Projects there, none worked in yet: point at the job box, not at "New project"
-    const any = projects.some((p) => !isOtherFolder(p));
-    return `<div class="tr-head"><h2 id="todayRecentH">${esc(t('todayRecent'))}</h2></div><p class="tr-empty small muted">${esc(t(any ? 'todayRecentNoWork' : 'todayRecentEmpty'))}</p>`;
+    return `<div class="tr-head"><h2 id="todayRecentH">${esc(t('todayRecent'))}</h2></div><p class="tr-empty small muted">${esc(t('todayRecentNoWork'))}</p>`;
   }
   const cards = list
     .map((p) => {
@@ -42,6 +44,7 @@ export function createTodayRecent(el, { open, showProjects }) {
       const html = todayRecentHtml(store.sortedProjects(now), groupSessions(store.sessions.values()), now);
       if (html === last) return;
       last = html;
+      el.hidden = !html;
       replaceHtml(el, html);
     },
   };

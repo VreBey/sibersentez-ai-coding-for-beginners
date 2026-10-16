@@ -36,6 +36,7 @@ const UNKNOWN_GROUP = {
   'written-before-seen': 'written-before-seen',
   'no-review-time': 'no-review-time',
   unreadable: 'unreadable',
+  'folder-unreadable': 'unreadable',
   'too-many-files': 'too-big',
   'too-large': 'too-big',
   'file-too-large': 'too-big',
@@ -145,26 +146,32 @@ function acceptedText(team, result) {
   return at ? t('jrAcceptedSeen', { time: dayTime(at) }) : t('jrAccepted');
 }
 
-// What changed, in words and a short list (pure); null: still asked
-function changesHtml(c) {
+// What changed, in words (the card's first view: the counts, and the files that could not be read, never hidden) and
+// the short list with its notes (folded under "Details"). Pure; null: still asked
+function changesSummaryHtml(c) {
   if (!c) return `<p class="small muted">${esc(t('jrLoading'))}</p>`;
   if (c.basis !== 'start') return `<p class="small">${esc(t(BASES.has(c.basis) ? `jrBasis_${c.basis}` : 'jrBasis_unreadable'))}</p>`;
   const lines = [];
   const unknownCount = c.counts?.unknown ?? (Array.isArray(c.unknown) ? c.unknown.length : 0);
   // Nothing changed among the files that could be read: never "nothing changed" while some could not be (Z1)
   if (!c.total) lines.push(`<p class="small">${esc(t(unknownCount ? 'jrNoChangesRead' : 'jrNoChanges'))}</p>`);
-  else {
-    // The whole counts (the server cuts the names at its maximum)
-    const n = c.counts || { changed: c.changed.length, added: c.added.length, deleted: c.deleted.length };
-    lines.push(`<p class="small">${esc(t('jrChanges', n))}</p>`);
+  // The whole counts (the server cuts the names at its maximum)
+  else lines.push(`<p class="small">${esc(t('jrChanges', c.counts || { changed: c.changed.length, added: c.added.length, deleted: c.deleted.length }))}</p>`);
+  if (unknownCount) lines.push(`<p class="small">${esc(t('jrUnknown', { count: unknownCount }))}</p>`);
+  // What the start's lean copy left out: not compared, so never only in the fold
+  if (c.scope === 'lean' && c.leftOut > 0) lines.push(`<p class="small muted">${esc(t('jrLean', { count: c.leftOut }))}</p>`);
+  return lines.join('');
+}
+function changesDetailHtml(c) {
+  if (!c || c.basis !== 'start') return '';
+  const lines = [];
+  if (c.total) {
     const all = [...c.changed.map((f) => ['changed', f]), ...c.added.map((f) => ['added', f]), ...c.deleted.map((f) => ['deleted', f])];
     const shown = all.slice(0, NAMES_SHOWN).map(([kind, f]) => `<li class="jr-${kind}"><code translate="no" title="${esc(f)}">${esc(f)}</code></li>`).join('');
     const rest = c.total - Math.min(all.length, NAMES_SHOWN);
     lines.push(`<ul class="jr-files">${shown}${rest > 0 ? `<li class="muted">${esc(t('jrMore', { count: rest }))}</li>` : ''}</ul>`);
   }
-  if (unknownCount) lines.push(`<p class="small">${esc(t('jrUnknown', { count: unknownCount }))}</p>`);
   if (c.notes > 0) lines.push(`<p class="small muted">${esc(t(c.total ? 'jrNotes' : 'jrNotesOnly'))}</p>`);
-  if (c.scope === 'lean' && c.leftOut > 0) lines.push(`<p class="small muted">${esc(t('jrLean', { count: c.leftOut }))}</p>`);
   lines.push(`<p class="small muted">${esc(t('jrBasis'))}</p>`);
   return lines.join('');
 }
@@ -222,14 +229,37 @@ export function jobTips(text) {
 // result: the /job-result answer (the app's own record) or null
 // guide: the acceptance guide (acceptGuide.js acceptGuideHtml): before Accept while the result waits, after the
 // checks once accepted; '' says nothing
-export function jobResultHtml({ team = null, changes = null, result = null, point = null, steps = '', go = null, cost = '', tips = [], back: backOpts = {}, guide = '' } = {}) {
+// The card's first view (independent review of 0.19.0 §8: it had grown dense): what was asked, the review's word and
+// whether the files are still those it was about, anything that stands in the way (a review asking for changes, files
+// written after it, a reviewer agent that said otherwise, commands that ended with an error), the counts of what
+// changed, then the decision: try it (the guide), open, change, accept, go back. The rest of the evidence (the files'
+// names, every check, the cost, the tips, how to open it, where going back goes) is under "Details", a <details> that
+// keeps its state across redraws (moreOpen: the drawer's toggle listener). Blockers and what is not known are never
+// only in the fold. Pure.
+// more: the fold is open
+export function jobResultHtml({ team = null, changes = null, result = null, point = null, steps = '', go = null, cost = '', tips = [], back: backOpts = {}, guide = '', more = false, moreKey = 'job-result' } = {}) {
   if (!team || !RESULT_STEPS.includes(team.step)) return '';
   const asked = team.plan?.title ? `<p class="small"><b>${esc(t('jrAsked'))}</b> ${esc(team.plan.title)}</p>` : '';
   const verdict = team.review?.verdict;
   const review = verdict === 'APPROVE' ? t('jrReviewApproved') : verdict === 'REVISE' ? t('jrReviewRevise') : t('jrReviewNone');
-  const checks = `<p class="small"><b>${esc(t('jrChecks'))}</b></p><ul class="jr-checks"><li>${esc(review)}</li>${freshHtml(team, result)}${reviewersHtml(team, result)}${commandsHtml(result?.commands)}<li>${esc(t('jrNotRun'))}</li><li>${esc(acceptedText(team, result))}</li></ul>`;
+  const fresh = freshHtml(team, result);
+  const revs = reviewersHtml(team, result);
+  const cmds = commandsHtml(result?.commands);
+  // In the first view: the review's word, its freshness, whether a separate reviewer agent was seen (and what it said),
+  // commands that failed and were not run again, and what is not known of the commands (no session seen, a command with
+  // no end or never run, a tool whose log is not read, a failure whose later run is not known). A command that failed
+  // and then passed is the usual way of work: said under Details with every command
+  const c = result?.commands;
+  const failures = Array.isArray(c?.failures) ? c.failures : [];
+  const notAgain = failures.filter((x) => x?.laterOk === false).length;
+  const pos = (v) => Number.isInteger(v) && v > 0;
+  const cmdsUnknown = c === null ? `<li class="jr-cmds">${esc(t('jrCmdsNoSession'))}</li>` : c && (pos(c.noEnd) || pos(c.notRun) || (Array.isArray(c.unknownTools) && c.unknownTools.length) || failures.some((x) => x?.laterOk !== true && x?.laterOk !== false)) ? `<li>${esc(t('jrAttnCmdsUnknown'))}</li>` : '';
+  const now = `<ul class="jr-checks jr-now"><li${verdict === 'APPROVE' ? '' : ' class="jr-stale"'}>${verdict === 'APPROVE' ? esc(review) : `<b>${esc(review)}</b>`}</li>${fresh}${revs}${notAgain ? `<li class="jr-stale">${esc(t('jrAttnCmds', { count: notAgain }))}</li>` : ''}${cmdsUnknown}${team.step === 'done' ? `<li>${esc(acceptedText(team, result))}</li>` : ''}</ul>`;
+  const checks = `<p class="small"><b>${esc(t('jrChecks'))}</b></p><ul class="jr-checks"><li>${esc(review)}</li>${cmds}<li>${esc(t('jrNotRun'))}</li><li>${esc(acceptedText(team, result))}</li></ul>`;
   const back = startPointText(point);
-  return `<section class="dr-sec job-result" data-sec="result" aria-labelledby="jrH"><h3 id="jrH">${icon('check')} ${esc(t('jrTitle'))}</h3>${steps}${asked}${changesHtml(changes)}${cost ? `<p class="small muted jr-cost">${esc(cost)}</p>` : ''}${team.step === 'finish' ? guide + resultActsHtml(point, backOpts) : ''}${checks}${team.step === 'done' ? guide : ''}${team.step === 'finish' ? goHtml(go) : ''}${tipsHtml(tips)}<p class="small">${esc(t('jrOpen'))}</p>${back ? `<p class="small"><b>${esc(t('jrBack'))}</b> ${esc(back)}</p>` : ''}</section>`;
+  const details = `${changesDetailHtml(changes)}${team.step === 'done' ? guide : ''}${checks}${cost ? `<p class="small muted jr-cost">${esc(cost)}</p>` : ''}${tipsHtml(tips)}<p class="small">${esc(t('jrOpen'))}</p>${back ? `<p class="small"><b>${esc(t('jrBack'))}</b> ${esc(back)}</p>` : ''}`;
+  const fold = `<details class="dr-more jr-more" data-more="${esc(moreKey)}"${more ? ' open' : ''}><summary data-fk="jr:more">${esc(t('jrMore_details'))}</summary>${details}</details>`;
+  return `<section class="dr-sec job-result" data-sec="result" aria-labelledby="jrH"><h3 id="jrH">${icon('check')} ${esc(t('jrTitle'))}</h3>${steps}${asked}${now}${changesSummaryHtml(changes)}${team.step === 'finish' ? guide + resultActsHtml(point, backOpts) + goHtml(go) : ''}${fold}</section>`;
 }
 
 // The answers per project and job: asked again after ttl (files change while the person tries the result). The
@@ -270,7 +300,7 @@ export function createJobResult({ fetchJson = fetchJobChanges, fetchRecord = fet
   return {
     get,
     getRecord,
-    // opts: { steps, go } as jobResultHtml takes them
+    // opts: { steps, go, more, ... } as jobResultHtml takes them
     html(p, team, point, opts = {}) {
       if (!team || !RESULT_STEPS.includes(team.step)) return '';
       // A job from before job ids has no start copy of its own, and no record of the app's
@@ -278,7 +308,7 @@ export function createJobResult({ fetchJson = fetchJobChanges, fetchRecord = fet
       const changes = jobId ? get(p.id, jobId) : { basis: 'no-record' };
       const asks = jobId && (team.review?.verdict === 'APPROVE' || team.review?.verdict === 'REVISE' || team.step === 'done');
       const answer = asks ? getRecord(p.id, jobId) : null;
-      return jobResultHtml({ team, changes, result: answer?.failed ? null : answer, point, ...opts });
+      return jobResultHtml({ team, changes, result: answer?.failed ? null : answer, point, moreKey: `jr:${p.id}`, ...opts });
     },
   };
 }

@@ -24,6 +24,8 @@ const RESTORE_DIR = 'restore';
 export const RESTORE_LIMITS = Object.freeze({ files: 3000, bytes: 50 * 1024 * 1024, fileBytes: 16 * 1024 * 1024, depth: 16 });
 // Points kept per project (newest first); the point a restore goes back to and the one it takes are never pruned by it
 export const RESTORE_KEEP = 5;
+// Folders and entries a scan could not read that a point may name (scanProject unread); more is folder-unreadable
+export const UNREAD_MAX = 200;
 // A project over the limits (a game with art, a folder of logs) still gets a point: a lean one, which leaves out the
 // files an AI tool does not write (over LEAN.fileBytes, or logs) and says how many. Left out is never touched by going
 // back, as a skipped folder: the point of a lean scope is planned and backed up with the same scope.
@@ -55,9 +57,11 @@ const MANIFEST = 'manifest.json';
 const MANIFEST_MAX = 4 * 1024 * 1024;
 // Manifest versions (review 2026-10 F02): 1 holds no permissions; 2 holds each file's Unix permissions (mode) on
 // Linux and macOS. Both are read: a version 1 point is put back as before, a rewritten file keeping the permissions it
-// has. Windows writes version 2 without modes (its files have no such bits).
+// has. Windows writes version 2 without modes (its files have no such bits). 3 is 2 with gaps (unread, N01), written
+// only for a point that has some: an older app, which would remove the files under them, does not read such a point.
 const MANIFEST_VERSION = 2;
-const MANIFEST_VERSIONS = new Set([1, MANIFEST_VERSION]);
+const MANIFEST_VERSION_GAPS = 3;
+const MANIFEST_VERSIONS = new Set([1, MANIFEST_VERSION, MANIFEST_VERSION_GAPS]);
 // Read, write and run for owner, group and others only: set-user-id, set-group-id and sticky are never kept or set
 const MODE_BITS = 0o777;
 const validMode = (m) => m === undefined || (Number.isInteger(m) && m >= 0 && m <= MODE_BITS);
@@ -130,23 +134,31 @@ function keepLargest(list, f) {
 // inside the project, so a point never copies the points). seen (optional, the scope preview): collects what is left
 // out, seen.dirs (a Map of lower-case folder name -> { name, why }) and seen.big (a lean scan's left-out files);
 // seen.folders, when an array, gets every folder the scan entered ('' the project folder; treeFingerprint).
+// unread: folders that could not be listed and entries that could not be looked at (no access, a passing I/O error),
+// at most UNREAD_MAX: their files are not in the scan, and they are not an empty folder either. A point keeps them as
+// boundaries, and going back never removes a file under one as added later (independent review of 0.19.0, N01). The
+// project folder itself unreadable is a problem (folder-unreadable), never an empty project.
 export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'full', seen = null) {
   const lean = scope === 'lean';
   const skipped = new Set(skip.filter(Boolean).map((p) => path.resolve(p).toLowerCase()));
   const top = lstat(dir);
   if (!top || !top.isDirectory()) return fail('folder-missing');
   const files = [];
+  const unread = [];
   let bytes = 0;
   let leftOut = 0;
   let leftBytes = 0;
+  const gap = (rel) => (unread.push(rel), unread.length > UNREAD_MAX ? 'folder-unreadable' : null);
   const walk = (abs, rel, depth) => {
     if (depth > limits.depth) return 'too-deep';
     if (Array.isArray(seen?.folders)) seen.folders.push(rel);
     let list;
     try {
       list = fs.readdirSync(abs, { withFileTypes: true });
-    } catch {
-      return null; // an unreadable folder is left out (going back never removes what a point does not hold)
+    } catch (e) {
+      // Gone since its parent was listed (a temporary folder): nothing there to keep, no gap
+      if (rel && e?.code === 'ENOENT') return null;
+      return rel ? gap(rel) : 'folder-unreadable';
     }
     list.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     const names = new Set(list.filter((d) => d.isDirectory()).map((d) => d.name.toLowerCase()));
@@ -155,8 +167,16 @@ export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'fu
       const childRel = rel ? `${rel}/${d.name}` : d.name;
       if (!safeRel(childRel)) continue;
       const child = path.join(abs, d.name);
-      const st = lstat(child);
-      if (!st || st.isSymbolicLink()) continue;
+      let st;
+      try {
+        st = fs.lstatSync(child);
+      } catch (e) {
+        // Deleted since the folder was listed (an editor's swap file): gone, no gap; any other error is one
+        const p = e?.code === 'ENOENT' ? null : gap(childRel);
+        if (p) return p;
+        continue;
+      }
+      if (st.isSymbolicLink()) continue;
       if (st.isDirectory()) {
         const low = d.name.toLowerCase();
         const why = RESTORE_SKIP.has(low) ? (VCS_DIRS.has(low) ? 'history' : 'packages') : depth === 0 && RESTORE_SKIP_TOP.has(low) ? (TOOL_DIRS.has(low) ? 'tools' : 'build') : unity && UNITY_SKIP.has(low) ? 'build' : skipped.has(path.resolve(child).toLowerCase()) ? 'hub' : null;
@@ -183,7 +203,17 @@ export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'fu
     return null;
   };
   const problem = walk(dir, '', 0);
-  return problem ? fail(problem) : { ok: true, files, bytes, scope: lean ? 'lean' : 'full', leftOut, leftBytes };
+  return problem ? fail(problem) : { ok: true, files, bytes, scope: lean ? 'lean' : 'full', leftOut, leftBytes, unread: unread.sort() };
+}
+
+// Under one of the boundaries (a scan's or a point's unread), by the project's file name key
+function underAny(boundaries, key) {
+  if (!boundaries.length) return () => false;
+  const keys = boundaries.map(key);
+  return (rel) => {
+    const k = key(rel);
+    return keys.some((b) => k === b || k.startsWith(`${b}/`));
+  };
 }
 
 function readManifest(pointDir) {
@@ -195,6 +225,9 @@ function readManifest(pointDir) {
     if (!MANIFEST_VERSIONS.has(m?.version) || !POINT_ID_RE.test(m.id) || !Array.isArray(m.files)) return null;
     if (m.scope !== undefined && !RESTORE_SCOPES.includes(m.scope)) return null;
     if (!m.files.every((f) => f && safeRel(f.rel) && Number.isInteger(f.size) && f.size >= 0 && hasDigest(f) && validMode(f.mode))) return null;
+    // What the scan could not read when the point was taken (N01): going back leaves everything under them alone
+    // (version 3 names some, version 1 and 2 none)
+    if ((m.unread !== undefined || m.version === MANIFEST_VERSION_GAPS) && !(m.version === MANIFEST_VERSION_GAPS && Array.isArray(m.unread) && m.unread.length > 0 && m.unread.length <= UNREAD_MAX && m.unread.every(safeRel))) return null;
     // A file in a folder points leave out is never read back or written: such entries are dropped, not the point.
     // 0.17 leaves out more tools' folders (.gemini, .qwen, .opencode, .codex); a point taken before still names their
     // files and must stay listed and usable (review 2026-10-08: it vanished from the list after the update)
@@ -222,7 +255,7 @@ export function listPoints({ hubDir, projectId }) {
     if (!st || !st.isDirectory()) continue;
     const m = readManifest(pd);
     if (!m || m.id !== id || m.projectId !== projectId) continue;
-    out.push({ id, at: m.at, reason: POINT_REASONS.includes(m.reason) ? m.reason : 'manual', label: pointLabel(m.label), files: m.files.length, bytes: m.files.reduce((n, f) => n + f.size, 0), scope: m.scope || 'full', leftOut: Number.isInteger(m.leftOut) ? m.leftOut : 0 });
+    out.push({ id, at: m.at, reason: POINT_REASONS.includes(m.reason) ? m.reason : 'manual', label: pointLabel(m.label), files: m.files.length, bytes: m.files.reduce((n, f) => n + f.size, 0), scope: m.scope || 'full', leftOut: Number.isInteger(m.leftOut) ? m.leftOut : 0, unread: m.unread?.length || 0 });
   }
   return out;
 }
@@ -358,7 +391,8 @@ function preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope }) {
   let candidate = null;
   if (latest && reuse) {
     const m = readManifest(path.join(base, latest.id));
-    if (m && (m.scope || 'full') === scan.scope && sameFiles(m.files, scan.files)) candidate = { id: latest.id, files: m.files, answer: { ok: true, id: latest.id, reused: true, files: scan.files.length, bytes: scan.bytes, scope: scan.scope, leftOut: scan.leftOut } };
+    const sameGaps = (m?.unread || []).join('\0') === scan.unread.join('\0');
+    if (m && (m.scope || 'full') === scan.scope && sameGaps && sameFiles(m.files, scan.files)) candidate = { id: latest.id, files: m.files, answer: { ok: true, id: latest.id, reused: true, files: scan.files.length, bytes: scan.bytes, scope: scan.scope, leftOut: scan.leftOut } };
   }
   const shared = latest ? sharedFrom(path.join(base, latest.id)) : null;
   const at = now();
@@ -477,7 +511,7 @@ async function sameContentAsync(dir, files) {
 // Secrets typed into a job (a key, a password) are masked before the label reaches the disk (review 2026-10-02); cut
 // on whole characters so an emoji is never split
 const pointLabel = (label) => (typeof label === 'string' ? Array.from(redact(label).replace(/\s+/g, ' ').trim()).slice(0, LABEL_MAX).join('') : '');
-const manifestOf = ({ scan, id, at }, projectId, reason, files, label) => ({ version: MANIFEST_VERSION, id, projectId, at, reason: POINT_REASONS.includes(reason) ? reason : 'manual', files, ...(pointLabel(label) ? { label: pointLabel(label) } : {}), ...(scan.scope === 'lean' ? { scope: 'lean', leftOut: scan.leftOut } : {}) });
+const manifestOf = ({ scan, id, at }, projectId, reason, files, label) => ({ version: scan.unread.length ? MANIFEST_VERSION_GAPS : MANIFEST_VERSION, id, projectId, at, reason: POINT_REASONS.includes(reason) ? reason : 'manual', files, ...(pointLabel(label) ? { label: pointLabel(label) } : {}), ...(scan.scope === 'lean' ? { scope: 'lean', leftOut: scan.leftOut } : {}), ...(scan.unread.length ? { unread: scan.unread } : {}) });
 // Read once: the copy and its digest are the same bytes, even if the file changes meanwhile
 const copied = (f, buf) => ({ rel: f.rel, size: buf.length, mtimeMs: f.size === buf.length ? f.mtimeMs : 0, sha256: digestOf(buf), ...(f.mode !== undefined ? { mode: f.mode } : {}) });
 // The project's points folder: the owner's only, also when an older version made it open to others (a folder, never
@@ -584,13 +618,15 @@ const readRel = (dir, rel) => fs.readFileSync(path.join(dir, ...rel.split('/')))
 // The digest of a plan: the preview hands it to the page, the apply refuses a plan that differs (plan-changed), so
 // going back never does more than the person was shown
 function planDigest(plan) {
-  return digestOf(JSON.stringify([plan.point?.id, plan.changed, plan.missing, plan.added])).slice(0, 16);
+  return digestOf(JSON.stringify([plan.point?.id, plan.changed, plan.missing, plan.added, plan.unread])).slice(0, 16);
 }
 
 // What going back to a point would do (reads only). changed: files that differ now and are put back (the digest
 // decides, a new time alone is no change); missing: files deleted since and brought back; added: files that came
-// later and are removed. Returns { ok: true, point: { id, at, reason }, changed, missing, added, planId } or
-// { ok: false, problem }.
+// later and are removed; unread: folders (or entries) left alone, because the point could not read them when it was
+// taken (a file there now may be older than the point: never removed) or the project's cannot be read now (the
+// point's files there are neither missing nor written). Returns { ok: true, point: { id, at, reason }, changed,
+// missing, added, unread, planId } or { ok: false, problem }.
 /** @returns {any} */
 export function planRestore({ hubDir, projectId, dir, id, limits = RESTORE_LIMITS }) {
   const pt = readPoint(hubDir, projectId, id);
@@ -603,12 +639,14 @@ export function planRestore({ hubDir, projectId, dir, id, limits = RESTORE_LIMIT
   const scan = scanProject(dir, limitsFor(scope, limits), [hubDir], scope);
   if (!scan.ok) return scan;
   const now = new Map(scan.files.map((f) => [key(f.rel), f]));
+  const unreadThen = pt.manifest.unread || [];
+  const unreadNow = underAny(scan.unread, key);
   const changed = [];
   const missing = [];
   for (const f of pt.manifest.files) {
     const cur = now.get(key(f.rel));
     if (!cur) {
-      missing.push(f.rel);
+      if (!unreadNow(f.rel)) missing.push(f.rel);
       continue;
     }
     // The bytes decide, and the permissions where the point holds them (review F02: chmod -x is a change)
@@ -620,9 +658,11 @@ export function planRestore({ hubDir, projectId, dir, id, limits = RESTORE_LIMIT
     }
     if (!same) changed.push(f.rel);
   }
-  const added = scan.files.filter((f) => !inPoint.has(key(f.rel))).map((f) => f.rel);
+  const neverSeen = underAny(unreadThen, key);
+  const added = scan.files.filter((f) => !inPoint.has(key(f.rel)) && !neverSeen(f.rel)).map((f) => f.rel);
+  const unread = [...new Set([...unreadThen, ...scan.unread])].sort();
   const { at, reason } = pt.manifest;
-  const plan = { ok: true, point: { id, at, reason }, changed, missing, added };
+  const plan = { ok: true, point: { id, at, reason }, changed, missing, added, unread };
   return { ...plan, planId: planDigest(plan) };
 }
 
@@ -863,6 +903,8 @@ export async function treeFingerprint(dir, { hubDir = null, limits = RESTORE_LIM
     scan = scanProject(dir, limitsFor('lean', limits), [hubDir], 'lean', seen);
   }
   if (!scan.ok) return { ok: false, problem: scan.problem };
+  // A folder it could not read: no fingerprint claims the files in it (N01); tried again later (jobResults.mjs)
+  if (scan.unread.length) return { ok: false, problem: 'unreadable' };
   const notes = new Set([FIRST_DIR, '.orkestra']);
   const files = scan.files.filter((f) => !notes.has(f.rel.split('/')[0].toLowerCase()));
   const quick = crypto.createHash('sha256');
@@ -923,7 +965,9 @@ export function projectRestoreScope({ catalog, projectId, homeDir = null, claude
   if (!scan.ok) return { status: 200, body: { ...body, ok: false, problem: scan.problem } };
   const big = seen.big.sort((a, b) => b.size - a.size || (a.rel < b.rel ? -1 : 1)).slice(0, SCOPE_BIG);
   const dirs = [...seen.dirs.values()];
-  return { status: 200, body: { ...body, ok: true, scope: scan.scope, files: scan.files.length, bytes: scan.bytes, leftOut: scan.leftOut, leftBytes: scan.leftBytes, big, skipped: dirs.slice(0, SCOPE_DIRS), moreDirs: Math.max(0, dirs.length - SCOPE_DIRS) } };
+  // unread: folders the copy could not read (N01), said as a gap, not as a choice; at most SCOPE_DIRS, moreUnread the rest
+  const unread = scan.unread.slice(0, SCOPE_DIRS);
+  return { status: 200, body: { ...body, ok: true, scope: scan.scope, files: scan.files.length, bytes: scan.bytes, leftOut: scan.leftOut, leftBytes: scan.leftBytes, big, skipped: dirs.slice(0, SCOPE_DIRS), moreDirs: Math.max(0, dirs.length - SCOPE_DIRS), unread, moreUnread: scan.unread.length - unread.length } };
 }
 
 // GET /api/projects/<id>/job-changes?job=<Job-ID> (read-only, no action mode needed; docs/restore.md §9): what changed
@@ -1015,6 +1059,9 @@ export async function projectJobChanges({ catalog, projectId, jobId, limits = RE
   const leftOut = Number.isInteger(pt.manifest.leftOut) ? pt.manifest.leftOut : 0;
   const key = keyIn(dir);
   const now = new Map(scan.files.map((f) => [key(f.rel), f]));
+  // Folders the copy could not read, or the project's that cannot be read now (N01): their files are unknown
+  const neverSeen = underAny(pt.manifest.unread || [], key);
+  const unreadNow = underAny(scan.unread, key);
   const inCopy = new Set();
   const changed = [];
   const deleted = [];
@@ -1029,7 +1076,7 @@ export async function projectJobChanges({ catalog, projectId, jobId, limits = RE
     let kind = null;
     // Not in this look at the project: gone, or still there but now past what a copy of this scope takes (a lean
     // copy's size limits): that file changed, it was not deleted
-    if (!cur) kind = await stillThere(dir, f);
+    if (!cur) kind = unreadNow(f.rel) ? 'unknown' : await stillThere(dir, f);
     else if (cur.rel !== f.rel || cur.size !== f.size) kind = 'changed';
     else {
       const same = await bytesMatch(dir, f, readFile);
@@ -1043,6 +1090,7 @@ export async function projectJobChanges({ catalog, projectId, jobId, limits = RE
   for (const f of scan.files) {
     if (inCopy.has(key(f.rel))) continue;
     if (isNote(f.rel)) notes++;
+    else if (neverSeen(f.rel)) unknown.push(f.rel);
     // A lean copy that left files out: one not in it but made before the job started was left out then, changed since
     // (a copy that left nothing out: a file not in it is new)
     // (the job's own start: its record's time; a reused copy may be days older)

@@ -1016,7 +1016,10 @@ export function createWorkshop(root, { store, toast = (_text) => {}, label = (s)
         empty.dataset.kind = 'none';
         empty.innerHTML = `<p>${esc(word('noneBody'))}</p><div class="ws-none-btns"><button type="button" class="ws-none-new" data-ws-none="new">${esc(word('noneNew'))}</button><button type="button" data-ws-none="example">${esc(word('noneExample'))}</button></div>`;
       }
-      empty.hidden = false;
+      // With no project of the person's own the "Got an idea?" card above (checklist.js) holds the same two ways on:
+      // this box steps back, so a new install shows one start (0.19.0 clean-install trial). It stays for someone whose
+      // projects are all resting (the Building has none to show, the card is gone)
+      empty.hidden = !hasOwnProject([...store.projects.values()]);
     } else {
       delete empty.dataset.kind;
       empty.hidden = !scene.closed;

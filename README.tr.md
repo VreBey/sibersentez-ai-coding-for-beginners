@@ -49,7 +49,7 @@ nasıl geri alacağını bildiğini varsayarlar. SiberSentez onların etrafında
 | Başlamak | Git, Node.js ve aracı elle kur | Adım adım sihirbaz; her komutta Enter'a sen basarsın |
 | İş vermek | Terminalde iyi bir istem yaz | Kendi sözlerinle söyle; ekip, plan ve kontrol senin için kurulur |
 | Dosyalar değişmeden önce | Aracın ayarlarına bağlı | Plan kipi olan araçta yapay zekâ önce plan yazar, onayını bekler |
-| İşi kontrol etmek | Kodu sen okursun | Ayrı bir denetçi kontrol eder; sonucu tek tıkla açarsın |
+| İşi kontrol etmek | Kodu sen okursun | İş ayrı bir denetçiden kontrol ister; sonuç kartı uygulamanın kendi gördüğünü söyler, kabulden önce sen denersin |
 | Bir hata | Biliyorsan `git` | Her işten önce kopya alınır: tek tıkla geri dön, onu da geri al |
 | Ne olduğunu görmek | Akan terminal çıktısı | Kimin çalıştığını, kimin seni beklediğini ve neyin değiştiğini gösteren bir bina |
 
@@ -60,12 +60,12 @@ Yalnız senin bilgisayarında çalışır, kendi yapay zekâsını getirmez ve i
 1. **Proje oluştur.** Bir ad ver ve ne yapmak istediğini yaz: "arama kutusu olan bir tarif sitesi".
 2. **Başlat'a bas.** Yapay zekâ aracın pencerenin içindeki kendi terminalinde, işin ilk mesajıyla açılır.
 3. **Planı onayla.** Plan kipi olan araçta (Claude Code, Gemini CLI, GitHub Copilot CLI, Cursor CLI ve Qwen Code) sen evet demeden hiçbir şeye dokunulmaz; istersen değişiklik iste.
-4. **Sonucu aç.** Ayrı bir denetçi kontrol etti. Kabul et, değişiklik iste ya da işten önceki hâle dön.
+4. **Sonucu aç.** İş ayrı bir denetçiden kontrol ister; sonuç kartı SiberSentez'in kendi gördüğünü söyler (denetçi çalıştı mı, hangi komutlar nasıl bitti, dosyalar sonradan değişti mi). Dene; sonra kabul et, değişiklik iste ya da işten önceki hâle dön.
 
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/light-tr.webp" alt="Açık tema: ekip Bina'da çalışıyor"><br><b>Koyu ya da açık.</b> Temanı seç ya da sistemi izle; bina akşam penceresi gibi kalır.</td>
-    <td width="50%"><img src="docs/screenshots/result.webp" alt="Sonuç hazır: aç, neyin değiştiğini gör ya da geri al"><br><b>Kontrol edilmiş sonuç.</b> Ayrı bir denetçi işi kontrol eder; sonucu aç, neyin değiştiğine bak ya da geri al.</td>
+    <td width="50%"><img src="docs/screenshots/result.webp" alt="Sonuç hazır: aç, neyin değiştiğini gör ya da geri al"><br><b>Sonuç ve görülenler.</b> İş ayrı bir kontrol ister, kart uygulamanın gördüğünü söyler; sonucu aç, neyin değiştiğine bak ya da geri al.</td>
   </tr>
 </table>
 

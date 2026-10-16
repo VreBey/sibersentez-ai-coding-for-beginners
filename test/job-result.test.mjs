@@ -97,7 +97,8 @@ test('the answers are asked per project and job, again after a while; a job from
 test('the drawer shows it under the job, before "How to run it"', () => {
   const drawer = fs.readFileSync(new URL('../public/js/views/drawer.js', import.meta.url), 'utf8');
   assert.ok(drawer.indexOf('${jobResultSection(p)}') > 0 && drawer.indexOf('${jobResultSection(p)}') < drawer.indexOf("${built ? runHint.html(p, { quiet: resultFirst }) : ''}"));
-  assert.ok(drawer.includes('return jobResult.html(p, d, startPoint, waiting ? { steps: stepsHtml(d, { offline: store.lost }), go, cost, tips, back: backOpts, guide } : { cost, tips, back: backOpts, guide });'));
+  assert.ok(drawer.includes('return jobResult.html(p, d, startPoint, waiting ? { steps: stepsHtml(d, { offline: store.lost }), go, cost, tips, back: backOpts, guide, more } : { cost, tips, back: backOpts, guide, more });'));
+  assert.ok(drawer.includes('const more = moreOpen.has(`jr:${p.id}`);'), 'the Details fold keeps its state per project');
   // The way to the job's AI session goes where the Building's result card goes (review U08)
   assert.ok(drawer.includes("if (act === 'open-ai') return void window.dispatchEvent(new CustomEvent('hq-action', { detail: { action: 'open-ai-terminal', projectId: p.id, sessionId: btn.dataset.jobSession || null } }));"));
 });
@@ -316,4 +317,57 @@ test("the app's record, review round 2: no record is told without a wrong cause,
   r.html(p, team(), null);
   await tick();
   assert.equal(asked, 4);
+});
+
+test('the card\'s first view (independent review of 0.19.0 §8): the decision and what stands in its way; the files\' names and every check under Details, whose state is kept', () => {
+  setLanguage('en');
+  const S = STRINGS.en;
+  const changes = { basis: 'start', total: 2, counts: { changed: 1, added: 1, deleted: 0, unknown: 1 }, changed: ['index.html'], added: ['menu.html'], deleted: [], unknown: ['locked.db'] };
+  const cut = (h) => [h.slice(0, h.indexOf('<details')), h.slice(h.indexOf('<details'))];
+  // Approved, the files the same: the word and the counts first; the names and the checks folded
+  let [first, fold] = cut(jobResultHtml({ team: team(), changes, result: { fresh: 'same', record: { verdict: { value: 'APPROVE', blockers: 0, nits: 0, seenAt: 1, reviewAt: 1 } } }, cost: 'About $1', tips: ['short'] }));
+  assert.ok(first.includes(esc(S.jrReviewApproved)) && first.includes('jr-now'));
+  assert.ok(first.includes(esc(S.jrChanges.replace('{changed}', '1').replace('{added}', '1').replace('{deleted}', '0'))), 'the counts in the first view');
+  assert.ok(first.includes(esc(S.jrUnknown.replace('{count}', '1'))), 'what could not be read is never only in the fold');
+  assert.ok(first.includes('data-jr-act="open"'), 'the decision in the first view');
+  assert.ok(!first.includes('menu.html') && fold.includes('menu.html'), 'the names under Details');
+  for (const x of [S.jrNotRun, 'About $1', S.jrOpen]) assert.ok(fold.includes(esc(x)), x);
+  assert.ok(!first.includes(esc(S.jrNotRun)));
+  assert.match(fold, /^<details class="dr-more jr-more" data-more="job-result"><summary data-fk="jr:more">/);
+  assert.match(jobResultHtml({ team: team(), changes, more: true, moreKey: 'jr:p' }), /<details class="dr-more jr-more" data-more="jr:p" open>/, 'kept open across redraws');
+  // What stands in the way stays in the first view: a review asking for changes, files written after it, a reviewer
+  // agent that said otherwise, commands that failed and were not run again
+  const revise = team({ review: { verdict: 'REVISE', blockers: 1, nits: 0 } });
+  [first] = cut(jobResultHtml({ team: revise, changes, result: null }));
+  assert.ok(first.includes(`<li class="jr-stale"><b>${esc(S.jrReviewRevise)}</b></li>`));
+  const record = { verdict: { value: 'APPROVE', blockers: 0, nits: 0, seenAt: 1, reviewAt: 1 } };
+  [first] = cut(jobResultHtml({ team: team({ review: { verdict: 'APPROVE', blockers: 0, nits: 0 } }), changes, result: { fresh: 'changed', writtenSince: 2, record, reviewers: { agents: 1, types: ['reviewer'], said: 'REVISE' }, commands: { ran: 5, failed: 2, failures: [{ label: 'npm test', code: 1, at: 1, laterOk: false }, { label: 'npm run lint', code: 1, at: 1, laterOk: true }], failedLines: 2 } } }));
+  assert.ok(first.includes('data-jr-act="re-review"'), 'files written after the review, with its button');
+  assert.ok(/class="jr-revs jr-stale"/.test(first), 'a reviewer agent that said otherwise');
+  assert.ok(first.includes(esc(S.jrAttnCmds.replace('{count}', '1'))), 'only the one not run again');
+  // Unknown freshness is said in the first view too
+  [first] = cut(jobResultHtml({ team: team({ review: { verdict: 'APPROVE', blockers: 0, nits: 0 } }), changes, result: { fresh: 'unknown', reason: 'unreadable', record } }));
+  assert.ok(first.includes('jr-seen'), 'not known: said, not folded');
+  // Accepted: the acceptance in the first view, the guide under Details
+  const done = jobResultHtml({ team: team({ step: 'done' }), changes, guide: '<div class="ag">guide</div>' });
+  [first, fold] = cut(done);
+  assert.ok(first.includes(esc(S.jrAccepted)), 'the acceptance in the first view');
+  assert.ok(!first.includes('class="ag"') && fold.includes('class="ag"'));
+});
+
+test('the first view never leaves a "not known" to the fold: no reviewer agent seen, no session, commands with no end or an unknown later run, a lean copy\'s left-out files (review of 2026-10-16)', () => {
+  setLanguage('en');
+  const S = STRINGS.en;
+  const first = (opts) => {
+    const h = jobResultHtml({ team: team({ review: { verdict: 'APPROVE', blockers: 0, nits: 0 } }), changes: { basis: 'start', total: 0, counts: { changed: 0, added: 0, deleted: 0, unknown: 0 }, changed: [], added: [], deleted: [], ...opts.changes }, result: { fresh: 'same', record: null, ...opts.result } });
+    return h.slice(0, h.indexOf('<details'));
+  };
+  assert.ok(first({ result: { reviewers: { agents: 0 } } }).includes(esc(S.jrRevNone)), 'no separate reviewer agent seen');
+  assert.ok(first({ result: { reviewers: { agents: 1, types: ['reviewer'] } } }).includes('jr-revs'), 'one seen: said too');
+  assert.ok(first({ result: { commands: null } }).includes(esc(S.jrCmdsNoSession)), 'no session of the job seen');
+  for (const commands of [{ ran: 3, noEnd: 1 }, { ran: 3, notRun: 1 }, { ran: 0, unknownTools: ['codex'] }, { ran: 2, failed: 1, failures: [{ label: 'x', code: 1, at: 1, laterOk: null }], failedLines: 1 }]) {
+    assert.ok(first({ result: { commands } }).includes(esc(S.jrAttnCmdsUnknown)), JSON.stringify(commands));
+  }
+  assert.ok(!first({ result: { commands: { ran: 3, failed: 0, failures: [] } } }).includes(esc(S.jrAttnCmdsUnknown)), 'all known: nothing more');
+  assert.ok(first({ changes: { scope: 'lean', leftOut: 4 } }).includes(esc(S.jrLean.replace('{count}', '4'))), 'what the lean copy left out');
 });
