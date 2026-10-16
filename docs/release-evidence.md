@@ -26,6 +26,54 @@ The release facts (commit, files, digests, attestations, workflow runs) come fro
 An attestation is not code signing. The installer and the AppImage are **unsigned**, so Windows SmartScreen still
 warns on first start, and the attestation does not change that.
 
+## 0.20.0 (2026-10-16)
+
+### Built from
+
+- Tag `v0.20.0`, commit `ad67e0f25e08ad4fbe682ad417a923191ba2b85e`, published 2026-10-16:
+  https://github.com/VreBey/sibersentez-ai-coding-for-beginners/releases/tag/v0.20.0
+
+| File | Size | SHA-256 | In SHA256SUMS.txt | Provenance attestations |
+|---|---|---|---|---|
+| `SiberSentez-0.20.0-x86_64.AppImage` | 135.9 MB | `3cfbeca49ff8174ccaac71c6c5b490a73ed3f3743b889d1830f033afa9ba019c` | same | 1 |
+| `SiberSentez-Setup-0.20.0.exe` | 123.1 MB | `11362eae353f4679a9d959cbf38fd81110eabe427eb3a51a8bd197c872471829` | same | 1 |
+
+(GitHub; read 2026-10-17.) Before the upload, the maintainer also ran `sha256sum -c SHA256SUMS.txt` and
+`gh attestation verify` on both files; both passed.
+
+### Checked on GitHub at that commit
+
+| Workflow | What it runs | Result | Run (started) |
+|---|---|---|---|
+| Release build | As for 0.19.0: tests, type check, lint, the installer or AppImage and the packaged app's hidden checks on Windows and Ubuntu; then `SHA256SUMS.txt` and the attestations | build, build-linux, release: success | [38966159538](https://github.com/VreBey/sibersentez-ai-coding-for-beginners/actions/runs/38966159538) (2026-10-16, the tag) |
+| Tests | Windows, Ubuntu and macOS, as for 0.19.0 | test, test-linux, test-macos: success | [38966159505](https://github.com/VreBey/sibersentez-ai-coding-for-beginners/actions/runs/38966159505) (2026-10-16, the tag) |
+| Packaged QA | The packaged app's hidden checks on a clean Windows and Ubuntu runner, started by hand before the tag | qa, qa-linux: success | [38965786782](https://github.com/VreBey/sibersentez-ai-coding-for-beginners/actions/runs/38965786782) (2026-10-16, before the tag) |
+| CodeQL | GitHub's code scanning (JavaScript and the workflows) | success | [38965777226](https://github.com/VreBey/sibersentez-ai-coding-for-beginners/actions/runs/38965777226) (2026-10-16, the push) |
+
+### Checked by the maintainer before the release
+
+- Windows 11: the whole test suite (1,505 passed, 0 failed, 14 skipped), the type check, lint (308 files, no
+  findings), and the packaged app's hidden checks (43 of 43).
+- Linux: Ubuntu in WSL 2, the whole suite (1,401 passed, 0 failed, 118 skipped) and the AppImage's hidden checks
+  (10 of 10).
+- Windows Sandbox: install 0.19.0 (the released file), upgrade to 0.20.0, start, uninstall. All steps passed.
+- The AI tools' command-line options SiberSentez uses: 7 of 7. Claude Code 2.1.301 is the newest checked.
+- `npm audit --omit=dev`: no advisories. Electron 44.8.0, the latest stable release then.
+- Start-up on the maintainer's computer: the server ready in 0.55–0.57 s; the first scan of 462 log files (1.37 GB)
+  in 4.2–4.4 s.
+- Contrast: no text below the WCAG 2.2 threshold in either theme; the lowest ratio 5.2:1 dark, 4.85:1 light.
+- A separate reviewer agent read the changes since 0.19.0 that came from the outside review's open points: the first
+  round asked for changes (what is not known was only under Details; a click before the hub's record was read could
+  overwrite the marks it keeps), the second approved.
+
+### Not tested, or known gaps
+
+- Everything listed for 0.19.0 below still holds: unsigned, no macOS release, other AI tools not used for a whole
+  signed-in job, no real Linux desktop, the release assembled by hand, no session with beginners or a screen reader.
+- **The result card's Details fold** was looked at in a headless browser with the app's styles; opening and closing it
+  by keyboard in the running app was not tried.
+- **Codex** keeps the kit's roles' limits only in part. The app says so before Start; it does not stop the job.
+
 ## 0.19.0 (2026-10-10)
 
 ### Built from
