@@ -17,7 +17,7 @@ The release facts (commit, files, digests, attestations, workflow runs) come fro
 
 1. Download `SHA256SUMS.txt` from the same release.
 2. Compare your file's SHA-256 with the line for it:
-   - Windows (PowerShell): `Get-FileHash .\SiberSentez-Setup-0.20.0.exe -Algorithm SHA256`
+   - Windows (PowerShell): `Get-FileHash .\SiberSentez-Setup-0.21.0.exe -Algorithm SHA256`
    - Linux: `sha256sum -c SHA256SUMS.txt --ignore-missing`
 3. Optionally, check where it was built (needs the GitHub CLI):
    `gh attestation verify <file> --repo VreBey/sibersentez-ai-coding-for-beginners`.
@@ -25,6 +25,68 @@ The release facts (commit, files, digests, attestations, workflow runs) come fro
 
 An attestation is not code signing. The installer and the AppImage are **unsigned**, so Windows SmartScreen still
 warns on first start, and the attestation does not change that.
+
+## 0.21.0 (2026-10-21)
+
+### Built from
+
+- Tag `v0.21.0`, commit `79222c084340d114725a5e9d7253afadf52d649f`, published 2026-10-21:
+  https://github.com/VreBey/sibersentez-ai-coding-for-beginners/releases/tag/v0.21.0
+
+| File | Size | SHA-256 | In SHA256SUMS.txt | Provenance attestations |
+|---|---|---|---|---|
+| `SiberSentez-0.21.0-x86_64.AppImage` | 135.7 MB | `902d1812002cdedb723a8ac1086ce7b74b334d5fdabca9f17e258600365dbed1` | same | 1 |
+| `SiberSentez-Setup-0.21.0.exe` | 123.2 MB | `1d58d600d2e1b032005570236fae477d0f781bbf685ff2a01aabb4b0ce74f189` | same | 1 |
+
+(GitHub; read 2026-10-21.) Before the upload, the maintainer also ran `sha256sum -c SHA256SUMS.txt` and
+`gh attestation verify` on both files; both passed. After the upload the files were downloaded from the release
+again and checked against `SHA256SUMS.txt`.
+
+### Checked on GitHub at that commit
+
+| Workflow | What it runs | Result | Run (started) |
+|---|---|---|---|
+| Release build | As for 0.20.0, and now `npm audit --omit=dev` and `tools/audit-electron.mjs` before anything is built, without npm's cache | build, build-linux, release: success | [39570020240](https://github.com/VreBey/sibersentez-ai-coding-for-beginners/actions/runs/39570020240) (2026-10-21, the tag) |
+| Tests | Windows, Ubuntu and macOS, as for 0.20.0, and the Electron advisory check | test, test-linux, test-macos: success | [39570020162](https://github.com/VreBey/sibersentez-ai-coding-for-beginners/actions/runs/39570020162) (2026-10-21, the tag) |
+| Packaged QA | The packaged app's hidden checks on a clean Windows and Ubuntu runner, started by hand before the tag | qa, qa-linux: success | [39569484120](https://github.com/VreBey/sibersentez-ai-coding-for-beginners/actions/runs/39569484120) (2026-10-21, before the tag) |
+| CodeQL | GitHub's code scanning (JavaScript and the workflows) | success | [39569475397](https://github.com/VreBey/sibersentez-ai-coding-for-beginners/actions/runs/39569475397) (2026-10-21, the push) |
+
+### Checked by the maintainer before the release
+
+- Windows 11: the whole test suite (1,537 passed, 0 failed, 16 skipped), the type check, lint (314 files, no
+  findings), and the packaged app's hidden checks (43 of 43).
+- Linux: Ubuntu in WSL 2, the whole suite (1,434 passed, 0 failed, 119 skipped) and the AppImage's hidden checks
+  (all passed).
+- Windows Sandbox: install 0.20.0, upgrade to 0.21.0 (a local build of the same source), start, uninstall. All steps
+  passed; the hub survived the upgrade.
+- The AI tools' command-line options SiberSentez uses: 7 of 7. Claude Code 2.1.306 is the newest checked.
+- `npm audit --omit=dev`: no advisories; `tools/audit-electron.mjs`: no advisory against Electron 44.9.3, the latest
+  44.x release then.
+- Start-up on the maintainer's computer: the server ready in 0.56 s; the first scan of 539 log files (2.0 GB) in
+  4.7–4.9 s.
+- Contrast: no text below the WCAG 2.2 threshold in either theme; the lowest ratio 5.2:1 dark, 4.85:1 light.
+- Reviews by separate reviewer agents, each reading the source itself:
+  - an independent review of the whole app on 2026-10-20 (technical and product), whose findings this release
+    closes;
+  - a review of those fixes (two rounds, then approved);
+  - a last review of everything since 0.20.0 (three rounds). Its first round reproduced a way the new "remove the
+    copies of projects no longer listed" could remove a listed project's restore points while the list of projects
+    was half written; the second found the same while the loaded list was up to a minute old. Both were fixed before
+    the release, and the third round approved.
+
+### Not tested, or known gaps
+
+- Everything listed for 0.20.0 below still holds: unsigned, no macOS release, other AI tools not used for a whole
+  signed-in job, no real Linux desktop, the release assembled by hand, no session with beginners or a screen reader.
+- **"Ask the AI" on real tool screens.** The input box is recognized in the tests' layouts of Claude Code (rules
+  around the input) and Gemini CLI and Qwen Code (a box). It was not tried on a live screen of any tool; with Codex,
+  Copilot, Cursor and OpenCode the message is expected to go to the clipboard.
+- **The clipboard in the installed app** (the "copied" note and Ctrl+V) was not tried by hand.
+- **Free space on a network drive or a OneDrive hub**: what `fs.statfsSync` answers there was not tried; a drive that
+  cannot be asked is not checked.
+- **The AppImage on an older distribution** (Ubuntu 22.04) was not tried; only Ubuntu 26.04 in WSL.
+- **Large hubs**: the Settings row and going back's plan read synchronously; a hub with many large points may hold
+  the app for a moment.
 
 ## 0.20.0 (2026-10-16)
 
