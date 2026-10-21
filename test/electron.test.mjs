@@ -879,7 +879,7 @@ describe('packaging and installer', () => {
 
   test('one pinned dependency (node-pty); dev dependencies pinned: electron, electron-builder, xterm (vendored), happy-dom (the DOM tests only, plan D1), typescript (the type check only, plan D7)', () => {
     assert.deepEqual(pkg.dependencies, { 'node-pty': '1.1.0' });
-    assert.deepEqual(pkg.devDependencies, { '@xterm/addon-fit': '0.11.0', '@xterm/xterm': '6.0.0', electron: '44.9.3', 'electron-builder': '26.15.3', 'happy-dom': '20.14.6', typescript: '7.0.2' });
+    assert.deepEqual(pkg.devDependencies, { '@xterm/addon-fit': '0.11.0', '@xterm/xterm': '6.0.0', electron: '44.9.3', 'electron-builder': '26.15.3', 'happy-dom': '21.0.3', typescript: '7.0.2' });
   });
 
   test('per-user NSIS installer: fixed install folder, no elevation, English and Turkish, keeps user data', () => {
