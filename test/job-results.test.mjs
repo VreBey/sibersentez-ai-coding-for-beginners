@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { treeFingerprint, pointsDir, createPoint, RESTORE_LIMITS } from '../server/restore.mjs';
-import { observeTeam, observeTeamAnswer, listJobResults, writeJobResult, projectJobResult, jobResultRecord, JOB_RESULTS_FILE, JOB_RESULTS_KEEP, OBSERVE_RETRY_MS, writeTried } from '../server/jobResults.mjs';
+import { observeTeam, observeTeamAnswer, listJobResults, writeJobResult, projectJobResult, jobResultRecord, JOB_RESULTS_FILE, JOB_RESULTS_KEEP, JOB_RESULTS_BROKEN_KEEP, OBSERVE_RETRY_MS, writeTried } from '../server/jobResults.mjs';
 import { reviewFileTime } from '../server/team.mjs';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-job-results-'));
@@ -349,6 +349,47 @@ test('the file: newest first, one per job, at most a few; only known fields and 
   assert.deepEqual(listJobResults({ hubDir: hub, projectId: 'p' }), []);
   fs.writeFileSync(file, JSON.stringify({ version: 1, jobs: [] }) + ' '.repeat(70 * 1024));
   assert.deepEqual(listJobResults({ hubDir: hub, projectId: 'p' }), []);
+});
+
+test('a records file that cannot be read is set aside before the next record is written, never written over (independent review of 0.20.0)', () => {
+  const { hub } = setup('broken');
+  const base = pointsDir(hub, 'p');
+  const file = path.join(base, JOB_RESULTS_FILE);
+  const rec = (seenAt) => ({ jobId: J, verdict: { value: 'APPROVE', blockers: 0, nits: 0, seenAt }, tree: { problem: 'too-large', at: seenAt } });
+  const aside = () => fs.readdirSync(base).filter((n) => n.startsWith(`${JOB_RESULTS_FILE}.broken-`)).sort();
+  // Nothing there yet: written, nothing set aside
+  assert.equal(writeJobResult({ hubDir: hub, projectId: 'p', record: rec(1), now: () => 10 }), true);
+  assert.deepEqual(aside(), []);
+  // A readable file of this version is replaced as before
+  assert.equal(writeJobResult({ hubDir: hub, projectId: 'p', record: rec(2), now: () => 20 }), true);
+  assert.deepEqual(aside(), []);
+  // Cut short, then one of a newer version: each kept as it was, and the new record written
+  fs.writeFileSync(file, '{"version":1,"jobs":[{"jobId"');
+  assert.equal(writeJobResult({ hubDir: hub, projectId: 'p', record: rec(3), now: () => 30 }), true);
+  fs.writeFileSync(file, JSON.stringify({ version: 2, jobs: [{ jobId: J, future: true }] }));
+  assert.equal(writeJobResult({ hubDir: hub, projectId: 'p', record: rec(4), now: () => 40 }), true);
+  const names = aside();
+  assert.equal(names.length, 2);
+  assert.match(names[0], /\.broken-30-[0-9a-f]{6}$/, 'its time and a random part: never the name of an earlier copy');
+  assert.match(names[1], /\.broken-40-[0-9a-f]{6}$/);
+  assert.equal(fs.readFileSync(path.join(base, names[0]), 'utf8'), '{"version":1,"jobs":[{"jobId"');
+  assert.match(fs.readFileSync(path.join(base, names[1]), 'utf8'), /"future":true/);
+  assert.equal(listJobResults({ hubDir: hub, projectId: 'p' })[0].verdict.seenAt, 4);
+  // Two set aside at the same millisecond keep both
+  for (const t of [50, 50]) {
+    fs.writeFileSync(file, '{broken');
+    assert.equal(writeJobResult({ hubDir: hub, projectId: 'p', record: rec(5), now: () => t }), true);
+  }
+  // Only the newest few copies stay
+  assert.equal(aside().length, JOB_RESULTS_BROKEN_KEEP);
+  assert.ok(!aside().some((n) => /\.broken-30-/.test(n)), 'the oldest went first');
+  // A file that could not be read just now (held by a scanner or a sync program) is no broken one: left as it is,
+  // nothing written
+  const good = fs.readFileSync(file, 'utf8');
+  const before = aside();
+  assert.equal(writeJobResult({ hubDir: hub, projectId: 'p', record: rec(6), stateOf: () => 'busy' }), false);
+  assert.equal(fs.readFileSync(file, 'utf8'), good);
+  assert.deepEqual(aside(), before);
 });
 
 test('still the files of the verdict: same, touched with the same content, changed (with how many written since), unknown and why', async () => {

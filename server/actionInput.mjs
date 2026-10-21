@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isLegacyHub, validName, CATEGORY_RE, MAX_REL_PATH } from './library.mjs';
 import { TARGETS, defaultTargets, resolveProject } from './install.mjs';
-import { POINT_ID_RE } from './restore.mjs';
+import { POINT_ID_RE, ORPHANS_MAX } from './restore.mjs';
 import { KEY_RE, normalizeJob } from './fit.mjs';
 import { toolById, TOOL_IDS } from './tools.mjs';
 import { parseGitHubUrl, FETCH_ID_RE } from './github.mjs';
@@ -20,7 +20,7 @@ import { PLATFORM, fileManager, isLocalAbsolute, normalizeDir } from './platform
 // 'new' (a new Claude Code session) stays for the server and the skill trial; the context menu offers 'terminal'
 export const LAUNCH_ACTIONS = Object.freeze(['resume', 'fork', 'new', 'terminal', 'explorer', 'vscode']);
 
-export const SKILL_ACTIONS = Object.freeze(['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'project-relink', 'project-unlink', 'accept-marks']);
+export const SKILL_ACTIONS = Object.freeze(['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'restore-clean', 'project-relink', 'project-unlink', 'accept-marks']);
 
 // An AI tool started in a terminal, with the project's idea as its first message (docs/ai-start.md)
 const AI_ACTIONS = Object.freeze(['start-ai']);
@@ -73,7 +73,10 @@ const SKILL_FIELDS = {
   'skills-apply': { required: ['projectId'], optional: ['keys', 'targets'] },
   // Restore points (docs/restore.md): what going back would do, and going back
   'restore-preview': { required: ['projectId', 'pointId'], optional: [] },
-  'restore-apply': { required: ['projectId', 'pointId'], optional: ['planId'] },
+  // planId: the preview the person saw is required (independent review 2026-10-20, T08)
+  'restore-apply': { required: ['projectId', 'pointId', 'planId'], optional: [] },
+  // The points of projects no longer listed, by their folder's key (Settings; independent review 2026-10-20, T05)
+  'restore-clean': { required: ['keys'], optional: [] },
   // A moved project linked to its new folder (docs/internal/project-relink-plan.md): a picked folder, or the listed
   // project whose folder it is; and the link undone
   'project-relink': { required: ['projectId'], optional: ['folder', 'from', 'plan', 'planId'] },
@@ -165,11 +168,11 @@ export function createValidators({ catalog, ingest, hubDir, codeExe, homeDir, cl
     for (const k of Object.keys(body)) {
       if (k !== 'action' && !spec.required.includes(k) && !spec.optional.includes(k)) return reject(400, 'unexpected-field');
     }
-    for (const k of spec.required) if (body[k] === undefined || body[k] === null || body[k] === '') return reject(400, `eksik alan: ${k}`);
+    for (const k of spec.required) if (body[k] === undefined || body[k] === null || body[k] === '') return reject(400, 'missing-field');
     for (const k of ['projectId', 'sessionId']) if (body[k] !== undefined && typeof body[k] !== 'string') return reject(400, 'bad-field');
     if (body.packages !== undefined && (!Array.isArray(body.packages) || body.packages.some((p) => typeof p !== 'string'))) return reject(400, 'bad-field');
     if (body.packages && body.packages.length > MAX_PACKAGES) return reject(400, 'too-many-packages');
-    if (TARGET_ACTIONS.has(action) && body.projectId === undefined && body.sessionId === undefined) return reject(400, 'projectId ya da sessionId gerekli');
+    if (TARGET_ACTIONS.has(action) && body.projectId === undefined && body.sessionId === undefined) return reject(400, 'missing-field');
     // Windows Terminal's actions (a Claude Code session, a plain tab): Windows only. Linux and macOS have SiberSentez's
     // own terminal for both (plan G1)
     if (!internal && !plat.windows && TERMINAL_ACTIONS.has(action)) return reject(501, 'windows-terminal-only');
@@ -347,6 +350,10 @@ export function createValidators({ catalog, ingest, hubDir, codeExe, homeDir, cl
         adopt.push({ kind: it.kind, name: it.name, source: o.source, pick: o.pick });
       }
       ctx.adopt = adopt;
+    } else if (action === 'restore-clean') {
+      const keys = body.keys;
+      if (!Array.isArray(keys) || !keys.length || keys.length > ORPHANS_MAX || keys.some((k) => typeof k !== 'string' || !/^[0-9a-f]{24}$/.test(k)) || new Set(keys).size !== keys.length) return reject(400, 'bad-keys');
+      ctx.cleanKeys = keys;
     } else if (action === 'library-scan' || action === 'library-import') {
       if (typeof body.source !== 'string' || body.source.length > 260) return reject(400, 'bad-source');
       ctx.source = body.source;
@@ -419,7 +426,7 @@ export function createValidators({ catalog, ingest, hubDir, codeExe, homeDir, cl
     const github = ctx.repo ? [ctx.repo.name, ctx.repo.ref, ctx.repo.path] : ctx.fetchId || '';
     const digest = crypto
       .createHash('sha256')
-      .update(JSON.stringify([ctx.source || '', ctx.picks || ctx.items || ctx.adopt || ctx.keys || ctx.checks || [], ctx.targets || [], !!ctx.planOnly, github, ctx.pointId || '', ctx.relink || null, ctx.accept || null]))
+      .update(JSON.stringify([ctx.source || '', ctx.picks || ctx.items || ctx.adopt || ctx.keys || ctx.checks || ctx.cleanKeys || [], ctx.targets || [], !!ctx.planOnly, github, ctx.pointId || '', ctx.relink || null, ctx.accept || null]))
       .digest('hex')
       .slice(0, 16);
     return { ok: true, skill: true, action, ctx, key: `${action}|${body.projectId || ''}|${digest}` };

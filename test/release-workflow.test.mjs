@@ -36,12 +36,14 @@ test('the release build: the installer and the AppImage behind the same gates, t
     ['build', win, 'npm run dist -- --publish never', 'tools/electron-qa.ps1'],
     ['build-linux', linux, 'npx electron-builder --linux AppImage --publish never', 'xvfb-run -a bash tools/linux-qa.sh'],
   ]) {
-    const order = ['run: npm test', 'run: npm run typecheck', 'run: npm run lint', build, qa, 'upload-artifact'].map((s) => j.indexOf(s));
+    // The release's own audit too (independent review 2026-10-20, T10), before anything is built
+    const order = ['run: npm test', 'run: npm run typecheck', 'run: npm run lint', 'run: npm audit --omit=dev --audit-level=low', 'run: node tools/audit-electron.mjs', build, qa, 'upload-artifact'].map((s) => j.indexOf(s));
     assert.ok(order.every((i) => i > 0), `${name}: every step`);
     assert.deepEqual(order, [...order].sort((a, b) => a - b), `${name}: gates, then the build, its hidden checks, then the upload`);
     assert.doesNotMatch(j, /id-token|attestations: write|contents: write/, `${name}: no write rights`);
   }
   assert.match(rel, /needs: \[build, build-linux\]/);
+  assert.doesNotMatch(wf, /cache: npm/, 'no package cache: every release installs from the registry by the lock file');
   // What the builds upload is what the release job takes, by name (never a pattern an earlier run's output could match)
   const uploaded = (j) => [...j.matchAll(/upload-artifact@[^\n]+\n\s+with:\n\s+name: ([\w-]+)/g)].map((m) => m[1]);
   const taken = [...rel.matchAll(/download-artifact@[^\n]+\n\s+with:\n\s+name: ([\w-]+)/g)].map((m) => m[1]);

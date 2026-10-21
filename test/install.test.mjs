@@ -717,7 +717,7 @@ test('trial cleanup: only real trial folders with the marker and older than 7 da
 
 // ---------------- action surface ----------------
 test('actions: the skill actions (skills-apply from docs/auto-skills.md, then the restore points of docs/restore.md) are listed with the launch actions; off -> 404 for every one, no file written', async () => {
-  assert.deepEqual([...SKILL_ACTIONS], ['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'project-relink', 'project-unlink', 'accept-marks']);
+  assert.deepEqual([...SKILL_ACTIONS], ['library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'restore-clean', 'project-relink', 'project-unlink', 'accept-marks']);
   // start-ai (docs/ai-start.md) follows the skill actions; the GitHub import's actions come last (docs/github-import.md)
   assert.deepEqual([...ACTION_NAMES], [...LAUNCH_ACTIONS, ...SKILL_ACTIONS, 'start-ai', 'github-fetch', 'github-import', 'github-discard', 'github-check-update']);
   const w = world();
@@ -1421,16 +1421,18 @@ test('restore points: preview and a dry apply write nothing; live goes back afte
     const pre = await dry.post({ action: 'restore-preview', projectId: 'cc', pointId: point.id });
     assert.equal(pre.status, 200, JSON.stringify(pre.json));
     assert.deepEqual([pre.json.changed, pre.json.missing, pre.json.added], [['index.html'], [], ['extra.js']]);
-    assert.deepEqual(pre.json.counts, { changed: 1, missing: 0, added: 1, unread: 0 });
+    assert.deepEqual(pre.json.counts, { changed: 1, missing: 0, added: 1, unread: 0, big: 0 });
     assert.deepEqual(pre.json.result, { executed: false });
     dry.tick();
-    const d = await dry.post({ action: 'restore-apply', projectId: 'cc', pointId: point.id });
+    const d = await dry.post({ action: 'restore-apply', projectId: 'cc', pointId: point.id, planId: pre.json.planId });
     assert.equal(d.json.mode, 'dry');
     assert.deepEqual(d.json.result, { executed: false });
     assert.deepEqual(snapshotTree(p), before, 'preview mode: the project is untouched');
     for (const [body, code] of [
-      [{ action: 'restore-apply', projectId: 'cc', pointId: '../x' }, 'bad-point-id'],
+      [{ action: 'restore-apply', projectId: 'cc', pointId: '../x', planId: '0123456789abcdef' }, 'bad-point-id'],
       [{ action: 'restore-apply', projectId: 'cc' }, 'missing-field'],
+      // Never without the preview the person saw (independent review 2026-10-20, T08)
+      [{ action: 'restore-apply', projectId: 'cc', pointId: point.id }, 'missing-field'],
       [{ action: 'restore-apply', projectId: 'cc', pointId: point.id, path: 'C:\\x' }, 'unexpected-field'],
       [{ action: 'restore-preview', projectId: 'codex', pointId: point.id }, 'point-missing'],
       [{ action: 'restore-preview', projectId: 'broad', pointId: point.id }, 'broad-folder'],
@@ -1445,7 +1447,7 @@ test('restore points: preview and a dry apply write nothing; live goes back afte
   // An AI session still working in the project: going back is refused, nothing changes
   const busy = await startServer(w, { ingest: { sessions: new Map([['s1', { projectId: 'cc', live: true }]]) } });
   try {
-    const r = await busy.post({ action: 'restore-apply', projectId: 'cc', pointId: point.id });
+    const r = await busy.post({ action: 'restore-apply', projectId: 'cc', pointId: point.id, planId: '0123456789abcdef' });
     assert.equal(r.json.error, 'ai-working');
     assert.deepEqual(snapshotTree(p), before);
   } finally {
@@ -1457,7 +1459,7 @@ test('restore points: preview and a dry apply write nothing; live goes back afte
   try {
     const job = 'J' + 'd'.repeat(32);
     assert.deepEqual(docked.actions.terminalState({ sessions: [{ id: 't1', projectId: 'cc', ai: true, tool: 'codex', jobId: job, startedAt: 1 }] }), { ok: true, reason: 'saved' });
-    let r = await docked.post({ action: 'restore-apply', projectId: 'cc', pointId: point.id });
+    let r = await docked.post({ action: 'restore-apply', projectId: 'cc', pointId: point.id, planId: '0123456789abcdef' });
     assert.equal(r.json.error, 'ai-working');
     assert.deepEqual(snapshotTree(p), before);
     docked.actions.terminalState({ sessions: [{ id: 't2', projectId: 'cc', ai: false, tool: null }, { id: 't3', projectId: 'other', ai: true, tool: 'gemini' }], ended: { id: 't1', projectId: 'cc', ai: true, tool: 'codex', jobId: job, exitCode: 0 } });

@@ -39,9 +39,17 @@ test('the one big start: while there is no project of their own, Today shows "Go
   assert.doesNotMatch(html, /start-card|startCardH/);
   assert.match(html, /data-cl="project"[^>]*>.*Yeni proje oluştur/);
   assert.match(html, /data-cl="tour"/, 'the tour link opens the tour (review U12)');
-  assert.doesNotMatch(html, /data-cl="tool"/, 'a tool was found: no tool button');
-  assert.match(startCardHtml({ tools: { status: 'ready', tools: [] } }), /data-cl="tool"/, 'no tool yet: its button too');
-  assert.doesNotMatch(startCardHtml({ tools: { status: 'loading', tools: [] } }), /data-cl="tool"/, 'still looking: no button yet');
+  assert.doesNotMatch(html, /class="act-btn" data-cl="tool"/, 'a tool was found: no tool button');
+  // What it takes, before anything is made (independent review of 0.20.0): a tool and its account, most of them paid
+  assert.ok(html.includes(esc(S.firstCardNeeds)), 'what it takes');
+  assert.match(S.firstCardNeeds, /ücretli/);
+  assert.match(STRINGS.en.firstCardNeeds, /paid plan/);
+  assert.doesNotMatch(S.firstCardBody + STRINGS.en.firstCardBody, /bir şey bilmen gerekmiyor|need to know nothing/, 'no promise that hides the account');
+  assert.match(html, /class="linkish" data-cl="tool"[^>]*>Hangi araç ne ister\?</, 'a tool found: a link to what each one needs');
+  const none = startCardHtml({ tools: { status: 'ready', tools: [] } });
+  assert.match(none, /class="act-btn" data-cl="tool"/, 'no tool yet: its button too');
+  assert.equal((none.match(/data-cl="tool"/g) || []).length, 1, 'and no second link to the same place');
+  assert.doesNotMatch(startCardHtml({ tools: { status: 'loading', tools: [] } }), /class="act-btn" data-cl="tool"/, 'still looking: no button yet (the link to what each needs is there)');
   assert.equal(hasOwnProject([]), false);
   assert.equal(hasOwnProject([{ id: 'home', kind: 'adhoc', broad: true }, { id: 'tmp', kind: 'adhoc', place: 'temp' }]), false, 'a broad or temporary folder is not a project of their own');
   assert.equal(hasOwnProject([{ id: 'p', path: 'C:\\p' }]), true);

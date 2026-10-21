@@ -53,6 +53,9 @@ export class ProjectMemory {
     this.timer = null;
     this.saves = 0;
     this.lastFirstSeenAt = 0; // the firstSeenAt of the last folder recorded in this process (record)
+    // How the file was read at start: 'ok', 'missing', 'unreadable' (held, no access) or 'rebuilt' (broken, set aside).
+    // Only 'ok' and 'missing' say the list is whole (catalog.listingSure)
+    this.loadState = 'missing';
     this.load();
   }
 
@@ -63,6 +66,7 @@ export class ProjectMemory {
       text = fs.readFileSync(this.file, 'utf8');
     } catch (e) {
       if (e?.code !== 'ENOENT') this.log(`project memory unreadable (${e?.code || 'error'}); starting empty`);
+      this.loadState = e?.code === 'ENOENT' ? 'missing' : 'unreadable';
       return;
     }
     if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
@@ -80,8 +84,10 @@ export class ProjectMemory {
         /* rebuilt anyway */
       }
       this.dirty = true;
+      this.loadState = 'rebuilt';
       return;
     }
+    this.loadState = 'ok';
     for (const e of data.projects) {
       if (!e || typeof e.path !== 'string' || !e.path.trim()) continue;
       const n = normPath(e.path);

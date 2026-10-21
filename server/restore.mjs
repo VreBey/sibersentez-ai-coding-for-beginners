@@ -33,6 +33,12 @@ export const LEAN = Object.freeze({ fileBytes: 2 * 1024 * 1024, skipExt: Object.
 // The limits a scope scans with: a lean point may hold more small files than a full one
 const limitsFor = (scope, limits) => (scope === 'lean' ? { ...limits, files: Math.max(limits.files, LEAN.files), bytes: Math.max(limits.bytes, LEAN.bytes) } : limits);
 const RESTORE_SCOPES = Object.freeze(['full', 'lean']);
+// A look at the present that only names files (going back's plan, what a job changed) has no size limit and a high
+// count limit: a folder of hundreds of thousands of files is still refused, as it would take minutes to list
+export const LOOK_FILES = 100000;
+// What a job changed is asked every few seconds while a drawer is open: its look stops lower, so a huge project never
+// holds the server for long each time (review of the fix, 2026-10-20)
+export const JOB_LOOK_FILES = 20000;
 const OVER = new Set(['too-many-files', 'too-large', 'file-too-large']);
 // Folders never copied, at any depth: package caches, version control and virtual environments
 const RESTORE_SKIP = Object.freeze(new Set(['.git', '.hg', '.svn', 'node_modules', '.venv', 'venv', '__pycache__', '.pytest_cache', '.next', '.nuxt', '.turbo', '.cache', '.parcel-cache', '.godot']));
@@ -111,6 +117,15 @@ export function safeRel(rel) {
   return rel.split('/').every((part) => part && part !== '.' && part !== '..' && !/[. ]$/.test(part) && !DEVICE_RE.test(part));
 }
 
+// A boundary a manifest names (its unread): only compared with the project's paths, never written, so it may hold a
+// name a point cannot (Linux: "notes: draft.md", T07); still relative, forward slashes, no '.' or '..' part, no control
+// character
+function boundaryRel(rel) {
+  if (typeof rel !== 'string' || !rel || rel.length > REL_MAX) return false;
+  if (/[\u0000-\u001f\u007f\\]/.test(rel) || rel.startsWith('/')) return false;
+  return rel.split('/').every((part) => part && part !== '.' && part !== '..');
+}
+
 // A path in one of the folders a point leaves out (a manifest written by hand could name one)
 function skippedRel(rel) {
   const parts = String(rel).toLowerCase().split('/').slice(0, -1);
@@ -138,13 +153,17 @@ function keepLargest(list, f) {
 // at most UNREAD_MAX: their files are not in the scan, and they are not an empty folder either. A point keeps them as
 // boundaries, and going back never removes a file under one as added later (independent review of 0.19.0, N01). The
 // project folder itself unreadable is a problem (folder-unreadable), never an empty project.
-export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'full', seen = null) {
+// big (optional, an array): a file over limits.fileBytes is put there ({ rel, size }) and counted as left out instead
+// of stopping the scan (going back and its point of the present: independent review 2026-10-20, T01).
+export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'full', seen = null, big = null) {
   const lean = scope === 'lean';
   const skipped = new Set(skip.filter(Boolean).map((p) => path.resolve(p).toLowerCase()));
   const top = lstat(dir);
   if (!top || !top.isDirectory()) return fail('folder-missing');
   const files = [];
   const unread = [];
+  // Names a point cannot hold (T07), apart: they never use up the gaps' budget, and fill what is left of it
+  const odd = [];
   let bytes = 0;
   let leftOut = 0;
   let leftBytes = 0;
@@ -165,7 +184,14 @@ export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'fu
     const unity = names.has('assets') && names.has('projectsettings');
     for (const d of list) {
       const childRel = rel ? `${rel}/${d.name}` : d.name;
-      if (!safeRel(childRel)) continue;
+      // A name a point cannot hold (Linux allows "notes: draft.md"): never copied, and said like an entry that could not
+      // be read, so nobody takes it for kept and going back leaves it alone (independent review 2026-10-20, T07). Only a
+      // name a manifest can keep as a boundary (boundaryRel: a control character, a backslash or a path over REL_MAX
+      // would make the whole manifest unreadable, review of the fix); any other is skipped as before
+      if (!safeRel(childRel)) {
+        if (boundaryRel(childRel) && odd.length < UNREAD_MAX) odd.push(childRel);
+        continue;
+      }
       const child = path.join(abs, d.name);
       let st;
       try {
@@ -193,7 +219,13 @@ export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'fu
           if (seen) keepLargest(seen.big, { rel: childRel, size: st.size });
           continue;
         }
-        if (st.size > limits.fileBytes) return 'file-too-large';
+        if (st.size > limits.fileBytes) {
+          if (!Array.isArray(big)) return 'file-too-large';
+          big.push({ rel: childRel, size: st.size });
+          leftOut++;
+          leftBytes += st.size;
+          continue;
+        }
         bytes += st.size;
         files.push({ rel: childRel, size: st.size, mtimeMs: Math.floor(st.mtimeMs), ...(KEEPS_MODES ? { mode: st.mode & MODE_BITS } : {}) });
         if (files.length > limits.files) return 'too-many-files';
@@ -203,7 +235,8 @@ export function scanProject(dir, limits = RESTORE_LIMITS, skip = [], scope = 'fu
     return null;
   };
   const problem = walk(dir, '', 0);
-  return problem ? fail(problem) : { ok: true, files, bytes, scope: lean ? 'lean' : 'full', leftOut, leftBytes, unread: unread.sort() };
+  if (problem) return fail(problem);
+  return { ok: true, files, bytes, scope: lean ? 'lean' : 'full', leftOut, leftBytes, unread: [...unread, ...odd.slice(0, UNREAD_MAX - unread.length)].sort() };
 }
 
 // Under one of the boundaries (a scan's or a point's unread), by the project's file name key
@@ -227,7 +260,7 @@ function readManifest(pointDir) {
     if (!m.files.every((f) => f && safeRel(f.rel) && Number.isInteger(f.size) && f.size >= 0 && hasDigest(f) && validMode(f.mode))) return null;
     // What the scan could not read when the point was taken (N01): going back leaves everything under them alone
     // (version 3 names some, version 1 and 2 none)
-    if ((m.unread !== undefined || m.version === MANIFEST_VERSION_GAPS) && !(m.version === MANIFEST_VERSION_GAPS && Array.isArray(m.unread) && m.unread.length > 0 && m.unread.length <= UNREAD_MAX && m.unread.every(safeRel))) return null;
+    if ((m.unread !== undefined || m.version === MANIFEST_VERSION_GAPS) && !(m.version === MANIFEST_VERSION_GAPS && Array.isArray(m.unread) && m.unread.length > 0 && m.unread.length <= UNREAD_MAX && m.unread.every(boundaryRel))) return null;
     // A file in a folder points leave out is never read back or written: such entries are dropped, not the point.
     // 0.17 leaves out more tools' folders (.gemini, .qwen, .opencode, .codex); a point taken before still names their
     // files and must stay listed and usable (review 2026-10-08: it vanished from the list after the update)
@@ -336,6 +369,8 @@ const stampOf = (at) => {
   return `${p(d.getUTCFullYear(), 4)}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
 };
 
+export const TMP_COPY_MAX_AGE_MS = 3600 * 1000;
+
 // Keep the newest RESTORE_KEEP points; protect: ids never removed here
 function prune(base, protect = []) {
   // A restore that stopped halfway keeps both its points: the way forward and the way back (RESTORE_MARK)
@@ -356,8 +391,9 @@ function prune(base, protect = []) {
   for (const n of names) {
     const p = path.join(base, n);
     if (!POINT_ID_RE.test(n)) {
-      // An interrupted copy (<id>.tmp-...) is left over from a crash: removed
-      if (/^R\d{14}[0-9a-f]{4}\.tmp-[0-9a-f]{8}$/.test(n)) fs.rmSync(p, { recursive: true, force: true });
+      // An interrupted copy (<id>.tmp-...) is left over from a crash: removed once it is an hour old. A newer one may be
+      // another copy still being made (another window, a second start: independent review 2026-10-20, T02)
+      if (/^R\d{14}[0-9a-f]{4}\.tmp-[0-9a-f]{8}$/.test(n) && Date.now() - (lstat(p)?.mtimeMs ?? Date.now()) > TMP_COPY_MAX_AGE_MS) fs.rmSync(p, { recursive: true, force: true });
       // The same for a start record that was being written (recordJobPoint)
       if (/^\.start-points\.json\.[0-9a-f]{8}\.tmp$/.test(n)) fs.rmSync(p, { force: true });
       // And for a restore mark that was being written
@@ -378,9 +414,9 @@ function prune(base, protect = []) {
 // the newest point when nothing changed). Shared by createPoint and createPointAsync.
 // { answer } (done: a problem or the newest point again) or { base, id, tmp, scan, shared, candidate } to copy
 /** @returns {any} */
-function preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope }) {
+function preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope, leaveBig = false }) {
   if (!hubDir) return { answer: fail('no-hub') };
-  let scan = scanProject(dir, limitsFor(scope, limits), [hubDir], scope === 'lean' ? 'lean' : 'full');
+  let scan = scanProject(dir, limitsFor(scope, limits), [hubDir], scope === 'lean' ? 'lean' : 'full', null, leaveBig ? [] : null);
   if (!scan.ok && !scope && OVER.has(scan.problem)) scan = scanProject(dir, limitsFor('lean', limits), [hubDir], 'lean');
   if (!scan.ok) return { answer: scan };
   const base = pointsDir(hubDir, projectId);
@@ -484,6 +520,117 @@ async function countDisk(base, points) {
   return { bytes, apart };
 }
 
+// The hub's points as a whole (Settings › General; independent review 2026-10-20, T05): what they all take on disk (a
+// file shared by several points counts once) and the folders of projects that are no longer listed. Such a folder is
+// one whose points all name projects isListed answers false for, and that no restore cut off halfway left a mark in;
+// a folder whose points cannot be read (no project named) is never one. Read only. isListed: (projectId) => boolean.
+// Returns { bytes, projects, orphans: [{ key, projectId, points, bytes, newest }] }.
+const KEY_RE = /^[0-9a-f]{24}$/;
+export const ORPHANS_MAX = 200;
+function pointFolders(hubDir) {
+  const base = path.join(hubDir, RESTORE_DIR);
+  let names = [];
+  try {
+    names = fs.readdirSync(base).filter((n) => KEY_RE.test(n));
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const key of names.sort()) {
+    const dir = path.join(base, key);
+    const st = lstat(dir);
+    if (!st || !st.isDirectory()) continue;
+    let ids = [];
+    try {
+      ids = fs.readdirSync(dir).filter((n) => POINT_ID_RE.test(n)).sort();
+    } catch {
+      continue;
+    }
+    const points = ids.map((id) => ({ id, m: readManifest(path.join(dir, id)) })).filter((x) => x.m && x.m.id === x.id);
+    out.push({ key, dir, points, marked: !!lstat(path.join(dir, RESTORE_MARK)) });
+  }
+  return out;
+}
+// A folder is a project's only when its key is that project's key (projectKey): a manifest that names another project
+// (written by hand, or by another program) never makes a listed project's folder look like an orphan's (review of the
+// fix, 2026-10-20)
+// And its newest point is ORPHAN_MIN_AGE_MS old at least: a project in use this week is never offered for removal,
+// whatever the list says for a moment (pre-release review 2026-10-21)
+export const ORPHAN_MIN_AGE_MS = 7 * 24 * 3600 * 1000;
+const orphanOf = (folder, isListed, now = Date.now()) => {
+  const ids = new Set(folder.points.map((x) => (typeof x.m.projectId === 'string' ? x.m.projectId : '')));
+  if (!folder.points.length || folder.marked || ids.size !== 1 || ids.has('')) return null;
+  const newest = Math.max(...folder.points.map((x) => (Number.isFinite(x.m.at) ? x.m.at : Infinity)));
+  if (!(now - newest >= ORPHAN_MIN_AGE_MS)) return null;
+  const [id] = ids;
+  return projectKey(id) === folder.key && !isListed(id) ? id : null;
+};
+// Whether the list of projects can say "no longer listed" now (pre-release review 2026-10-21): the catalog read its
+// registry and project memory whole (catalog.listingSure), and the logs' first look is done (the sessions it finds name
+// projects too). Otherwise no folder is offered or removed as an orphan's
+export function listingTrusted({ catalog, ingest }) {
+  if (catalog?.listingSure?.() === false) return false;
+  const state = ingest?.scan?.state;
+  return !state || state === 'ready';
+}
+
+// The keys of the folders of projects no longer listed now (restore-clean's preview)
+export function orphanKeys({ hubDir, isListed, now = Date.now }) {
+  return new Set(hubDir ? pointFolders(hubDir).filter((f) => orphanOf(f, isListed, now())).map((f) => f.key) : []);
+}
+export async function hubPointsDisk({ hubDir, isListed, now = Date.now }) {
+  if (!hubDir) return { bytes: 0, projects: 0, orphans: [] };
+  const seen = new Set();
+  let bytes = 0;
+  const orphans = [];
+  const folders = pointFolders(hubDir);
+  for (const folder of folders) {
+    let own = 0;
+    for (const { id, m } of folder.points) {
+      for (const f of m.files) {
+        let st = null;
+        try {
+          st = await fs.promises.lstat(path.join(folder.dir, id, 'files', ...f.rel.split('/')), { bigint: true });
+        } catch {
+          continue;
+        }
+        if (!st.isFile()) continue;
+        const ino = st.ino > 0n ? `${st.dev}:${st.ino}` : `${folder.key}/${id}/${f.rel}`;
+        if (seen.has(ino)) continue;
+        seen.add(ino);
+        bytes += Number(st.size);
+        own += Number(st.size);
+      }
+    }
+    const projectId = orphanOf(folder, isListed, now());
+    if (projectId && orphans.length < ORPHANS_MAX) orphans.push({ key: folder.key, projectId, points: folder.points.length, bytes: own, newest: folder.points.at(-1).m.at ?? null });
+  }
+  return { bytes, projects: folders.length, orphans };
+}
+
+// The folders of projects no longer listed, removed (the person said yes in Settings): each key is checked again here
+// (still a folder of no listed project, still no mark), so a project listed again meanwhile keeps its points. Its
+// start and result records, kept beside the points, go with them. Returns { removed: [keys], kept: [keys] }.
+export function removeOrphanPoints({ hubDir, keys, isListed, now = Date.now }) {
+  const removed = [];
+  const kept = [];
+  const folders = new Map(pointFolders(hubDir).map((f) => [f.key, f]));
+  for (const key of keys) {
+    const folder = folders.get(key);
+    if (!folder || !orphanOf(folder, isListed, now())) {
+      kept.push(key);
+      continue;
+    }
+    try {
+      fs.rmSync(folder.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+      removed.push(key);
+    } catch {
+      kept.push(key);
+    }
+  }
+  return { removed, kept };
+}
+
 // Every file of a point holds the same bytes in the project now (its digest); false at the first that does not, or
 // cannot be read
 function sameContent(dir, files) {
@@ -511,7 +658,8 @@ async function sameContentAsync(dir, files) {
 // Secrets typed into a job (a key, a password) are masked before the label reaches the disk (review 2026-10-02); cut
 // on whole characters so an emoji is never split
 const pointLabel = (label) => (typeof label === 'string' ? Array.from(redact(label).replace(/\s+/g, ' ').trim()).slice(0, LABEL_MAX).join('') : '');
-const manifestOf = ({ scan, id, at }, projectId, reason, files, label) => ({ version: scan.unread.length ? MANIFEST_VERSION_GAPS : MANIFEST_VERSION, id, projectId, at, reason: POINT_REASONS.includes(reason) ? reason : 'manual', files, ...(pointLabel(label) ? { label: pointLabel(label) } : {}), ...(scan.scope === 'lean' ? { scope: 'lean', leftOut: scan.leftOut } : {}), ...(scan.unread.length ? { unread: scan.unread } : {}) });
+// unread: only what boundaryRel takes (scanProject keeps to it); anything else would make the manifest unreadable
+const manifestOf = ({ scan, id, at }, projectId, reason, files, label) => ({ version: scan.unread.some(boundaryRel) ? MANIFEST_VERSION_GAPS : MANIFEST_VERSION, id, projectId, at, reason: POINT_REASONS.includes(reason) ? reason : 'manual', files, ...(pointLabel(label) ? { label: pointLabel(label) } : {}), ...(scan.scope === 'lean' ? { scope: 'lean', leftOut: scan.leftOut } : scan.leftOut > 0 ? { leftOut: scan.leftOut } : {}), ...(scan.unread.some(boundaryRel) ? { unread: scan.unread.filter(boundaryRel) } : {}) });
 // Read once: the copy and its digest are the same bytes, even if the file changes meanwhile
 const copied = (f, buf) => ({ rel: f.rel, size: buf.length, mtimeMs: f.size === buf.length ? f.mtimeMs : 0, sha256: digestOf(buf), ...(f.mode !== undefined ? { mode: f.mode } : {}) });
 // The project's points folder: the owner's only, also when an older version made it open to others (a folder, never
@@ -524,18 +672,36 @@ function privateBase(base) {
     /* the point is still taken; the folder keeps what it had */
   }
 }
+// Room on the hub's drive for a copy (independent review 2026-10-20, T05): its bytes twice over (a copy shares unchanged
+// files with the newest point, but a first copy shares none) and FREE_MARGIN for everything else on that drive. A drive
+// that cannot be asked (an old system, a network folder) is not checked. Never a half-written copy on a full drive
+export const FREE_MARGIN = 200 * 1024 * 1024;
+export function hubFreeBytes(hubDir) {
+  try {
+    const st = fs.statfsSync(hubDir);
+    return Number(st.bavail) * Number(st.bsize);
+  } catch {
+    return null;
+  }
+}
+const roomFor = (p, freeBytes, hubDir) => {
+  const free = freeBytes(hubDir);
+  return free === null || !Number.isFinite(free) || free >= p.scan.bytes * 2 + FREE_MARGIN;
+};
 const pointAnswer = ({ scan, id }, files) => ({ ok: true, id, reused: false, files: files.length, bytes: files.reduce((n, x) => n + x.size, 0), scope: scan.scope, leftOut: scan.leftOut });
 
 // Take a point of the project's files. When nothing changed since the newest point (same paths, sizes and times pick
 // it, every file's bytes against its digest decide: review Z1), that point is answered again (reused: true) instead
 // of a second copy, unless reuse is false (a restore's point of the
 // present is always new). The id grows: a clock that went back, or two points in one second, still sort in the order
-// they were taken. Over the full limits a lean point is taken (§7); scope forces one. Returns { ok: true, id, reused,
-// files, bytes, scope, leftOut } or { ok: false, problem }.
-export function createPoint({ hubDir, projectId, dir, reason = 'manual', now = Date.now, limits = RESTORE_LIMITS, protect = [], reuse = true, scope = null, label = '' }) {
-  const p = preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope });
+// they were taken. Over the full limits a lean point is taken (§7); scope forces one. leaveBig: a file over the size
+// limit is left out of the point instead of stopping it (going back's point of the present, which never touches such a
+// file: planRestore big). Returns { ok: true, id, reused, files, bytes, scope, leftOut } or { ok: false, problem }.
+export function createPoint({ hubDir, projectId, dir, reason = 'manual', now = Date.now, limits = RESTORE_LIMITS, protect = [], reuse = true, scope = null, label = '', leaveBig = false, freeBytes = hubFreeBytes }) {
+  const p = preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope, leaveBig });
   if (p.answer) return p.answer;
   if (p.candidate && sameContent(dir, p.candidate.files)) return p.candidate.answer;
+  if (!roomFor(p, freeBytes, hubDir)) return fail('disk-full');
   const files = [];
   try {
     fs.mkdirSync(path.join(p.tmp, 'files'), { recursive: true, mode: HUB_DIR_MODE });
@@ -549,7 +715,7 @@ export function createPoint({ hubDir, projectId, dir, reason = 'manual', now = D
       if (!(from && linkShared(from, dest, buf))) fs.writeFileSync(dest, buf, { flag: 'wx', mode: HUB_FILE_MODE });
       files.push(rec);
     }
-    fs.writeFileSync(path.join(p.tmp, MANIFEST), JSON.stringify(manifestOf(p, projectId, reason, files, label)), { mode: HUB_FILE_MODE });
+    fs.writeFileSync(path.join(p.tmp, MANIFEST), JSON.stringify(manifestOf(p, projectId, reason, files, label)), { mode: HUB_FILE_MODE, flush: true });
     fs.renameSync(p.tmp, path.join(p.base, p.id));
   } catch {
     fs.rmSync(p.tmp, { recursive: true, force: true });
@@ -562,10 +728,11 @@ export function createPoint({ hubDir, projectId, dir, reason = 'manual', now = D
 // The same point, copied without holding the server: a big project's first point takes seconds (a Unity game: about
 // 3,000 files and 100 MB, 9 s), and the live view and every other request keep moving meanwhile. Used by start-ai
 // and by going back (its point of the present); actions.mjs keeps the two from running in one project at once.
-export async function createPointAsync({ hubDir, projectId, dir, reason = 'manual', now = Date.now, limits = RESTORE_LIMITS, protect = [], reuse = true, scope = null, label = '' }) {
-  const p = preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope });
+export async function createPointAsync({ hubDir, projectId, dir, reason = 'manual', now = Date.now, limits = RESTORE_LIMITS, protect = [], reuse = true, scope = null, label = '', leaveBig = false, freeBytes = hubFreeBytes }) {
+  const p = preparePoint({ hubDir, projectId, dir, now, limits, reuse, scope, leaveBig });
   if (p.answer) return p.answer;
   if (p.candidate && (await sameContentAsync(dir, p.candidate.files))) return p.candidate.answer;
+  if (!roomFor(p, freeBytes, hubDir)) return fail('disk-full');
   const files = [];
   try {
     await fs.promises.mkdir(path.join(p.tmp, 'files'), { recursive: true, mode: HUB_DIR_MODE });
@@ -579,7 +746,7 @@ export async function createPointAsync({ hubDir, projectId, dir, reason = 'manua
       if (!(from && (await linkSharedAsync(from, dest, buf)))) await fs.promises.writeFile(dest, buf, { flag: 'wx', mode: HUB_FILE_MODE });
       files.push(rec);
     }
-    await fs.promises.writeFile(path.join(p.tmp, MANIFEST), JSON.stringify(manifestOf(p, projectId, reason, files, label)), { mode: HUB_FILE_MODE });
+    await fs.promises.writeFile(path.join(p.tmp, MANIFEST), JSON.stringify(manifestOf(p, projectId, reason, files, label)), { mode: HUB_FILE_MODE, flush: true });
     await fs.promises.rename(p.tmp, path.join(p.base, p.id));
   } catch {
     await fs.promises.rm(p.tmp, { recursive: true, force: true });
@@ -618,15 +785,35 @@ const readRel = (dir, rel) => fs.readFileSync(path.join(dir, ...rel.split('/')))
 // The digest of a plan: the preview hands it to the page, the apply refuses a plan that differs (plan-changed), so
 // going back never does more than the person was shown
 function planDigest(plan) {
-  return digestOf(JSON.stringify([plan.point?.id, plan.changed, plan.missing, plan.added, plan.unread])).slice(0, 16);
+  return digestOf(JSON.stringify([plan.point?.id, plan.changed, plan.missing, plan.added, plan.unread, plan.big, plan.beforeScope])).slice(0, 16);
+}
+
+// The files the point of the present (applyRestore) can hold, and the scope it is taken in (independent review
+// 2026-10-20, T01: a job that made the project bigger than a point's limits is the moment going back is needed most).
+// Files over the size limit are never in it; when the rest is over a full point's limits, a full point's present is
+// kept as a lean one, which leaves out what a lean point does (§7). What it cannot hold is left alone by going back.
+// Over a lean point's limits too: the problem, as before. Returns { ok: true, files, big, beforeScope } or a problem.
+function presentKeepable(scan, big, scope, limits) {
+  const full = limitsFor(scope, limits);
+  const sum = (list) => list.reduce((n, f) => n + f.size, 0);
+  const over = (list, lim) => (list.length > lim.files ? 'too-many-files' : sum(list) > lim.bytes ? 'too-large' : null);
+  if (!over(scan.files, full)) return { ok: true, files: scan.files, big, beforeScope: scope };
+  if (scope === 'lean') return fail(over(scan.files, full));
+  const leftByLean = (f) => f.size > LEAN.fileBytes || LEAN.skipExt.has(path.extname(f.rel).toLowerCase());
+  const files = scan.files.filter((f) => !leftByLean(f));
+  const problem = over(files, limitsFor('lean', limits));
+  if (problem) return fail(problem);
+  return { ok: true, files, big: [...big, ...scan.files.filter(leftByLean)], beforeScope: 'lean' };
 }
 
 // What going back to a point would do (reads only). changed: files that differ now and are put back (the digest
 // decides, a new time alone is no change); missing: files deleted since and brought back; added: files that came
 // later and are removed; unread: folders (or entries) left alone, because the point could not read them when it was
 // taken (a file there now may be older than the point: never removed) or the project's cannot be read now (the
-// point's files there are neither missing nor written). Returns { ok: true, point: { id, at, reason }, changed,
-// missing, added, unread, planId } or { ok: false, problem }.
+// point's files there are neither missing nor written); big: files there now that the point of the present cannot
+// hold (too big for a copy, or left out when the present is kept as a lean point: presentKeepable), left as they are,
+// neither removed nor overwritten. beforeScope: the scope of that point. Returns { ok: true, point: { id, at, reason },
+// changed, missing, added, unread, big, beforeScope, planId } or { ok: false, problem }.
 /** @returns {any} */
 export function planRestore({ hubDir, projectId, dir, id, limits = RESTORE_LIMITS }) {
   const pt = readPoint(hubDir, projectId, id);
@@ -636,17 +823,28 @@ export function planRestore({ hubDir, projectId, dir, id, limits = RESTORE_LIMIT
   const key = keyIn(dir);
   const inPoint = fileMap(pt.manifest.files, key);
   if (!inPoint) return fail('point-ambiguous');
-  const scan = scanProject(dir, limitsFor(scope, limits), [hubDir], scope);
+  // The present is looked at whole (no count or size limit); what a point of it could hold decides what is touched
+  const lim = limitsFor(scope, limits);
+  const tooBig = [];
+  const scan = scanProject(dir, { ...lim, files: LOOK_FILES, bytes: Infinity }, [hubDir], scope, null, tooBig);
   if (!scan.ok) return scan;
-  const now = new Map(scan.files.map((f) => [key(f.rel), f]));
+  const keep = presentKeepable(scan, tooBig, scope, limits);
+  if (!keep.ok) return keep;
+  const now = new Map(keep.files.map((f) => [key(f.rel), f]));
+  const bigNow = new Set(keep.big.map((f) => key(f.rel)));
   const unreadThen = pt.manifest.unread || [];
   const unreadNow = underAny(scan.unread, key);
   const changed = [];
   const missing = [];
+  const grown = [];
   for (const f of pt.manifest.files) {
     const cur = now.get(key(f.rel));
     if (!cur) {
-      if (!unreadNow(f.rel)) missing.push(f.rel);
+      if (unreadNow(f.rel) || bigNow.has(key(f.rel))) continue;
+      // Still there, only out of this look (a lean look leaves a file grown past LEAN.fileBytes, or a new log, out): left
+      // alone and named with the big ones, never "brought back" over it (review of the fix, 2026-10-20)
+      if (lstat(path.join(dir, ...f.rel.split('/')))?.isFile()) grown.push(f.rel);
+      else missing.push(f.rel);
       continue;
     }
     // The bytes decide, and the permissions where the point holds them (review F02: chmod -x is a change)
@@ -659,10 +857,11 @@ export function planRestore({ hubDir, projectId, dir, id, limits = RESTORE_LIMIT
     if (!same) changed.push(f.rel);
   }
   const neverSeen = underAny(unreadThen, key);
-  const added = scan.files.filter((f) => !inPoint.has(key(f.rel)) && !neverSeen(f.rel)).map((f) => f.rel);
+  const added = keep.files.filter((f) => !inPoint.has(key(f.rel)) && !neverSeen(f.rel)).map((f) => f.rel);
   const unread = [...new Set([...unreadThen, ...scan.unread])].sort();
+  const big = [...keep.big.map((f) => f.rel), ...grown].sort();
   const { at, reason } = pt.manifest;
-  const plan = { ok: true, point: { id, at, reason }, changed, missing, added, unread };
+  const plan = { ok: true, point: { id, at, reason }, changed, missing, added, unread, big, beforeScope: keep.beforeScope };
   return { ...plan, planId: planDigest(plan) };
 }
 
@@ -747,7 +946,7 @@ async function backedUpAsync(dir, rel, kept, key) {
 // start out of the project until it is done (actions.mjs restoring). planId (optional): the preview's digest; a plan
 // that changed since is refused (plan-changed). Returns { ok: true, before, restored, removed, failed: [{ rel, error }] }
 // or { ok: false, problem }.
-export async function applyRestore({ hubDir, projectId, dir, id, planId = null, now = Date.now, limits = RESTORE_LIMITS }) {
+export async function applyRestore({ hubDir, projectId, dir, id, planId = null, now = Date.now, limits = RESTORE_LIMITS, freeBytes = hubFreeBytes }) {
   const plan = planRestore({ hubDir, projectId, dir, id, limits });
   if (!plan.ok) return plan;
   if (planId && planId !== plan.planId) return fail('plan-changed');
@@ -770,8 +969,10 @@ export async function applyRestore({ hubDir, projectId, dir, id, planId = null, 
       return fail('point-damaged');
     }
   }
-  const before = await createPointAsync({ hubDir, projectId, dir, reason: 'before-restore', now, limits, protect: [id], reuse: false, scope: pt.manifest.scope === 'lean' ? 'lean' : 'full' });
-  if (!before.ok) return fail('backup-failed');
+  // In the scope the plan chose, leaving out the files the plan leaves alone (presentKeepable)
+  const before = await createPointAsync({ hubDir, projectId, dir, reason: 'before-restore', now, limits, protect: [id], reuse: false, scope: plan.beforeScope, leaveBig: true, freeBytes });
+  // A drive too full for the copy of the present says so (review of the fix: it read as a generic failure)
+  if (!before.ok) return fail(before.problem === 'disk-full' ? 'disk-full' : 'backup-failed');
   if (!(await writeRestoreMark(hubDir, projectId, { to: id, before: before.id, at: now() }))) return fail('backup-failed');
   const key = keyIn(dir);
   // The present's point, by the same key (two names that are one file here cannot both be in it; if a hand-made one
@@ -825,7 +1026,9 @@ export async function applyRestore({ hubDir, projectId, dir, id, planId = null, 
       // (a private file is never readable by others on the way), and has them before it takes the name. Only the
       // project's file is changed, never a copy in the hub.
       const mode = KEEPS_MODES ? (byRel.get(rel).mode ?? (st ? st.mode & MODE_BITS : undefined)) : undefined;
-      await fs.promises.writeFile(tmp, buf, { flag: 'wx', ...(mode !== undefined ? { mode: HUB_FILE_MODE } : {}) });
+      // flush: on the disk before it takes the name (independent review 2026-10-20, T09: power lost right after "done"
+      // must not leave an empty file)
+      await fs.promises.writeFile(tmp, buf, { flag: 'wx', flush: true, ...(mode !== undefined ? { mode: HUB_FILE_MODE } : {}) });
       if (mode !== undefined) await fs.promises.chmod(tmp, mode);
       await fs.promises.rename(tmp, dest);
       restored++;
@@ -1053,7 +1256,9 @@ export async function projectJobChanges({ catalog, projectId, jobId, limits = RE
   const broad = typeof catalog.isBroad === 'function' && !!catalog.isBroad(normPath(dir));
   if (!dir || p.broad || p.tmpOnly || broad || !isLocalPath(dir) || hasStreamColon(dir)) return { status: 200, body: { ...body, basis: 'unreadable', problem: 'folder' } };
   const scope = pt.manifest.scope === 'lean' ? 'lean' : 'full';
-  const scan = scanProject(dir, limitsFor(scope, limits), [hubDir], scope);
+  // Only names and sizes are looked at, so a job that made the project bigger than a copy's limits is still told
+  // (independent review 2026-10-20, T01); a file is read only at the size its copy holds
+  const scan = scanProject(dir, { ...limitsFor(scope, limits), files: Math.max(limitsFor(scope, limits).files, JOB_LOOK_FILES), bytes: Infinity, fileBytes: Infinity }, [hubDir], scope);
   if (!scan.ok) return { status: 200, body: { ...body, basis: 'unreadable', problem: scan.problem } };
   const isNote = (rel) => rel.toLowerCase().startsWith(`${FIRST_DIR}/`);
   const leftOut = Number.isInteger(pt.manifest.leftOut) ? pt.manifest.leftOut : 0;

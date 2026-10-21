@@ -11,7 +11,7 @@ import { projectRun } from './runhint.mjs';
 import { createChangesCache } from './changes.mjs';
 import { projectTeam } from './team.mjs';
 import { observeTeamAnswer, projectJobResult, listJobResults, JOB_RESULT_TTL_MS } from './jobResults.mjs';
-import { projectRestoreWithDisk, createJobChangesCache, projectRestoreScope, SCOPE_TTL_MS } from './restore.mjs';
+import { projectRestoreWithDisk, createJobChangesCache, projectRestoreScope, SCOPE_TTL_MS, hubPointsDisk, listingTrusted } from './restore.mjs';
 import { projectPublishCheck } from './publishCheck.mjs';
 import { createFit } from './fit.mjs';
 import { PERIODS } from './usage.mjs';
@@ -362,6 +362,18 @@ export function createHandler({ ingest, catalog, clients, port, publicDir, actio
     // route. Detection runs on the first request, is cached for five minutes; ?refresh=1 checks again (throttled).
     // The answer holds no path and no output of any tool.
     if (p === '/api/about') return sendJson(res, 200, aboutAnswer());
+    // What every restore point in the hub takes on disk, and the points of projects no longer listed (Settings ›
+    // General; independent review 2026-10-20, T05): read-only, no action mode needed. Removing them is an action
+    // (restore-clean)
+    if (p === '/api/restore-disk') {
+      // Orphans only while the list of projects can be trusted (listingTrusted); else the total alone, and why
+      const sure = listingTrusted({ catalog, ingest });
+      hubPointsDisk({ hubDir: catalog?.hubDir || null, isListed: sure ? (id) => !!catalog?.getProject?.(id) : () => true }).then(
+        (r) => sendJson(res, 200, sure ? r : { ...r, unsure: true, why: catalog?.listingDoubt?.() === 'memory-set-aside' ? 'memory-set-aside' : 'busy' }),
+        () => sendJson(res, 500, { error: 'restore-disk-failed' }),
+      );
+      return;
+    }
     // The one request SiberSentez makes outside this computer for itself, and only when the person turned it on: the
     // latest release of its own repository, at most once a day (server/update.mjs). The answer: versions and the
     // release page's link. The last answer is kept in the hub (update-check.json), so starting again does not ask again.

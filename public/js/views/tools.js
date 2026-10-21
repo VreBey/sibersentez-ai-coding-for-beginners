@@ -361,7 +361,9 @@ export function testedLine(x) {
   if (!v) return '';
   const range = v.from === v.to ? v.from : `${v.from}–${v.to}`;
   const fit = x.installed && x.version ? v.fit : 'unknown';
-  const warn = fit === 'older' || fit === 'newer';
+  // Only an older tool is a risk; a newer one (most people, as tools update often) is said quietly (independent review
+  // 2026-10-20, U03: a red line beside a green 'nothing to fix' read as a fault)
+  const warn = fit === 'older';
   return `<p class="small ai-tested${warn ? ' warn' : ' muted'}">${esc(t(`aiTested_${fit}`, { range, date: v.at, version: x.version || '' }))}</p>`;
 }
 

@@ -26,6 +26,12 @@ export class Terminal {
   write(text) {
     this.written += text;
   }
+  // The screen as xterm's buffer gives it: the last `rows` lines of what was written (colors and moves left out)
+  get buffer() {
+    const lines = this.written.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\r\n?/g, '\n').split('\n');
+    const baseY = Math.max(0, lines.length - this.rows);
+    return { active: { baseY, getLine: (i) => (i < lines.length ? { translateToString: () => lines[i] } : undefined) } };
+  }
   onData(fn) {
     this.dataFns.push(fn);
     return { dispose() {} };

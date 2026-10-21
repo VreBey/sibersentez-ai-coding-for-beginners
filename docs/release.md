@@ -24,7 +24,9 @@ once the whole roadmap (F1–F5) is done. The version number changes only at thi
 6. `tools/perf-baseline.mjs` and `tools/contrast-scan.js` again; the numbers next to the last ones
    (`docs/release-evidence.md`, the last release's "Checked by the maintainer").
 7. Dependencies (plan A5): `npm audit --omit=dev` finds nothing (the CI runs it on every push; it covers what ships in
-   the app, node-pty). `npm audit` for the build tools: on 2026-10-09 eight moderate findings, all in electron-builder's
+   the app, node-pty), and `node tools/audit-electron.mjs` finds no advisory against Electron, the app's runtime, which
+   `--omit=dev` leaves out (the CI runs it too). The release build runs both again before it builds anything, and
+   installs without npm's cache (independent review 2026-10-20, T10). `npm audit` for the build tools: on 2026-10-09 eight moderate findings, all in electron-builder's
    chain (sprintf-js, a denial of service through a format string), which runs only while the installer is built and
    is not in the app; npm's "fix" was a downgrade, so it waits for electron-builder. Dependabot's open pull requests
    are looked at (weekly for npm, monthly for the GitHub Actions; nothing merges by itself).

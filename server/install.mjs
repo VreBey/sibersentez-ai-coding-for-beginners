@@ -117,7 +117,8 @@ export function isBroadFolder(dir, homeDir) {
   return forms.some((f) => {
     const n = normPath(f);
     if (isDriveRoot(f) || /^[a-z]:$/i.test(n) || isSystemFolder(n)) return true;
-    return homes.some((h) => ['', 'Desktop', 'Documents', 'Downloads'].some((x) => n === normPath(x ? path.join(h, x) : h)));
+    // A folder that holds the home folder (C:\Users) is every account's: broad too (independent review 2026-10-20, T03)
+    return homes.some((h) => normPath(h).startsWith(n + '/') || ['', 'Desktop', 'Documents', 'Downloads'].some((x) => n === normPath(x ? path.join(h, x) : h)));
   });
 }
 

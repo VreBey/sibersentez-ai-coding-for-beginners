@@ -32,10 +32,14 @@ export function checklistModel({ tools = { status: 'idle', tools: [] }, mode = '
 // The one big start (docs/direction.md §3.3): while there is no project of the person's own yet, Today shows a single
 // card, "Got an idea?", with one primary button (New project) instead of the four-step list, and a link to the short
 // tour. The list comes once the first project exists. tools: the tools state; no tool found yet adds its button.
+// What it takes is said before anything is made (independent review of 0.20.0: "you need to know nothing first" hid
+// that most tools want a paid plan): an AI tool and its account, with a link to what each tool needs (the tools panel's
+// wizard, whose account lines are checked against the tools' own pages); with no tool found the button says it already.
 export function startCardHtml({ tools = { status: 'idle', tools: [] } } = {}) {
   const noTool = tools.status === 'ready' && !tools.tools.some((x) => x.installed);
   const toolBtn = noTool ? `<button type="button" class="act-btn" data-cl="tool" data-fk="cl:tool">${esc(t('cl_tool_go'))}</button>` : '';
-  return `<section class="first-card" aria-labelledby="firstCardH"><div class="fc-text"><h2 id="firstCardH">${esc(t('firstCardTitle'))}</h2><p>${esc(t('firstCardBody'))}</p></div><div class="fc-btns"><button type="button" class="act-btn primary fc-go" data-cl="project" data-fk="cl:project">${icon('folder')}<span>${esc(t('firstCardGo'))}</span></button>${toolBtn}<button type="button" class="act-btn" data-cl="demo" data-fk="cl:demo">${icon('play')}<span>${esc(t('firstCardDemo'))}</span></button><button type="button" class="linkish" data-cl="tour" data-fk="cl:tour">${esc(t('firstCardTour'))}</button></div></section>`;
+  const needsGo = noTool ? '' : ` <button type="button" class="linkish" data-cl="tool" data-fk="cl:needs">${esc(t('firstCardNeedsGo'))}</button>`;
+  return `<section class="first-card" aria-labelledby="firstCardH"><div class="fc-text"><h2 id="firstCardH">${esc(t('firstCardTitle'))}</h2><p>${esc(t('firstCardBody'))}</p><p class="fc-needs">${esc(t('firstCardNeeds'))}${needsGo}</p></div><div class="fc-btns"><button type="button" class="act-btn primary fc-go" data-cl="project" data-fk="cl:project">${icon('folder')}<span>${esc(t('firstCardGo'))}</span></button>${toolBtn}<button type="button" class="act-btn" data-cl="demo" data-fk="cl:demo">${icon('play')}<span>${esc(t('firstCardDemo'))}</span></button><button type="button" class="linkish" data-cl="tour" data-fk="cl:tour">${esc(t('firstCardTour'))}</button></div></section>`;
 }
 
 // Whether the person has a project of their own (a folder they work in; broad and system folders do not count)

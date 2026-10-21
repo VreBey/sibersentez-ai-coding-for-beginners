@@ -22,6 +22,7 @@
   overflow-wrap: anywhere;
 }
 #todayChecklist .fc-text p { max-width: 60ch; color: var(--text-2); line-height: 1.75; }
+#todayChecklist .fc-text .fc-needs { margin-top: 10px; font-size: 13px; line-height: 1.6; }
 #todayChecklist .fc-btns { display: flex; flex-wrap: wrap; gap: 12px 18px; min-width: 0; max-width: 100%; }
 #todayChecklist .fc-go {
   min-height: 48px;
@@ -136,7 +137,9 @@
 .act-btn:disabled, .act-btn[aria-disabled="true"] { cursor: not-allowed; box-shadow: none; }
 
 /* d. State is reinforced by borders and weight, without animation. */
-.job-steps { gap: 8px; margin-block: 10px 14px; }
+/* Four in a row where they fit, two by two in a narrow panel: a step's name never breaks inside a word ("Kontrol et"
+   broke as "Kontro / l et" in the Building's side panel) */
+.job-steps { gap: 8px; margin-block: 10px 14px; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); }
 .job-steps > li {
   min-width: 0;
   padding: 10px 6px;
@@ -144,7 +147,7 @@
   background: var(--panel);
   color: var(--muted);
   line-height: 1.5;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .job-steps > li.done { color: var(--busy); border-color: var(--busy); background: rgba(var(--busy-rgb), 0.06); }
 .job-steps > li.now { color: var(--text); border: 2px solid var(--accent); background: rgba(var(--accent-rgb), 0.12); font-weight: 700; }

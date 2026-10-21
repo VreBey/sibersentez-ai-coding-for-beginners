@@ -32,6 +32,8 @@ export const ACTION_FIELDS = Object.freeze({
   // Restore points (docs/restore.md): a project and one of its points by id
   'restore-preview': Object.freeze(['projectId', 'pointId']),
   'restore-apply': Object.freeze(['projectId', 'pointId', 'planId']),
+  // The points of projects no longer listed, by their folder's key (Settings; independent review 2026-10-20, T05)
+  'restore-clean': Object.freeze(['keys']),
   'project-relink': Object.freeze(['projectId', 'folder', 'from', 'plan', 'planId']),
   'project-unlink': Object.freeze(['projectId', 'plan']),
   // The person's marks while trying a job's result (acceptGuide.js), kept in the hub: the whole set each time

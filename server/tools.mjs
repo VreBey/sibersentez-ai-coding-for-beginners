@@ -44,8 +44,9 @@ export const TOOLS = Object.freeze([
   Object.freeze({ id: 'codex', name: 'Codex CLI', commands: ['codex'], version: ['--version'], ready: ['login', 'status'], prompt: 'arg', appPackage: /^OpenAI\.Codex_/i, resume: Object.freeze(['resume']), resumeMin: '0.160.0' }),
   Object.freeze({ id: 'gemini', name: 'Gemini CLI', commands: ['gemini'], version: ['--version'], ready: null, prompt: '-i', plan: Object.freeze(['--approval-mode', 'plan']), planMin: '0.61.0', resume: Object.freeze(['--resume']), resumeMin: '0.61.0' }),
   Object.freeze({ id: 'copilot', name: 'GitHub Copilot CLI', commands: ['copilot'], version: ['version'], ready: null, prompt: '-i', plan: Object.freeze(['--plan']), planMin: '1.0.93', resume: Object.freeze(['--resume=']), resumeMin: '1.0.92' }),
-  // `agent` is a generic name: another program could carry it, so it counts only when its folder or its version output
-  // says Cursor (generic)
+  // `agent` is a generic name: another program could carry it, so it counts only when its folder (or, for a link such as
+  // Linux's ~/.local/bin/agent, the folder it points into) says Cursor (generic). Any other `agent` is never run, not
+  // even for its version (independent review 2026-10-20, T12)
   Object.freeze({ id: 'cursor', name: 'Cursor CLI', commands: ['cursor-agent', 'agent'], generic: Object.freeze({ agent: /cursor/i }), version: ['--version'], ready: ['status'], readyOut: (out) => /logged in/i.test(out) && !/not logged in/i.test(out), prompt: 'arg', plan: Object.freeze(['--plan']), planMin: '2026.10.01', resume: Object.freeze(['--resume']), resumeMin: '2026.10.01' }),
   Object.freeze({ id: 'qwen', name: 'Qwen Code', commands: ['qwen'], version: ['--version'], ready: null, prompt: 'arg', plan: Object.freeze(['--approval-mode', 'plan']), planMin: '0.25.0', resume: Object.freeze(['--resume']), resumeMin: '0.25.0' }),
   Object.freeze({ id: 'opencode', name: 'OpenCode', commands: ['opencode'], version: ['--version'], ready: null, prompt: '--prompt', resume: Object.freeze(['--session']), resumeMin: '1.18.35' }),
@@ -58,7 +59,7 @@ export const TOOL_IDS = Object.freeze(TOOLS.map((t) => t.id));
 // (docs/release.md) moves "to" and "at" when the check passes on a newer version; the tools panel says where the
 // installed version stands (toolTested). Checked 2026-10-10 on the owner's computer: every tool "ok".
 export const TOOL_CHECKED = Object.freeze({
-  claude: Object.freeze({ from: '2.1.283', to: '2.1.301', at: '2026-10-16' }),
+  claude: Object.freeze({ from: '2.1.283', to: '2.1.306', at: '2026-10-21' }),
   codex: Object.freeze({ from: '0.160.0', to: '0.160.1', at: '2026-10-10' }),
   gemini: Object.freeze({ from: '0.61.0', to: '0.63.0', at: '2026-10-10' }),
   copilot: Object.freeze({ from: '1.0.92', to: '1.0.93', at: '2026-10-10' }),
@@ -336,6 +337,15 @@ function defaultExists(p) {
   }
 }
 
+// Where a command file really is (a link followed), or null
+function defaultRealPath(p) {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return null;
+  }
+}
+
 // A small JSON settings file of a tool, or null (missing, too large, not JSON)
 function defaultReadJson(p) {
   try {
@@ -455,6 +465,8 @@ export function createToolDetector({
   readyTimeoutMs = READY_TIMEOUT_MS,
   cmdExe = path.win32.join(envValue(process.env, 'SystemRoot') || 'C:\\Windows', 'System32', 'cmd.exe'),
   plat = PLATFORM,
+  // Where a link leads (a generic command name: its real folder decides)
+  realPath = defaultRealPath,
 } = {}) {
   let last = null; // { at, tools, node }
   let startedAt = 0;
@@ -482,23 +494,21 @@ export function createToolDetector({
   }
 
   async function detectTool(tool, dirs) {
-    const found = findInstalls(tool.commands, dirs, isFile, plat);
+    // A generic command name is kept only when its folder or its real one names the tool: nothing else is run
+    const found = findInstalls(tool.commands, dirs, isFile, plat).filter((f) => {
+      const rx = tool.generic?.[plat.path.basename(f.file).replace(/\.[^.]+$/, '').toLowerCase()];
+      // Its own folder's name and its name, not the whole path (a user name or an upper folder with the word in it
+      // proves nothing: review of the fix, 2026-10-20)
+      const near = (p) => (p ? `${plat.path.basename(plat.path.dirname(p))}/${plat.path.basename(p)}` : '');
+      return !rx || rx.test(near(f.file)) || rx.test(near(realPath(f.file)));
+    });
     const installs = found.map((f) => ({ ...f, via: installKind(f.file, (d) => isDir(plat.path.join(d, 'node_modules')), plat), version: null }));
     await Promise.all(
       installs.slice(0, MAX_INSTALLS).map(async (i) => {
         const r = await run(i, tool.version, versionTimeoutMs, true);
         i.version = r.code === 0 || r.out ? parseVersion(r.out) : null;
-        i.said = String(r.out || '');
       }),
     );
-    // A generic command name is kept only when its folder or what it printed names the tool
-    const kept = installs.filter((i) => {
-      const rx = tool.generic?.[plat.path.basename(i.file).replace(/\.[^.]+$/, '').toLowerCase()];
-      return !rx || rx.test(i.file) || rx.test(i.said || '');
-    });
-    for (const i of kept) delete i.said;
-    installs.length = 0;
-    installs.push(...kept);
     const chosen = installs[0] || null;
     let ready = 'unknown';
     if (chosen && tool.ready) {

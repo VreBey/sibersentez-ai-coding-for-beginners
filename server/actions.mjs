@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn as nodeSpawn } from 'node:child_process';
 import { isLegacyHub, listLibrary, findLibraryItem, scanSource, publicScanItems, planImport, executeImport, writeCatalog, publicPlan, normRel, lstat, treeHash, sameHash } from './library.mjs';
 import { resolveProject, readInstalls, planInstall, executeInstall, planRemove, executeRemove, planTrial, makeTrial } from './install.mjs';
-import { createPointAsync, planRestore, applyRestore, recordJobPoint, listPoints } from './restore.mjs';
+import { createPointAsync, planRestore, applyRestore, recordJobPoint, listPoints, removeOrphanPoints, orphanKeys, listingTrusted } from './restore.mjs';
 import { planRelink, setRelink, removeRelink } from './relinks.mjs';
 import { listJobResults, writeTried } from './jobResults.mjs';
 import { createFit, planApplyImports } from './fit.mjs';
@@ -86,7 +86,7 @@ const JSON_TYPE_RE = /^application\/json\s*(?:;\s*charset=utf-8\s*)?$/i;
 const PROGRAM_CODES = { resume: 'wt', fork: 'wt', new: 'wt', explorer: 'explorer', vscode: 'vscode' };
 
 // Actions that write in live mode (one at a time). A GitHub fetch writes the download into the hub's incoming/ folder.
-const WRITING = new Set(['library-import', 'library-adopt', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-apply', 'project-relink', 'project-unlink', ...GITHUB_ACTIONS]);
+const WRITING = new Set(['library-import', 'library-adopt', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-apply', 'restore-clean', 'project-relink', 'project-unlink', ...GITHUB_ACTIONS]);
 // Writing actions that may also only plan (plan: true), outside the one-writing-action lock
 const PLAN_ONLY_OK = new Set(['skills-remove', 'project-relink', 'project-unlink']);
 // Names per list in a restore reply (the counts are whole)
@@ -407,6 +407,7 @@ export function createActions({
       }
       if (action === 'skills-apply') return applySkills(ctx, execute, base);
       if (action === 'restore-preview' || action === 'restore-apply') return await runRestore(action, ctx, execute, base);
+      if (action === 'restore-clean') return runClean(ctx, execute, base);
       if (action === 'project-relink' || action === 'project-unlink') return runRelink(action, ctx, execute, base);
       if (action === 'accept-marks') return runAcceptMarks(ctx, execute, base);
       if (action === 'skills-trial') {
@@ -518,7 +519,7 @@ export function createActions({
     const isNote = (rel) => rel.toLowerCase().startsWith(`${FIRST_DIR}/`);
     const cut = (list) => [...list.filter((r) => !isNote(r)), ...list.filter(isNote)].slice(0, RESTORE_LIST_MAX);
     const notes = (list) => list.filter(isNote).length;
-    const summary = { point: plan.point, planId: plan.planId, changed: cut(plan.changed), missing: cut(plan.missing), added: cut(plan.added), unread: plan.unread.slice(0, RESTORE_LIST_MAX), counts: { changed: plan.changed.length, missing: plan.missing.length, added: plan.added.length, unread: plan.unread.length }, notes: { changed: notes(plan.changed), missing: notes(plan.missing), added: notes(plan.added) } };
+    const summary = { point: plan.point, planId: plan.planId, changed: cut(plan.changed), missing: cut(plan.missing), added: cut(plan.added), unread: plan.unread.slice(0, RESTORE_LIST_MAX), big: plan.big.slice(0, RESTORE_LIST_MAX), counts: { changed: plan.changed.length, missing: plan.missing.length, added: plan.added.length, unread: plan.unread.length, big: plan.big.length }, notes: { changed: notes(plan.changed), missing: notes(plan.missing), added: notes(plan.added) } };
     if (action === 'restore-preview' || !execute) return { status: 200, body: { ...base, ...summary, result: { executed: false } }, note: action === 'restore-preview' ? 'plan' : 'dry' };
     restoring.add(ctx.project.id);
     let r;
@@ -529,6 +530,22 @@ export function createActions({
     }
     if (!r.ok) return failed(r.problem === 'point-missing' ? 404 : 409, r.problem, 'restore', summary);
     return { status: 200, body: { ...base, ...summary, before: r.before, result: { executed: true, restored: r.restored, removed: r.removed, failed: r.failed.slice(0, RESTORE_LIST_MAX) } }, note: r.failed.length ? 'partial' : 'live' };
+  }
+
+  // The points of projects no longer listed (Settings; independent review 2026-10-20, T05): preview and dry name the
+  // folders that would go, live removes them. Each key is checked again when removed (removeOrphanPoints), so a project
+  // listed again meanwhile keeps its points
+  function runClean(ctx, execute, base) {
+    // A list read in part (a registry being written, a project memory held by another program, the logs still being
+    // read) never decides what is removed (pre-release review 2026-10-21)
+    if (!listingTrusted({ catalog, ingest })) return failed(409, 'catalog-unsure', 'restore');
+    const isListed = (id) => !!catalog?.getProject?.(id);
+    if (!execute) {
+      const would = orphanKeys({ hubDir, isListed });
+      return { status: 200, body: { ...base, keys: ctx.cleanKeys.filter((k) => would.has(k)), result: { executed: false } }, note: 'dry' };
+    }
+    const r = removeOrphanPoints({ hubDir, keys: ctx.cleanKeys, isListed });
+    return { status: 200, body: { ...base, result: { executed: true, removed: r.removed, kept: r.kept } }, note: r.kept.length ? 'partial' : 'live' };
   }
 
   // The person's marks while trying a job's result (jobResults.mjs writeTried; independent review of 0.19.0 §8): in the
@@ -900,6 +917,9 @@ export function createActions({
     // project is being put back (its files are half old, half new until that is done)
     const pid = ctx.pointProjectId;
     if (pid && restoring.has(pid)) return fail(409, 'restore-running', 'restore-running');
+    // Another start in the same project is still copying it (independent review 2026-10-20, T02): one copy at a time,
+    // so the second job never starts without its point
+    if (pid && starting.has(pid)) return fail(409, 'start-running', 'start-running');
     if (pid) starting.add(pid);
     let restorePoint;
     try {

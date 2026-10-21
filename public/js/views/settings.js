@@ -5,7 +5,8 @@
 import { esc } from '../format.js';
 import { icon } from '../icons.js';
 import { t, modeName, language, tOs } from '../i18n.js';
-import { actionsState, onActionsChange } from '../actions.js';
+import { actionsState, onActionsChange, runAction } from '../actions.js';
+import { sizeText } from '../restore.js';
 import { costShown, setCostShown, advancedShown, setAdvancedShown, onPrefs, terminalReaderOn, setTerminalReader } from '../usage.js';
 import { installedTools, toolsState, onToolsChange, needTools, capsLine } from './tools.js';
 import { preferredTool, readTool, saveTool } from './job.js';
@@ -60,9 +61,44 @@ function toolRow(tools, tool, looking = false) {
   return `<div class="set-row"><div class="set-text"><b>${esc(t('setToolTitle'))}</b><p class="small muted">${esc(t('setToolText'))}</p>${capsLine(chosen?.caps)}</div><div class="set-ctl">${select}</div></div>`;
 }
 
+// The restore copies (independent review 2026-10-20, T05): what every point in the hub takes, and the points of projects
+// no longer listed with a way to remove them, asked once inline (pure). disk: null (not asked yet), { state: 'loading' |
+// 'failed' } or { state: 'ready', data: the /api/restore-disk answer, step: null | 'ask' | 'busy', result }; mode: the
+// actions mode (removing is a writing action: live only)
+const NAMES_SHOWN = 4;
+export function diskRowHtml(disk, mode = 'off') {
+  const say = (text, cls = 'muted') => `<p class="small ${cls}">${esc(text)}</p>`;
+  let body = '';
+  if (!disk || disk.state === 'loading') body = say(t('setDiskLoading'));
+  else if (disk.state !== 'ready') body = say(t('setDiskFailed'));
+  else {
+    const d = disk.data || {};
+    const orphans = Array.isArray(d.orphans) ? d.orphans : [];
+    body = say(t('setDiskTotal', { size: sizeText(d.bytes) || '0 KB' }), '');
+    // The list of projects could not be read whole just now: nothing is offered for removal (pre-release review)
+    if (d.unsure === true) body += say(t(d.why === 'memory-set-aside' ? 'setDiskUnsureMemory' : 'setDiskUnsure'));
+    if (disk.error) body += say(t('setDiskCleanFailed'), 'warn');
+    if (disk.result) {
+      body += say(t('setDiskDone', { count: disk.result.removed }), 'ok');
+      if (disk.result.kept) body += say(t('setDiskKept', { count: disk.result.kept }));
+    }
+    if (orphans.length) {
+      const size = sizeText(orphans.reduce((n, o) => n + (Number(o.bytes) || 0), 0)) || '0 KB';
+      const names = orphans.slice(0, NAMES_SHOWN).map((o) => String(o.projectId)).join(', ') + (orphans.length > NAMES_SHOWN ? ', …' : '');
+      body += say(t('setDiskOrphans', { count: orphans.length, size, names }), '');
+      if (mode !== 'live') body += say(t('setDiskLive'));
+      else if (disk.step === 'ask' || disk.step === 'busy') {
+        const off = disk.step === 'busy' ? ' disabled' : '';
+        body += `<div class="set-ask" role="group" aria-label="${esc(t('setDiskClean'))}">${say(t('setDiskAsk', { count: orphans.length }), 'warn')}<button type="button" class="act-btn danger" data-set-act="disk-yes" data-fk="set:disk-yes"${off}><span>${esc(t('setDiskYes'))}</span></button> <button type="button" class="act-btn" data-set-act="disk-no" data-fk="set:disk-no"${off}><span>${esc(t('setDiskNo'))}</span></button></div>`;
+      } else body += btn('disk-clean', t('setDiskClean'));
+    }
+  }
+  return `<div class="set-row"><div class="set-text"><b>${esc(t('setDiskTitle'))}</b><p class="small muted">${esc(t('setDiskText'))}</p><div class="set-disk" aria-live="polite">${body}</div></div></div>`;
+}
+
 // canLogs: the desktop app can open its log folder (review A4); a browser has none. canBundle: the desktop app can put
 // the support bundle together (supportBundle.js); bundle: its preview's state, or null
-export function settingsHtml({ canBundle = false, bundle = null, mode = 'off', lang = 'en', cost = false, advanced = false, canSwitch = false, langChoice = 'auto', canLang = false, tools = [], tool = '', toolsLooking = false, updates = updatesState(), updatesChecked = updatesOn(), canLogs = false, theme = themeChoice() } = {}) {
+export function settingsHtml({ disk = null, canBundle = false, bundle = null, mode = 'off', lang = 'en', cost = false, advanced = false, canSwitch = false, langChoice = 'auto', canLang = false, tools = [], tool = '', toolsLooking = false, updates = updatesState(), updatesChecked = updatesOn(), canLogs = false, theme = themeChoice() } = {}) {
   const modeText = t(`setMode_${['off', 'dry', 'live'].includes(mode) ? mode : 'off'}`);
   return [
     group('actions', 'action', t('setActions'), [
@@ -72,7 +108,7 @@ export function settingsHtml({ canBundle = false, bundle = null, mode = 'off', l
     group('usage', 'cpu', t('setUsage'), [
       row(t('setCostTitle'), t('setCostText'), toggle('data-set-cost', 'set:cost', cost, t('setCostTitle'))),
     ]),
-    group('general', 'globe', t('setGeneral'), [languageRow(lang, langChoice, canLang), themeRow(theme), row(t('setAdvancedTitle'), t('setAdvancedText'), toggle('data-set-advanced', 'set:advanced', advanced, t('setAdvancedTitle'))), row(t('setReaderTitle'), t('setReaderText'), toggle('data-set-reader', 'set:reader', terminalReaderOn(), t('setReaderTitle'))), row(t('updTitle'), t('updText'), `${toggle('data-set-updates', 'set:updates', updatesChecked, t('updTitle'))}<div class="upd-state" aria-live="polite">${updateRowHtml(updates)}</div>`)]),
+    group('general', 'globe', t('setGeneral'), [languageRow(lang, langChoice, canLang), themeRow(theme), row(t('setAdvancedTitle'), t('setAdvancedText'), toggle('data-set-advanced', 'set:advanced', advanced, t('setAdvancedTitle'))), row(t('setReaderTitle'), t('setReaderText'), toggle('data-set-reader', 'set:reader', terminalReaderOn(), t('setReaderTitle'))), row(t('updTitle'), t('updText'), `${toggle('data-set-updates', 'set:updates', updatesChecked, t('updTitle'))}<div class="upd-state" aria-live="polite">${updateRowHtml(updates)}</div>`), diskRowHtml(disk, mode)]),
     group('help', 'prompt', t('setHelp'), [row(t('setGuideTitle'), t('setGuideText'), btn('guide', t('setGuideOpen'))), row(t('setDiagTitle'), tOs('setDiagText'), btn('diag', t('setDiagCopy'))), ...(canLogs ? [row(t('setLogsTitle'), t('setLogsText'), btn('logs', t('setLogsOpen')))] : []), ...(canBundle ? [row(t('setBundleTitle'), t('setBundleText'), btn('bundle', t('setBundleOpen'))) + supportPreviewHtml(bundle)] : []), row(t('setLicenseTitle'), tOs('setLicenseText', { url: SOURCE_URL })), row(t('setSupportTitle'), t('setSupportText'), `<a class="act-btn" href="${SPONSOR_URL}" target="_blank" rel="noopener noreferrer" data-fk="set:support">${icon('heart')}<span>${esc(t('setSupportOpen'))}</span></a>`)]),
   ].join('');
 }
@@ -89,11 +125,48 @@ export function createSettingsView(root, { openTools = () => {}, openGuide = () 
   }
   // The support bundle's preview (supportBundle.js): null, or { step: 'loading' | 'ready' | 'failed', text }
   let bundle = null;
+  // The restore copies' row (diskRowHtml): asked when Settings is drawn first, and again after a removal
+  let disk = null;
+  async function loadDisk() {
+    // A removal's result stays shown once the copies are counted again (review of the fix, 2026-10-20)
+    const result = disk?.result || null;
+    disk = { state: 'loading' };
+    try {
+      const res = await fetch('/api/restore-disk', { cache: 'no-store', credentials: 'same-origin' });
+      const data = res.ok ? await res.json() : null;
+      disk = data && Number.isFinite(data.bytes) ? { state: 'ready', data, step: null, result } : { state: 'failed' };
+    } catch {
+      disk = { state: 'failed' };
+    }
+    if (!root.closest('[hidden]')) render();
+  }
+  async function diskAct(act) {
+    if (disk?.state !== 'ready') return;
+    if (act === 'disk-clean') disk = { ...disk, step: 'ask', result: null, error: false };
+    else if (act === 'disk-no') disk = { ...disk, step: null };
+    else if (act === 'disk-yes' && disk.step === 'ask') {
+      const keys = (disk.data.orphans || []).map((o) => o.key);
+      disk = { ...disk, step: 'busy' };
+      render();
+      const r = await runAction({ action: 'restore-clean', keys });
+      const done = r?.ok && r.result?.executed;
+      if (!done) {
+        // Said, not counted again over it
+        disk = { ...disk, step: null, result: null, error: true };
+        return render();
+      }
+      disk = { ...disk, step: null, result: { removed: r.result.removed.length, kept: r.result.kept.length } };
+      return loadDisk();
+    }
+    render();
+    root.querySelector(act === 'disk-clean' ? '[data-fk="set:disk-no"]' : '[data-fk="set:disk-clean"]')?.focus({ preventScroll: true });
+  }
   function render() {
+    if (!disk) loadDisk();
     // The tools are looked for once, on the first screen that needs them (Settings can be the first one)
     needTools();
     const st = toolsState();
-    const html = settingsHtml({ toolsLooking: st.status === 'idle' || st.status === 'loading', mode: actionsState().mode, lang: language(), cost: costShown(), advanced: advancedShown(), canSwitch: typeof openActions === 'function', langChoice, canLang: !!bridge(), tools: installedTools(toolsState()).map((x) => ({ id: x.id, name: x.name, caps: x.caps })), tool: preferredTool(installedTools(toolsState()), readTool())?.id || '', canLogs: typeof openLogs === 'function', canBundle: !!supportBundle, bundle });
+    const html = settingsHtml({ toolsLooking: st.status === 'idle' || st.status === 'loading', mode: actionsState().mode, lang: language(), cost: costShown(), advanced: advancedShown(), canSwitch: typeof openActions === 'function', langChoice, canLang: !!bridge(), tools: installedTools(toolsState()).map((x) => ({ id: x.id, name: x.name, caps: x.caps })), tool: preferredTool(installedTools(toolsState()), readTool())?.id || '', canLogs: typeof openLogs === 'function', canBundle: !!supportBundle, bundle, disk });
     if (root._html === html) return;
     const fk = root.contains(document.activeElement) ? /** @type {HTMLElement} */ (document.activeElement).dataset?.fk : null;
     root._html = html;
@@ -108,6 +181,7 @@ export function createSettingsView(root, { openTools = () => {}, openGuide = () 
     else if (act === 'diag') copyDiagnostics();
     else if (act === 'logs') openLogs?.();
     else if (act && act.startsWith('bundle')) bundleAct(act);
+    else if (act && act.startsWith('disk-')) diskAct(act);
   });
   // Preview: the shell's parts and the diagnostic info, put together; Copy and Save hand the same text on (main.js
   // says how it went); Close gives the focus back to Preview

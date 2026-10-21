@@ -5,11 +5,13 @@
 // http://127.0.0.1:<port>/ only; system tray; logs; QA mode (optionally hidden: nothing reaches the screen).
 // Every decision lives in helpers.mjs as a pure, tested function; this file only wires them to Electron.
 // Security: the window is sandboxed (sandbox + contextIsolation, nodeIntegration off). Its preload
-// (electron/preload.cjs) gives the page exactly ten functions, one IPC channel each, that the shell honours only
+// (electron/preload.cjs) gives the page twelve functions (sibersentezShell), one IPC channel each, that the shell honours only
 // from the main window's top frame on the server origin (bridgeSender): setActionsMode(mode), pickProjectFolder(),
 // createIdeaProject(name, idea, choose), pickLibraryFolder(), setLanguage(lang), saveProjectIdea(projectId, text),
 // setAttention(count, text), reportError(text), openLogs() (review A4), setTheme(theme) (plan E4), supportParts() and
-// saveSupport(text) (the support bundle); nothing else
+// saveSupport(text) (the support bundle); and the embedded terminal's own channels (sibersentezTerminal: open,
+// write, resize, close and list asked by the page; onData, onExit and onToolEnd sent to it; electron/terminals.mjs);
+// nothing else
 // reaches the renderer (the terminal bridge: test/terminal.test.mjs).
 // Permission requests are denied except notifications and clipboard writes from our own origin; the page may only
 // send network requests to its own origin.
@@ -177,7 +179,10 @@ if (dataDirCheck?.ok) {
 
 const LOG_DIR = app.getPath('logs');
 const mainLog = createLogger({ dir: LOG_DIR, name: 'main' });
-const serverLog = createLogger({ dir: LOG_DIR, name: 'server' });
+// The server's output comes line by line: kept and written together (independent review 2026-10-20, T11); the main
+// log stays written at once (a crash's last lines must reach the file)
+const serverLog = createLogger({ dir: LOG_DIR, name: 'server', buffered: true });
+process.on('exit', () => serverLog.flush());
 const log = (m) => mainLog.write(m);
 // Every native dialog of the shell goes through this: a hidden QA run opens none (each call is logged and cancelled)
 const dialog = guardDialogs(electronDialog, { hidden: QA_SHELL.hidden, log });
@@ -312,7 +317,7 @@ function pipeLines(stream, prefix) {
 // not work there; utilityProcess always exists in Electron 44, the fallback is for development and old versions.
 function spawnServer(port, onExit) {
   const entry = path.join(app.getAppPath(), 'server', 'index.mjs');
-  const env = buildServerEnv(process.env, { port, hubPath: state.hubPath, instance: state.instance, sessionKey: state.sessionKey });
+  const env = buildServerEnv(process.env, { port, hubPath: state.hubPath, instance: state.instance, sessionKey: state.sessionKey, knownDirs: knownDirs() });
   let markExited = (_value) => {};
   // exited: settles when the process is gone (a requested restart waits for it so the port is free again).
   // forceKill: terminates the process by pid, only while no exit was seen (a pid is never reused before that).
@@ -631,7 +636,7 @@ function hardenSession(ses) {
 
 // ---------------------------------------------------------------- window
 
-// The window's options are the tested windowOptions (sandboxed, isolated, no Node; the preload's three functions;
+// The window's options are the tested windowOptions (sandboxed, isolated, no Node; the preload's bridge;
 // DevTools only in development). A hidden QA run: never shown, no taskbar button, off screen.
 // "What needs you" on the taskbar (docs/attention.md §4): the page's count of waiting sessions and its words for it.
 // A dot over the taskbar button while someone waits, the words in the tray's tooltip, a flash when the count grows
@@ -1019,7 +1024,9 @@ function showTrayHint() {
 // The folders a new project may not be, as the shell knows them; the server adds the catalog's own rules (AppData,
 // the temp folder, the personal Claude folder, ...). The system folders (systemFolderRules: %SystemRoot% and all
 // below it; the Program Files, ProgramData and OneDrive roots themselves) are refused as 'broad', like the server does.
-function projectFolderRules() {
+// The person's known folders where the system keeps them (moved into OneDrive, or localized on Linux), never a
+// project: the new-project check here and the server's catalog (buildServerEnv knownDirs) use the same list.
+function knownDirs() {
   const known = (name) => {
     try {
       return app.getPath(name);
@@ -1027,11 +1034,15 @@ function projectFolderRules() {
       return null;
     }
   };
+  return /** @type {string[]} */ (['desktop', 'documents', 'downloads', 'pictures', 'music', 'videos'].map(known).filter(Boolean));
+}
+
+function projectFolderRules() {
   const usual = ['Desktop', 'Documents', 'Downloads'].map((d) => path.join(HOME_DIR, d));
   const system = systemFolderRules(process.env);
   return {
     homeDir: HOME_DIR,
-    broadDirs: [known('desktop'), known('documents'), known('downloads'), ...usual, ...system.roots].filter(Boolean),
+    broadDirs: [...knownDirs(), ...usual, ...system.roots].filter(Boolean),
     systemTrees: system.trees,
     hubPath: state.hubPath,
     programDirs: [path.dirname(process.execPath), app.getAppPath()],
@@ -1367,6 +1378,7 @@ function main() {
     tray?.destroy();
     tray = null;
     log('app closed');
+    serverLog.flush();
   });
 
   app

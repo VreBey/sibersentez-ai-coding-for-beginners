@@ -715,6 +715,32 @@ describe('logging', () => {
     assert.match(fs.readFileSync(logger.file, 'utf8'), /line 59 /);
   });
 
+  // Independent review 2026-10-20, T11: the server's output is kept and written together, never a file look per line
+  test('a buffered log: lines written together after the current task (or at once past the buffer); the same cap and rotation', async () => {
+    const dir = path.join(TMP, 'logs-buffered');
+    const later = [];
+    const logger = createLogger({ dir, name: 'server', maxBytes: 400, buffered: true, schedule: (fn) => later.push(fn) });
+    logger.write('one');
+    logger.write('two');
+    assert.equal(fs.existsSync(logger.file), false, 'nothing written yet');
+    assert.equal(later.length, 1, 'one write scheduled for both lines');
+    later.shift()();
+    assert.match(fs.readFileSync(logger.file, 'utf8'), /Z one\n.*Z two\n$/);
+    for (let i = 0; i < 60; i++) logger.write(`line ${i} ${'x'.repeat(30)}`);
+    logger.flush();
+    assert.ok(fs.statSync(logger.file).size <= 400, 'the active log stays under the cap');
+    assert.ok(fs.existsSync(logger.rotated));
+    assert.match(fs.readFileSync(logger.file, 'utf8'), /line 59 /);
+    // The real schedule: written once the current task is done
+    const real = createLogger({ dir, name: 'real', buffered: true });
+    real.write('soon');
+    await new Promise((r) => setImmediate(r));
+    assert.match(fs.readFileSync(real.file, 'utf8'), /Z soon\n$/);
+    const src = fs.readFileSync(path.join(ROOT, 'electron', 'main.mjs'), 'utf8');
+    assert.match(src, /name: 'server', buffered: true/);
+    assert.match(src, /process\.on\('exit', \(\) => serverLog\.flush\(\)\)/, 'what is kept is written when the app ends');
+  });
+
   test('an unwritable log never crashes the app', () => {
     const blocker = path.join(TMP, 'file-not-folder');
     fs.writeFileSync(blocker, 'x');
@@ -853,7 +879,7 @@ describe('packaging and installer', () => {
 
   test('one pinned dependency (node-pty); dev dependencies pinned: electron, electron-builder, xterm (vendored), happy-dom (the DOM tests only, plan D1), typescript (the type check only, plan D7)', () => {
     assert.deepEqual(pkg.dependencies, { 'node-pty': '1.1.0' });
-    assert.deepEqual(pkg.devDependencies, { '@xterm/addon-fit': '0.11.0', '@xterm/xterm': '6.0.0', electron: '44.8.0', 'electron-builder': '26.15.3', 'happy-dom': '20.14.6', typescript: '7.0.2' });
+    assert.deepEqual(pkg.devDependencies, { '@xterm/addon-fit': '0.11.0', '@xterm/xterm': '6.0.0', electron: '44.9.3', 'electron-builder': '26.15.3', 'happy-dom': '20.14.6', typescript: '7.0.2' });
   });
 
   test('per-user NSIS installer: fixed install folder, no elevation, English and Turkish, keeps user data', () => {

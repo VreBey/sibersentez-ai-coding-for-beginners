@@ -13,7 +13,7 @@ import { Catalog } from '../server/catalog.mjs';
 import { createActions } from '../server/actions.mjs';
 import { createHandler } from '../server/app.mjs';
 import { PUBLIC_DIR } from '../server/config.mjs';
-import { RESTORE_KEEP, RESTORE_MARK, applyRestore, createPoint, listPoints, pointsDir, projectRestore, readRestoreMark } from '../server/restore.mjs';
+import { RESTORE_KEEP, RESTORE_MARK, applyRestore, createPoint, listPoints, pointsDir, projectRestore, readRestoreMark, TMP_COPY_MAX_AGE_MS } from '../server/restore.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sibersentez-restore-async-'));
 after(() => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
@@ -176,7 +176,8 @@ test('while a project is being put back, an AI start in it is refused (restore-r
   changeAll(w, 600);
   const s = await serve(w);
   try {
-    const back = s.post({ action: 'restore-apply', projectId: w.projectId, pointId: p.id });
+    const seen = await s.post({ action: 'restore-preview', projectId: w.projectId, pointId: p.id });
+    const back = s.post({ action: 'restore-apply', projectId: w.projectId, pointId: p.id, planId: seen.json.planId });
     await until(() => fs.existsSync(markFile(w)), 'the restore under way');
     const start = await s.post({ action: 'start-ai', projectId: w.projectId, tool: 'claude', job: 'Bir sayfa yap', inDock: true });
     assert.deepEqual([start.status, start.json.error], [409, 'restore-running']);
@@ -200,12 +201,49 @@ test('while an AI start takes its copy of a project, going back in it is refused
     const start = s.post({ action: 'start-ai', projectId: w.projectId, tool: 'claude', job: 'Bir sayfa yap', inDock: true });
     const base = pointsDir(w.hub, w.projectId);
     await until(() => fs.readdirSync(base).some((x) => x.includes('.tmp-')), 'the start copy under way');
-    const back = await s.post({ action: 'restore-apply', projectId: w.projectId, pointId: p.id });
+    const back = await s.post({ action: 'restore-apply', projectId: w.projectId, pointId: p.id, planId: '0123456789abcdef' });
     assert.deepEqual([back.status, back.json.error], [409, 'ai-working']);
     assert.equal((await start).status, 200);
   } finally {
     await s.close();
   }
+});
+
+// Independent review 2026-10-20, T02: a second start used to take its own copy meanwhile, and the first copy's pruning
+// removed the second one's unfinished folder, so the second job ran without a point
+test('while an AI start takes its copy of a project, a second start in it is refused (start-running); the first keeps its point', async (ctx) => {
+  if (process.platform !== 'win32') return ctx.skip('Windows paths');
+  const w = world(600);
+  createPoint({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, now: tick });
+  changeAll(w, 600);
+  const s = await serve(w);
+  try {
+    const first = s.post({ action: 'start-ai', projectId: w.projectId, tool: 'claude', job: 'Bir sayfa yap', inDock: true });
+    const base = pointsDir(w.hub, w.projectId);
+    await until(() => fs.readdirSync(base).some((x) => x.includes('.tmp-')), 'the start copy under way');
+    const second = await s.post({ action: 'start-ai', projectId: w.projectId, tool: 'claude', job: 'Bir menü ekle', inDock: true });
+    assert.deepEqual([second.status, second.json.error], [409, 'start-running']);
+    const done = await first;
+    assert.equal(done.status, 200, JSON.stringify(done.json));
+    assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).length, 2, 'the first start kept its point');
+  } finally {
+    await s.close();
+  }
+});
+
+test("pruning leaves another copy's unfinished folder alone; one an hour old is a crash's and goes", () => {
+  const w = world(2);
+  createPoint({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, now: tick });
+  const base = pointsDir(w.hub, w.projectId);
+  const fresh = path.join(base, 'R20261020090000abcd.tmp-0123abcd');
+  const stale = path.join(base, 'R20261020080000abcd.tmp-4567abcd');
+  for (const d of [fresh, stale]) fs.mkdirSync(path.join(d, 'files'), { recursive: true });
+  const old = new Date(Date.now() - TMP_COPY_MAX_AGE_MS - 60000);
+  fs.utimesSync(stale, old, old);
+  changeAll(w, 2);
+  createPoint({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, now: tick });
+  assert.equal(fs.existsSync(fresh), true, 'a copy still being made');
+  assert.equal(fs.existsSync(stale), false, 'left over from a crash');
 });
 
 test('the drawer says a restore stopped halfway, first, with its two ways out; a gone point offers no button; off disables both', async () => {

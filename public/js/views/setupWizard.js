@@ -111,7 +111,7 @@ export function wizardHtml(w, { info, st, canType = false, signedIn = false } = 
     const head = `<p class="wz-for small muted">${esc(t('wzFor', { name }))} <button type="button" class="linkish" data-wz="repick">${esc(t('wzOther'))}</button></p>`;
     if (w.step === 'needs') {
       const rows = w.needs
-        .map((n) => (n.ok ? `<li class="wz-ok">${icon('check')} ${esc(t(`wzNeed_${n.id}_ok`))}</li>` : `<li class="wz-need"><p>${esc(t(`wzNeed_${n.id}`))}</p><ul class="ai-cmds">${cmdRow(prereqFor(n.id, platformOfState(st)).cmd, t(`aiHow_${prereqFor(n.id, platformOfState(st)).how}`))}</ul></li>`))
+        .map((n) => (n.ok ? `<li class="wz-ok">${icon('check')} ${esc(t(`wzNeed_${n.id}_ok`))}</li>` : `<li class="wz-need"><p>${esc(t(platformOfState(st) === 'linux' && n.id === 'node' ? 'wzNeed_node_linux' : `wzNeed_${n.id}`))}</p><ul class="ai-cmds">${cmdRow(prereqFor(n.id, platformOfState(st)).cmd, t(`aiHow_${prereqFor(n.id, platformOfState(st)).how}`))}</ul></li>`))
         .join('');
       body = `${head}<h3 class="wz-h">${esc(t('wzNeedsTitle'))}</h3><ul class="wz-needs">${rows}</ul><p class="small muted">${esc(how)} ${esc(t('wzNeedsAfter'))}</p>`;
     } else if (w.step === 'install') {

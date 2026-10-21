@@ -203,6 +203,64 @@ export function tempFolders(env, home, plat = PLATFORM) {
   return list.map((t) => String(t || '').trim()).filter((t) => t && p.isAbsolute(t));
 }
 
+// The person's own known folders (Desktop, Documents, Downloads, Pictures, Music, Videos), never a project however a
+// tool reports it: a session opened on the desktop would make the whole desktop one, and going back there would touch
+// files that have nothing to do with the job (independent review of 0.20.0). The English names under the home folder,
+// plus where the system really keeps them, which may be elsewhere or localized: Windows moves them into OneDrive
+// (OneDrive\Masaüstü) and Linux names them in the person's language (~/Masaüstü). Sources:
+//   SIBERSENTEZ_KNOWN_DIRS   set by the desktop shell from Electron's app.getPath (the system's own answer): a JSON array
+//                            (a folder name may hold the path delimiter: "OneDrive - Firma; A.Ş."); a value set by hand
+//                            may also be a list separated by the platform's path delimiter
+//   Linux                    $XDG_CONFIG_HOME/user-dirs.dirs (else ~/.config/user-dirs.dirs), read with readFile
+// A server started by hand on Windows (no shell) knows only the English names: the registry's User Shell Folders are
+// not read, since reg.exe writes a localized name such as Masaüstü in the console's code page.
+// Only local absolute paths; never the home folder itself (it has its own rules).
+export const KNOWN_FOLDER_NAMES = Object.freeze(['Desktop', 'Documents', 'Downloads', 'Pictures', 'Music', 'Videos']);
+const XDG_KNOWN = Object.freeze(['DESKTOP', 'DOCUMENTS', 'DOWNLOAD', 'PICTURES', 'MUSIC', 'VIDEOS']);
+/**
+ * @param {Record<string, string | undefined>} env @param {string} home @param {Platform} [plat]
+ * @param {{ readFile?: (file: string) => string }} [io]
+ */
+export function knownFolders(env, home, plat = PLATFORM, { readFile } = {}) {
+  const p = plat.path;
+  const list = home ? KNOWN_FOLDER_NAMES.map((d) => p.join(home, d)) : [];
+  const given = envOf(env, 'SIBERSENTEZ_KNOWN_DIRS').trim();
+  let dirs = [];
+  try {
+    dirs = given.startsWith('[') ? JSON.parse(given) : given.split(plat.listSep);
+  } catch {
+    dirs = [];
+  }
+  for (const d of Array.isArray(dirs) ? dirs : []) if (typeof d === 'string') list.push(d.trim());
+  if (plat.linux && home && typeof readFile === 'function') {
+    try {
+      list.push(...parseUserDirs(readFile(p.join(configRoot(env, home, plat), 'user-dirs.dirs')), home));
+    } catch {
+      // No such file: the English names stay
+    }
+  }
+  const out = [];
+  for (const d of list) {
+    if (!isLocalAbsolute(d, plat) || (home && samePathOn(d, home, plat)) || isFsRoot(d, plat)) continue;
+    if (!out.some((o) => samePathOn(o, d, plat))) out.push(d);
+  }
+  return out;
+}
+
+// Linux' user-dirs.dirs (xdg-user-dirs): XDG_DESKTOP_DIR="$HOME/Masaüstü". Only the known folders, only under $HOME or
+// absolute; a folder set to $HOME itself means "not used" and is skipped.
+/** @param {string} text @param {string} home */
+export function parseUserDirs(text, home) {
+  const out = [];
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const m = /^\s*XDG_([A-Z]+)_DIR\s*=\s*"([^"]*)"\s*$/.exec(line);
+    if (!m || !XDG_KNOWN.includes(m[1])) continue;
+    const v = m[2].replace(/^\$HOME(?=\/|$)/, home).replace(/\/+$/, '');
+    if (v.startsWith('/') && v !== home) out.push(v);
+  }
+  return out;
+}
+
 // The home folder's places programs keep their own files, never a project however a tool reports it (an editor's
 // install folder, a game's save folder): Windows' <home>\AppData; Linux' ~/.local, ~/.cache, ~/.config, ~/.var
 // (Flatpak) and ~/snap; macOS' ~/Library as well

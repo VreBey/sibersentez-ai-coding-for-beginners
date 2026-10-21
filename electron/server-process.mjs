@@ -13,11 +13,13 @@ import { HOST, INSTANCE_HEADER } from './shell-paths.mjs';
 // that file (docs/actions-toggle.md). Node/Electron switches and the shell's own QA/data settings do not belong to
 // the server either.
 const STRIPPED_ENV = ['SIBERSENTEZ_ACTIONS', 'ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS', 'SIBERSENTEZ_QA_SHOT', 'SIBERSENTEZ_QA_QUIT_MS', 'SIBERSENTEZ_QA_DELAY_MS', 'SIBERSENTEZ_QA_ACTIONS', 'SIBERSENTEZ_QA_HIDDEN', 'SIBERSENTEZ_QA_PROBES', 'SIBERSENTEZ_QA_PROJECT_DIR', 'SIBERSENTEZ_DATA_DIR'];
-const SET_ENV = ['SIBERSENTEZ_PORT', 'SIBERSENTEZ_HUB', 'SIBERSENTEZ_INSTANCE', 'SIBERSENTEZ_SESSION_KEY'];
+const SET_ENV = ['SIBERSENTEZ_PORT', 'SIBERSENTEZ_HUB', 'SIBERSENTEZ_INSTANCE', 'SIBERSENTEZ_SESSION_KEY', 'SIBERSENTEZ_KNOWN_DIRS'];
 
 // Environment for the server process. Names are compared case-insensitively (Windows environment).
 // sessionKey (optional): the per-launch secret every /api request must carry (server/config.mjs SIBERSENTEZ_SESSION_KEY).
-export function buildServerEnv(baseEnv, { port, hubPath, instance, sessionKey }) {
+// knownDirs (optional): the person's known folders as the system names them (Electron's app.getPath: Desktop moved into
+// OneDrive, a localized name), never a project for the server (server/platform.mjs knownFolders).
+export function buildServerEnv(baseEnv, { port, hubPath, instance, sessionKey, knownDirs = [] }) {
   const env = { ...(baseEnv || {}) };
   for (const key of Object.keys(env)) {
     const k = key.toUpperCase();
@@ -30,6 +32,9 @@ export function buildServerEnv(baseEnv, { port, hubPath, instance, sessionKey })
   env.SIBERSENTEZ_INSTANCE = String(instance);
   if (sessionKey) env.SIBERSENTEZ_SESSION_KEY = String(sessionKey);
   if (hubPath) env.SIBERSENTEZ_HUB = hubPath;
+  // A JSON array: a folder's name may hold the path delimiter (server/platform.mjs knownFolders)
+  const known = (Array.isArray(knownDirs) ? knownDirs : []).filter((d) => typeof d === 'string' && path.isAbsolute(d));
+  if (known.length) env.SIBERSENTEZ_KNOWN_DIRS = JSON.stringify(known);
   return env;
 }
 

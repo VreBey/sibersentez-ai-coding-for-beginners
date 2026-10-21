@@ -87,7 +87,7 @@ test('shell: the server environment carries the new key; one the user set is nev
 test('wiring: the shell makes the key, hands it to the server and adds it to its own requests; the server checks it before anything else', () => {
   const main = fs.readFileSync(path.join(ROOT, 'electron', 'main.mjs'), 'utf8');
   assert.ok(main.includes("sessionKey: randomBytes(32).toString('hex'),"));
-  assert.ok(main.includes('sessionKey: state.sessionKey });'));
+  assert.ok(main.includes('sessionKey: state.sessionKey, knownDirs: knownDirs() });'));
   assert.ok(main.includes('withSessionKey(details.url, state.origin, details.requestHeaders, state.sessionKey)'));
   const app = fs.readFileSync(path.join(ROOT, 'server', 'app.mjs'), 'utf8');
   const h = app.indexOf('  function handle(req, res) {');

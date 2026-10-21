@@ -9,6 +9,8 @@ on:
   push:
     tags: ['v*']
 
+# No npm cache in these jobs (independent review 2026-10-20, T10): every release installs from the registry by the lock
+# file's hashes, nothing restored from an earlier run
 permissions:
   contents: read
   actions: read
@@ -22,7 +24,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: npm
       - run: npm ci --no-audit --no-fund
       # As in test.yml: a long TEMP path for the tests that compare real folder names
       - run: npm test
@@ -32,6 +33,10 @@ jobs:
       # The same gates as test.yml (independent review §10): types and lint before anything is built
       - run: npm run typecheck
       - run: npm run lint
+      # The release's own look at known advisories (independent review 2026-10-20, T10): a tag pushed after a new
+      # advisory, with no test.yml run since, is never built unchecked. What ships in the app, and Electron, its runtime
+      - run: npm audit --omit=dev --audit-level=low
+      - run: node tools/audit-electron.mjs
       # No certificate on the runner: electron-builder builds the installer unsigned. It never publishes on its own (on
       # CI it would try to): the release is made by hand
       - run: npm run dist -- --publish never
@@ -70,12 +75,13 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: npm
       - run: sudo apt-get update && sudo apt-get install -y xvfb libfuse2t64
       - run: npm ci --no-audit --no-fund
       - run: npm test
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm audit --omit=dev --audit-level=low
+      - run: node tools/audit-electron.mjs
       - run: npx electron-builder --linux AppImage --publish never
       - run: xvfb-run -a bash tools/linux-qa.sh
       - if: always()

@@ -61,13 +61,26 @@ may not find. One button, chosen when the section draws:
   (`drawer.js fillJob`, the same way a finished job's follow-ups fill it); Start stays the person's. If the AI
   stopped between the drawing and the click, the ask button does the same instead of doing nothing.
 
-Before writing, the dock checks the last terminal text with `dockState.aiDraftCheck` and the existing
-`promptHelp.detectPrompt`. A recognized permission question or menu brings the tab forward and shows a note to
-answer it first, without writing anything or filling the new-job box. Hiding the help note does not bypass the
-check: it reads the terminal text, not the dismissed note. Some menus act on a single letter without Enter.
-This is a best-effort check, not proof that the tool is at an empty input: unrecognized menus are not detected,
-and old question text may conservatively block a draft until it leaves the tail. Existing text in the AI input
-is not cleared; the question would be appended. Review the terminal input before using the button.
+Before writing, the dock reads the rows the tool shows now (xterm's active screen, not the output stream, where a
+redraw can push a question out of the last characters) and checks them with `dockState.aiDraftCheck`:
+
+- A recognized permission question or menu (`promptHelp.detectPrompt`): nothing is typed, the new-job box is not
+  filled, and the draft is copied; the note says to answer the question first and paste the message later.
+- Otherwise the draft is typed only when the tool's own input box is seen at the bottom (`dockState.inputVisible`): a
+  row that starts with an input box's prompt mark (`>`, `›`, `❯`, inside a box border or not), with a rule or a box
+  border right above it and right below it, and below that at most four status rows with no choice and no question.
+  Claude Code (rules) and Gemini CLI and Qwen Code (a box) draw one. The rules tell it from an earlier "> message" in
+  the transcript and from a menu's pointer row ("❯ Sonnet"), which a first version took for the input line (review of
+  the fix, 2026-10-20). A tool whose input has no such frame gets the draft on the clipboard. Which of
+  the other tools (Codex CLI, Copilot CLI, Cursor CLI, OpenCode) draw one was not checked on a live screen.
+- No input line seen (an unknown menu, a one-key question such as "Update now? y / n", a layout the check does not
+  know, the tool still drawing): nothing is typed, the draft is copied to the clipboard and a note says to paste it
+  with Ctrl+V when the AI waits. A clipboard that refuses it: the note holds the text.
+
+Before 2026-10-20 the check only looked for known questions, so a menu it did not know could take a letter of the
+draft as its answer (independent review 2026-10-20, T04). Some menus act on a single letter without Enter. Hiding
+the help note does not bypass the check. Existing text in the AI input is not cleared; the question would be
+appended. Review the terminal input before pressing Enter.
 
 Tests: `test/run-ask.test.mjs`, `test/run-ask-safety.test.mjs`.
 

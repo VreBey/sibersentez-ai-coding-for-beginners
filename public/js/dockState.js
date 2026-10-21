@@ -25,13 +25,48 @@ export function tabState(x) {
 // characters, any language, no control character (no Enter, no escape sequence)
 export const AI_DRAFT_MAX = 300;
 export const aiDraftOk = (text) => typeof text === 'string' && text.length > 0 && text.length <= AI_DRAFT_MAX && !/[\u0000-\u001f\u007f-\u009f]/.test(text);
-// Whether the draft may be typed into a tab now (pure): 'type', 'bad-text', or 'asks' while the tool's screen asks
-// something (promptHelp.js detectPrompt on its last text: a permission or a menu). Some menus take one key, Codex's
-// "y" (yes) and "a" (always), so the draft's letters could answer them: nothing is typed then (review U09, round 1).
-// A prompt that is not recognized is not caught (docs/run-hint.md).
-export function aiDraftCheck(text, screen) {
+// The tool's own input box at the bottom of its screen now (pure): a row that starts with the prompt mark of an input
+// box (">", "›" or "❯", inside a box border or not), with a rule or a box border right above it and right below it,
+// and below that at most FOOTER_ROWS rows of the tool's status line that hold no choice and no question. Claude Code
+// (rules above and below) and Gemini CLI and Qwen Code (a box) draw one. The rules are what tells it from an earlier
+// "> message" in the transcript, or the pointer row of a menu (review of the fix, 2026-10-20: both were taken for the
+// input line, so a draft went into an unknown one-key question). A tool or a layout that draws none is not
+// recognized, and the draft goes to the clipboard instead (aiDraftCheck).
+const INPUT_RE = /^\s*(?:[│┃|]\s*)?[>›❯](?:\s|$)/;
+const CHOICE_RE = /^\s*(?:[│┃|]\s*)?(?:[>›❯]\s*)?(?:\d{1,2}[.)]\s+\S|(?:yes|no|allow|deny|approve|reject|cancel|always|skip)\b)/i;
+// A row of a rule or a box's border only (at least three of its characters)
+const RULE_RE = /^\s*[╭╮╰╯┌┐└┘├┤─━═╌┄-]{3,}[\s╭╮╰╯┌┐└┘├┤─━═╌┄-]*$/;
+// A row that asks something: a question, a y/n, "press a key"
+const ASKS_RE = /\?\s*(?:\[[^\]]{0,12}\]|\([^)]{0,12}\))?\s*[│┃|]?\s*$|\b[yY]\/[nN]\b|\bpress\s+\S\s+to\b|\[[yYnN]\]/i;
+// A menu's hint in the rows under it ("Enter to select · Esc to cancel", "a: apply  s: skip")
+const MENU_HINT_RE = /\bto (?:select|cancel|confirm|choose)\b|(?:^|\s)[a-z]:\s+\w+/i;
+const FOOTER_ROWS = 4;
+export function inputVisible(rows) {
+  const lines = (Array.isArray(rows) ? rows : []).map((r) => String(r ?? ''));
+  const filled = lines.map((r, i) => (r.trim() ? i : -1)).filter((i) => i >= 0);
+  // From the bottom: the status rows, then the box's lower edge, the prompt row and the upper edge
+  for (let k = filled.length - 1; k >= 1 && k >= filled.length - 1 - FOOTER_ROWS; k--) {
+    if (!RULE_RE.test(lines[filled[k]])) continue;
+    const footer = filled.slice(k + 1).map((i) => lines[i]);
+    if (footer.some((r) => CHOICE_RE.test(r) || INPUT_RE.test(r) || ASKS_RE.test(r) || MENU_HINT_RE.test(r))) return false;
+    const prompt = lines[filled[k - 1]];
+    const above = k >= 2 ? lines[filled[k - 2]] : '';
+    return INPUT_RE.test(prompt) && !CHOICE_RE.test(prompt) && !ASKS_RE.test(prompt) && RULE_RE.test(above);
+  }
+  return false;
+}
+
+// Whether the draft may be typed into a tab now (pure): 'type', 'bad-text', 'asks' while the tool's screen asks
+// something (promptHelp.js detectPrompt: a permission or a menu), or 'unsure' when its input line cannot be seen.
+// Some menus take one key, Codex's "y" (yes) and "a" (always), so the draft's letters could answer them (review U09,
+// round 1). A question the helper does not know used to be typed into (independent review 2026-10-20, T04): now a draft
+// is typed only when the tool's input line is recognized on the screen itself (rows: the rows it shows now, not the
+// stream, where a redraw can push a question out of the last characters); else it goes to the clipboard.
+export function aiDraftCheck(text, rows) {
   if (!aiDraftOk(text)) return 'bad-text';
-  return detectPrompt(String(screen || '').slice(-2500)) ? 'asks' : 'type';
+  const lines = Array.isArray(rows) ? rows.map((r) => String(r ?? '')) : String(rows || '').split('\n');
+  if (detectPrompt(lines.join('\n').slice(-2500))) return 'asks';
+  return inputVisible(lines) ? 'type' : 'unsure';
 }
 
 // The tab a "show the terminal" for a project brings forward: the newest tab of that project whose AI still runs

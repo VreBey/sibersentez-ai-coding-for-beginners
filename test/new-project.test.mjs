@@ -379,7 +379,11 @@ describe('main.mjs: the new project is wired through the tested parts', () => {
     const facts = bodyOf(src, 'senderFacts');
     assert.ok(facts.includes('mainWindow: Boolean(win && !win.isDestroyed() && event?.sender === win.webContents), frame: frameFacts(event?.senderFrame), origin: state.origin'));
     const rules = bodyOf(src, 'projectFolderRules');
-    for (const needle of ['homeDir: HOME_DIR', 'hubPath: state.hubPath', 'programDirs: [path.dirname(process.execPath), app.getAppPath()]', "known('desktop')", "known('documents')", "known('downloads')"]) assert.ok(rules.includes(needle), needle);
+    for (const needle of ['homeDir: HOME_DIR', 'hubPath: state.hubPath', 'programDirs: [path.dirname(process.execPath), app.getAppPath()]', 'broadDirs: [...knownDirs(),']) assert.ok(rules.includes(needle), needle);
+    // The system's own names for the known folders (moved into OneDrive, localized), the same list the server gets
+    const known = bodyOf(src, 'knownDirs');
+    for (const name of ['desktop', 'documents', 'downloads', 'pictures', 'music', 'videos']) assert.ok(known.includes(`'${name}'`), name);
+    assert.ok(known.includes('app.getPath(name)'));
   });
 
   test('both kinds of server process carry the message channel; only the current process answers its own calls; an exit drops its calls', () => {

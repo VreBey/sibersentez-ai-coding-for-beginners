@@ -35,7 +35,10 @@ something serious was found, the files to clean first. **Look again** asks once 
 ## What it does not see
 
 - The repository's history: a key deleted from the files but committed before is still in `.git` and goes online
-  with a push. GitHub's own secret scanning helps; the steps do not check the history.
+  with a push. GitHub's own secret scanning helps. Since 2026-10-20 the panel says the check read the files as they
+  are now, and the steps ask the AI to look through the history too (independent review 2026-10-20, U04).
+- The panel also says that publishing needs a free GitHub account, and that with a free account the code becomes
+  public too, not only the site (GitHub Pages on a free account serves public repositories only).
 - Whether a `.env` file is already left out by `.gitignore`: it is listed anyway, and the steps say to keep such
   files out with `.gitignore`, never to delete them.
 

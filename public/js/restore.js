@@ -209,14 +209,17 @@ const KINDS = [['changed', 'rstChanged'], ['missing', 'rstMissing'], ['added', '
 // style.css was one line among eleven notes). An older server without the counts: every file as before.
 // Folders going back leaves alone because they could not be read (independent review N01): said apart, whatever else
 // the plan does, so nobody takes going back for the whole project
-function unreadHtml(plan) {
-  const names = (Array.isArray(plan?.unread) ? plan.unread : []).filter((n) => typeof n === 'string' && n);
+// Files there now that the copy of the present cannot hold (too big; independent review 2026-10-20, T01): left as
+// they are, said the same way
+function leftAloneHtml(plan, key, label) {
+  const names = (Array.isArray(plan?.[key]) ? plan[key] : []).filter((n) => typeof n === 'string' && n);
   if (!names.length) return '';
-  const count = Math.max(names.length, Number(plan.counts?.unread) || 0);
+  const count = Math.max(names.length, Number(plan.counts?.[key]) || 0);
   const shown = names.slice(0, NAMES_SHOWN).map((n) => `<li><code translate="no" title="${esc(n)}">${esc(n)}</code></li>`).join('');
   const rest = count - Math.min(names.length, NAMES_SHOWN);
-  return `<div class="rst-unread" role="note"><p class="small warn">${esc(t('rstUnread', { count: num(count) }))}</p><ul class="rst-names">${shown}${rest > 0 ? `<li class="muted">${esc(t('rstUnreadMore', { count: num(rest) }))}</li>` : ''}</ul></div>`;
+  return `<div class="rst-unread" role="note"><p class="small warn">${esc(t(label, { count: num(count) }))}</p><ul class="rst-names">${shown}${rest > 0 ? `<li class="muted">${esc(t('rstUnreadMore', { count: num(rest) }))}</li>` : ''}</ul></div>`;
 }
+const unreadHtml = (plan) => leftAloneHtml(plan, 'unread', 'rstUnread') + leftAloneHtml(plan, 'big', 'rstBig');
 
 export function planHtml(plan) {
   const c = plan?.counts || {};

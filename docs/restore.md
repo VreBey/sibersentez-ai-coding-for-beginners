@@ -110,8 +110,8 @@ The same measurement showed why a game was over the limits at all: its Unity pro
 
 A lean point is planned and gone back to with the same scope (`planRestore`, and the restore's point of the present is
 lean too), so what it left out is neither "added" nor "changed": going back never touches it, as with a skipped
-folder. A file that was small at the point and grew past the size later is reported `not-backed-up`, never
-overwritten. Tests: the lean case in `test/restore.test.mjs`.
+folder. A file that was small at the point and grew past the size later is left alone and named in the plan (`big`,
+§14), never overwritten. Tests: the lean case in `test/restore.test.mjs`.
 
 **Not holding the server.** The first lean point of that project took 9 s (an unchanged one: 0.2 s). start-ai now
 copies with `createPointAsync` (the same scan, id and manifest as `createPoint`, the reads and writes awaited), so the
@@ -291,8 +291,9 @@ later" and removed them (the before-restore point still held them). Now:
   failed), at most `UNREAD_MAX` (200); more, or the project folder itself unreadable, is the problem
   `folder-unreadable` (never an empty project). Something deleted while the scan runs (`ENOENT`: an editor's swap
   file) is gone, not a gap.
-- A point keeps them in its manifest (`unread`, safe relative paths only; a manifest with anything else there is not
-  read), and `listPoints` counts them. Such a manifest is `version: 3`, so an older app, which would remove the files
+- A point keeps them in its manifest (`unread`: relative paths with forward slashes, no `.` or `..` part, no control
+  character; a manifest with anything else there is not read), and `listPoints` counts them. Since §14 a name a point
+  cannot hold (Linux) is kept there too. Such a manifest is `version: 3`, so an older app, which would remove the files
   under a gap, does not read the point at all; a point without gaps stays `version: 2`. A point with gaps is answered
   again only for the same gaps, so a folder that can be read again gets a new, whole copy.
 - The plan (`planRestore`) never lists a file under one of the point's gaps as added: the point never saw it, so it
@@ -311,6 +312,70 @@ later" and removed them (the before-restore point still held them). Now:
 - Tests: `test/restore-unread.test.mjs` (the access error put into one folder or entry only: the scan, sync and async
   points, a deeper folder, a folder unreadable now, reuse, the manifest check, the scope preview, the fingerprint, a
   job's changes, the page).
+
+## 14. A job that made the project bigger than a point; two starts at once (2026-10-20, independent review)
+
+The review reproduced two ways a job could leave the person without a way back. Both are closed:
+
+- **T01, over the limits after the job.** Planning compared the point with the project scanned under the point's
+  limits, so a job that wrote one file over 16 MB, or took the project past 3,000 files or 50 MB, stopped the plan
+  (`file-too-large`, `too-many-files`, `too-large`). That is the moment going back is needed most. Now the plan looks
+  at the present whole (no size limit; at most `LOOK_FILES`, 100,000 names) and works out what a point of the present
+  can hold (`presentKeepable`):
+  - a file over the size limit is never in it;
+  - when the rest is over a full point's limits, a full point's present is kept as a lean one (§7), which also
+    leaves out files over 2 MB and logs;
+  - over a lean point's limits too, the plan is refused as before, before anything is touched.
+
+  Everything the point of the present cannot hold is left as it is: never removed as added later, never written
+  over, never counted missing. The plan names those files (`big`, in the plan digest too, with `beforeScope`). The
+  page lists them apart: "These files are too big for SiberSentez to keep a copy of now, so going back leaves them as
+  they are". `applyRestore` takes the point of the present in `beforeScope` with `leaveBig`, and a full point that
+  left files out records `leftOut`. What a job changed (§9) only looks at names and sizes, so it no longer reports
+  such a project as unreadable.
+- **T02, two starts in one project.** A second start while the first was still copying took its own copy. The first
+  copy's pruning then removed the second one's unfinished `.tmp-` folder as a crash's leftover, so the second job ran
+  without a point. Now a second start is refused while one is copying (`start-running`). Pruning removes an
+  unfinished copy only once it is an hour old (`TMP_COPY_MAX_AGE_MS`); a newer one may be another window's.
+- **T07, names a point cannot hold.** Linux allows names such as `notes: draft.md`. A point used to skip them without
+  a word; now they are kept as gaps (`unread`, §13), so the scope and the plan say they are left alone. Only a name a
+  manifest can keep as a boundary (`boundaryRel`: no control character, no backslash, at most 400 characters) is kept
+  so; any other is skipped as before. Such names never use up the gaps' budget (`UNREAD_MAX`). A first version kept
+  every such name, and one long path made the whole manifest unreadable, so the project's points vanished from the
+  list (review of the fix).
+- **A file that grew out of the look.** A lean point's small file that grew past `LEAN.fileBytes` is not in a lean
+  look at the present; it is named with `big` and left alone, never shown as missing.
+- **Looks without limits.** Planning looks at up to `LOOK_FILES` (100,000) names; what a job changed, asked every few
+  seconds while a drawer is open, at up to `JOB_LOOK_FILES` (20,000).
+- **T08, T09.** Going back through the API needs the preview's `planId` (`missing-field` without it). Restored files
+  and the points' manifests are flushed to the disk before they take their names.
+
+- **T05, disk.** Points had no limit beyond five per project, and the points of a project that was removed from the
+  list stayed for good. Now:
+  - A copy is not started when the hub's drive has less free space than twice the copy's bytes plus `FREE_MARGIN`
+    (200 MB): `disk-full`, said like any other reason no point was taken, and by going back when its copy of the
+    present cannot be kept. A drive that cannot be asked (`fs.statfsSync` fails) is not checked.
+  - Settings › General shows what every point in the hub takes (`GET /api/restore-disk`, `hubPointsDisk`; a file
+    shared by several points counts once) and names the projects no longer listed that still keep points. A folder
+    counts as such only when all its points name one project, the catalog does not list it, the folder's key is that
+    project's key (`projectKey`; a manifest naming another project never makes a listed project's folder look like an
+    orphan's), no restore cut off halfway left its mark there, and its newest point is a week old at least
+    (`ORPHAN_MIN_AGE_MS`); a folder whose points cannot be read is never one.
+  - "No longer listed" is trusted only from a list read whole (`listingTrusted`): the registry could be read both when
+    the list was loaded (`registryLoadState`, from the same read as its projects) and now (`registryState`), the
+    project memory was read at start (`loadState` 'ok' or 'missing', not 'unreadable' or 'rebuilt') and no broken copy
+    of it is set aside (`discovered.json.broken`: the projects only it named are in no list), and the logs' first look
+    is done. Otherwise Settings shows the total alone and
+    says why, and `restore-clean` answers `catalog-unsure`. The pre-release review (2026-10-21) showed a registry
+    being written made every registered project look gone, and one yes removed their points.
+  - Their removal is asked once ("Remove the copies of these N projects for good?") and is the writing action
+    `restore-clean` (live mode only; 1 to 200 distinct folder keys). Each key is checked again when it is removed
+    (`removeOrphanPoints`), so a project listed again meanwhile keeps its points. The points of listed projects are
+    never removed from there.
+
+Tests: `test/restore-big.test.mjs`, `test/restore-async.test.mjs` (the second start, pruning by age),
+`test/install.test.mjs` (planId required), `test/restore-disk.test.mjs` (the total, the unlisted projects, their
+removal, a full drive, the Settings row).
 
 ## A moved project linked to its new folder
 

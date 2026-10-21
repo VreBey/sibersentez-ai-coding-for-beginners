@@ -318,7 +318,7 @@ test('skill-flow menu items only while actions are on; the menu sends only launc
   const d = data();
   assert.deepEqual([...MENU_ACTIONS], ['resume', 'fork', 'terminal', 'explorer', 'vscode', 'start-ai']);
   // 'new' (a Claude Code session) is a server action the page knows but the menu never sends
-  assert.deepEqual([...ACTION_NAMES], ['resume', 'fork', 'new', 'terminal', 'explorer', 'vscode', 'library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'project-relink', 'project-unlink', 'accept-marks', 'start-ai', 'github-fetch', 'github-import', 'github-discard', 'github-check-update']);
+  assert.deepEqual([...ACTION_NAMES], ['resume', 'fork', 'new', 'terminal', 'explorer', 'vscode', 'library-scan', 'library-import', 'library-adopt', 'skills-preview', 'skills-install', 'skills-remove', 'skills-trial', 'skills-apply', 'restore-preview', 'restore-apply', 'restore-clean', 'project-relink', 'project-unlink', 'accept-marks', 'start-ai', 'github-fetch', 'github-import', 'github-discard', 'github-check-update']);
   assert.deepEqual(Object.keys(ACTION_FIELDS), [...ACTION_NAMES]);
   const all = [...TARGETS, { type: 'project', id: 'beta' }, { type: 'project', id: 'no-packages' }, { type: 'roster', id: 'skill:a11y-audit' }];
   const seen = { off: 0, dry: 0, live: 0 };
@@ -1009,6 +1009,7 @@ test('action client: one sender; each action carries only its own fields (ACTION
     'skills-apply': { projectId: 'cc', keys: ['skill:a', '7'], targets: ['claude', 'agents'] },
     'restore-preview': { projectId: 'cc', pointId: 'R20260930120000abcd' },
     'restore-apply': { projectId: 'cc', pointId: 'R20260930120000abcd', planId: '0123456789abcdef' },
+    'restore-clean': { keys: ['skill:a', '7'] },
     'project-relink': { projectId: 'cc', folder: 'D:\\Projects\\menu', from: 'x-menu', plan: true, planId: '0123456789abcdef' },
     'project-unlink': { projectId: 'cc', plan: true },
     'accept-marks': { projectId: 'cc', jobId: 'J0123456789abcdef0123456789abcdef', marks: { '0a1b2c3d': 'ok' }, itemKeys: ['0a1b2c3d', '7'] },

@@ -15,7 +15,7 @@ import { performance } from 'node:perf_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import { HUB_DIR, CLAUDE_DIR, HOME_DIR, KIT_DIR } from './config.mjs';
-import { readRegistry, normalizeRegistry } from './hub.mjs';
+import { normalizeRegistry, registryState, readRegistryWithState } from './hub.mjs';
 import { libraryItems, hasStreamColon, isDriveRoot, realPath, within, checkSource } from './library.mjs';
 import { isBroadFolder } from './install.mjs';
 import { readKit, kitCounts, KIT_SOURCE } from './kit.mjs';
@@ -26,7 +26,7 @@ import { readPlan } from './plan.mjs';
 import { ADAPTERS } from './adapters/index.mjs';
 import { ProjectMemory, SIBERSENTEZ_VIA } from './memory.mjs';
 import { readRelinks, readJoins } from './relinks.mjs';
-import { PLATFORM, PROGRAM_HOME_FOLDERS, configRoot, normalizeDir, isSystemFolder, tempFolders, programDataFolders } from './platform.mjs';
+import { PLATFORM, PROGRAM_HOME_FOLDERS, configRoot, normalizeDir, isSystemFolder, tempFolders, programDataFolders, knownFolders } from './platform.mjs';
 
 export { BUILTIN_AGENTS, readHeadCwd, resolveSlug } from './adapters/claude-code.mjs';
 
@@ -504,7 +504,11 @@ export class Catalog {
   // reg: raw registry JSON in either format (English "projects" or legacy "projeler"). When given, the
   // registry file is not read (tests stay off the real registry).
   loadProjects(reg) {
-    const { projects: rows } = reg === undefined ? readRegistry(this.hubDir) : normalizeRegistry(reg);
+    // How the registry was read for this list (listingSure): a list made from a half-written file stays untrusted until
+    // the next load, whatever the file holds by then (pre-release review 2026-10-21, round 2)
+    const read = reg === undefined ? readRegistryWithState(this.hubDir) : { registry: normalizeRegistry(reg), state: 'ok' };
+    this.registryLoadState = read.state;
+    const { projects: rows } = read.registry;
     // A project record: these fields, and more set below (exists, toolsOnly, git, installed, plan, ...)
     const list = rows.map((p) => /** @type {Record<string, any>} */ ({
       id: p.id,
@@ -677,15 +681,22 @@ export class Catalog {
   isBroad(n) {
     if (!this.broad) {
       const h = this.homeDir;
-      // The platform's temp folders and program data places (platform.mjs; plan G2)
+      // The platform's temp folders and program data places (platform.mjs; plan G2), and the person's known folders
+      // where the system really keeps them (moved into OneDrive, or localized: platform.mjs knownFolders)
       const temps = tempFolders(this.env, h);
-      this.broad = new Set([h, path.join(h, 'Desktop'), path.join(h, 'Documents'), path.join(h, 'Downloads'), ...temps].map(normPath));
+      const known = knownFolders(this.env, h, PLATFORM, { readFile: (file) => fs.readFileSync(file, 'utf8') });
+      // Windows: the profiles every account shares (Public, Default) beside the person's own (independent review
+      // 2026-10-20, T03: C:\Users\Public is open to every account and was taken for a project)
+      const shared = PLATFORM.windows && h ? [this.env?.PUBLIC, ...['Public', 'Default', 'Default User', 'All Users'].map((d) => path.join(path.dirname(h), d))].filter((x) => typeof x === 'string' && x) : [];
+      this.broad = new Set([h, ...known, ...temps, ...shared].map(normPath));
       this.appDataRoots = programDataFolders(h).map(normPath);
       this.appDataRoot = this.appDataRoots[0] || '';
       this.tempRoots = temps.map(normPath).filter((t) => this.appDataRoots.some((a) => t.startsWith(a + '/')));
       this.homeKey = h ? normPath(h) : '';
     }
     if (this.broad.has(n) || /^[a-z]:$/i.test(n)) return true;
+    // A folder that holds the home folder (C:\Users, /home): every account's files (T03)
+    if (this.homeKey && n && this.homeKey.startsWith(n + '/')) return true;
     // Linux and macOS: the home folder's program folders (~/.npm, ~/.nvm, ~/.cargo...: platform.mjs) and what is below
     // them are the programs' own, as AppData is on Windows; a hidden folder of the person's own (~/.dotfiles) is not.
     // The system's own folders (/usr, /etc/nginx...) never become projects from a tool record either (review G)
@@ -789,6 +800,23 @@ export class Catalog {
     };
     this.adhoc.set(key, p);
     return p;
+  }
+
+  // Whether "not listed" can be trusted now (pre-release review 2026-10-21): the registry and the project memory were
+  // read whole. Either missing because it could not be read would make listed projects look gone, and their restore
+  // points would be offered for removal (restore-clean)
+  // The registry as this list read it and as it is now; and a project memory set aside as broken (its projects are
+  // in none of the lists until the person brings them back) keeps it untrusted for as long as it is there
+  // listingDoubt: why not, or null ('memory-set-aside' lasts until the person removes that copy; the others pass)
+  listingDoubt() {
+    if (this.memory?.file && fs.existsSync(`${this.memory.file}.broken`)) return 'memory-set-aside';
+    const mem = this.memory?.loadState;
+    if (mem && mem !== 'ok' && mem !== 'missing') return 'memory';
+    if (this.registryLoadState === 'unreadable') return 'registry';
+    return this.hubDir && registryState(this.hubDir) === 'unreadable' ? 'registry' : null;
+  }
+  listingSure() {
+    return !this.listingDoubt();
   }
 
   adhocFor(cwd) {

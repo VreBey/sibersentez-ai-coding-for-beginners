@@ -107,6 +107,25 @@ function pickFile(hubDir, english, legacy, rows) {
   return hasOld ? old : en;
 }
 
+// Whether the registry could be read now (pre-release review 2026-10-21): 'ok', 'missing' (no file yet) or
+// 'unreadable' (being written, broken, held by another program). readRegistry reads the last two as empty, which must
+// never be taken for "no project is registered" by anything that removes data (restore-clean)
+export function registryState(hubDir) {
+  return readRegistryWithState(hubDir).state;
+}
+// The registry and how it was read, in one read (catalog.loadProjects keeps the state its projects came from)
+export function readRegistryWithState(hubDir) {
+  const file = registryFile(hubDir);
+  if (!file) return { registry: normalizeRegistry(null), state: 'missing' };
+  try {
+    let text = fs.readFileSync(file, 'utf8');
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+    return { registry: normalizeRegistry(JSON.parse(text)), state: 'ok' };
+  } catch (e) {
+    return { registry: normalizeRegistry(null), state: e?.code === 'ENOENT' ? 'missing' : 'unreadable' };
+  }
+}
+
 // Project registry: registry/projects.json, else legacy registry/projeler.json. null without a hub.
 export function registryFile(hubDir) {
   return pickFile(hubDir, ['registry', 'projects.json'], ['registry', 'projeler.json'], (f) => normalizeRegistry(readJson(f)).projects.length);

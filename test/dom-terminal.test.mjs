@@ -58,6 +58,13 @@ test('a draft for the AI: typed into its tab without Enter; never while the tool
   assert.equal(dock.askAi('nope', 'Planı onaylıyorum').ok, false, 'no AI tab of that project');
   const r = await dock.open({ projectId: 'site', ai: true });
   await settle();
+  // Nothing on its screen yet: its input line is not seen, so nothing is typed (independent review 2026-10-20, T04)
+  const early = writes.length;
+  assert.equal(dock.askAi('site', 'Planı onaylıyorum').copied, true);
+  assert.equal(writes.length, early, 'copied, not typed');
+  // The tool shows its input box
+  push(r.id, '\r\nClaude Code\r\n╭──────╮\r\n│ > Try "fix lint" │\r\n╰──────╯\r\n');
+  await settle();
   const ok = dock.askAi('site', 'Planı onaylıyorum, başlayabilirsin.');
   assert.equal(ok.ok, true);
   assert.deepEqual(writes.at(-1), [r.id, 'Planı onaylıyorum, başlayabilirsin.']);

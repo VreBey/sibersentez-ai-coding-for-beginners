@@ -3,7 +3,7 @@
 // the page asks its own server (GET /api/update, which asks GitHub at most once a day, server/update.mjs) when it
 // starts. A newer version is told once per version (a notice) and shown in Settings with its release page's link.
 // Nothing is downloaded or installed. The choice and the version told are kept in this browser.
-import { t } from './i18n.js';
+import { t, pagePlatformNow } from './i18n.js';
 import { esc } from './format.js';
 
 const UPDATES_KEY = 'sibersentez.updates';
@@ -90,5 +90,7 @@ export function updateRowHtml(s = state) {
   if (!a.ok) return `<span class="small muted">${esc(t('updFailed'))}</span>`;
   if (!a.newer) return `<span class="small">${esc(t('updLatest', { version: a.current || a.latest }))}</span>`;
   const link = a.url ? ` <a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(t('updOpen'))}</a>` : '';
-  return `<span class="small"><b>${esc(t('updNewer', { latest: a.latest, current: a.current || '?' }))}</b>${link}</span>`;
+  // Every new installer is unsigned too, so SmartScreen warns again (independent review 2026-10-20, U10); Windows only
+  const unsigned = pagePlatformNow() === 'win32' ? t('updUnsigned') : '';
+  return `<span class="small"><b>${esc(t('updNewer', { latest: a.latest, current: a.current || '?' }))}</b>${link}${unsigned ? ` <span class="muted">${esc(unsigned)}</span>` : ''}</span>`;
 }

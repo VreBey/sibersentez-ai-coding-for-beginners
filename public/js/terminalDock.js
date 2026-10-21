@@ -633,8 +633,30 @@ export function createTerminalDock({ toast = (_msg) => {}, root = document.body,
     for (const x of tabs.values()) if (x.term.options.screenReaderMode !== terminalReaderOn()) x.term.options.screenReaderMode = terminalReaderOn();
   });
 
+  // The rows the tool shows now (xterm's active screen, its last page: a person scrolled up does not change it)
+  function screenRows(x) {
+    const buf = x.term.buffer?.active;
+    if (!buf || typeof buf.getLine !== 'function') return x.plain.split('\n');
+    const rows = [];
+    for (let i = 0; i < x.term.rows; i++) rows.push(buf.getLine(buf.baseY + i)?.translateToString(true) ?? '');
+    return rows;
+  }
+  // A draft that is not typed goes to the clipboard, and the toast says how to paste it (independent review
+  // 2026-10-20, T04); a clipboard that refuses it: the toast holds the text itself
+  function copyDraft(text, check) {
+    const said = (body) => toast({ tone: 'info', title: t('draftTitle'), body });
+    Promise.resolve()
+      .then(() => navigator.clipboard.writeText(text))
+      .then(
+        () => said(t(check === 'asks' ? 'draftAsksCopied' : 'draftCopied')),
+        () => said(t('draftNoCopy', { text })),
+      );
+  }
+
   // "How to run it" when the way is not known (review U09): the question goes into the newest running AI tab of the
-  // project, which comes forward with the keyboard; never with Enter, the person reads it and sends it. { ok: false,
+  // project, which comes forward with the keyboard; never with Enter, the person reads it and sends it. Typed only when
+  // the tool's input line is seen on its screen (dockState.js aiDraftCheck); otherwise it is copied for the person to
+  // paste: { ok: true, id, copied: true }, or { ok: false, reason: 'asks' } while the tool asks something. { ok: false,
   // reason: 'no-ai' }: no AI of the project runs here
   function askAi(projectId, text) {
     if (!aiDraftOk(text)) return { ok: false, reason: 'bad-text' };
@@ -646,10 +668,11 @@ export function createTerminalDock({ toast = (_msg) => {}, root = document.body,
     const x = tabs.get(id);
     x.term.focus();
     // Read the screen itself: closing the help note does not answer the AI's question.
-    const check = aiDraftCheck(text, x.plain);
+    const check = aiDraftCheck(text, screenRows(x));
+    if (check === 'bad-text') return { ok: false, reason: check };
     if (check !== 'type') {
-      if (check === 'asks') toast({ tone: 'info', title: t('runAskAi'), body: t('runAskFirst') });
-      return { ok: false, reason: check };
+      copyDraft(text, check);
+      return check === 'asks' ? { ok: false, reason: 'asks' } : { ok: true, id, copied: true };
     }
     api.write(id, text);
     return { ok: true, id };

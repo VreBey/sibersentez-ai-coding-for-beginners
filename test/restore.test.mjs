@@ -114,8 +114,10 @@ test('a point: a copy with a manifest in the hub; nothing changed answers the sa
   const again = createPoint({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, now: tick });
   assert.deepEqual([again.id, again.reused], [p1.id, true]);
   assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).length, 1);
-  // Changes make new points; the newest RESTORE_KEEP stay, an interrupted copy is swept
-  fs.mkdirSync(path.join(pointsDir(w.hub, w.projectId), 'R20260101000000abcd.tmp-0badc0de'), { recursive: true });
+  // Changes make new points; the newest RESTORE_KEEP stay, an interrupted copy an hour old is swept
+  const crashed = path.join(pointsDir(w.hub, w.projectId), 'R20260101000000abcd.tmp-0badc0de');
+  fs.mkdirSync(crashed, { recursive: true });
+  fs.utimesSync(crashed, new Date(Date.now() - 2 * 3600 * 1000), new Date(Date.now() - 2 * 3600 * 1000));
   for (let i = 2; i <= RESTORE_KEEP + 2; i++) {
     w.write('index.html', `v${i}`);
     assert.equal(createPoint({ hubDir: w.hub, projectId: w.projectId, dir: w.dir, now: tick }).reused, false);
@@ -214,16 +216,18 @@ test('going back never writes through a link, never trusts a damaged copy, and c
   assert.equal(w.read('a.txt'), 'a3');
   assert.equal(w.read('later2.txt'), 'keep me', 'nothing removed either');
   assert.equal(listPoints({ hubDir: w.hub, projectId: w.projectId }).length, pts, 'no point taken');
-  // The present cannot be kept (over the limits): nothing changes
+  // The present over a full point's limits is kept as a lean one, and going back goes on (independent review
+  // 2026-10-20, T01; a present over a lean point's limits too: test/restore-big.test.mjs)
   const w2 = world();
   w2.write('a.txt', 'one');
   const p2 = createPoint({ hubDir: w2.hub, projectId: w2.projectId, dir: w2.dir, now: tick });
   w2.write('a.txt', 'two');
   w2.write('b.txt', 'later');
-  const refused = await applyRestore({ hubDir: w2.hub, projectId: w2.projectId, dir: w2.dir, id: p2.id, now: tick, limits: { ...RESTORE_LIMITS, files: 1 } });
-  assert.equal(refused.ok, false);
-  assert.equal(w2.read('a.txt'), 'two');
-  assert.equal(w2.read('b.txt'), 'later');
+  const back = await applyRestore({ hubDir: w2.hub, projectId: w2.projectId, dir: w2.dir, id: p2.id, now: tick, limits: { ...RESTORE_LIMITS, files: 1 } });
+  assert.equal(back.ok, true);
+  assert.equal(w2.read('a.txt'), 'one');
+  assert.equal(fs.existsSync(path.join(w2.dir, 'b.txt')), false);
+  assert.equal(listPoints({ hubDir: w2.hub, projectId: w2.projectId }).find((x) => x.id === back.before).scope, 'lean');
 });
 
 // ---------------- the drawer section (public/js/restore.js) ----------------

@@ -303,8 +303,9 @@ allowed in launcher paths; a tool that is not installed accepted; the launcher's
   plain terminal always works.
 - The panel lists the seven tools above; a tool added later needs an entry in `server/tools.mjs` and
   `public/js/views/tools.js`.
-- Cursor's command is also looked for under the generic name `agent`; another program with that name would be taken
-  for Cursor CLI (only its `--version` runs, hidden).
+- Cursor's command is also looked for under the generic name `agent`, but only where its folder, or the folder a link
+  points into (Linux: `~/.local/bin/agent`), names Cursor. Any other `agent` is never run, not even for its version
+  (independent review 2026-10-20, T12). A Cursor `agent` installed somewhere else is not found; `cursor-agent` is.
 - When a version or sign-in check times out, the whole process tree is ended: `%SystemRoot%\System32\taskkill.exe
   /T /F /PID <pid>` by absolute path, hidden, without a shell (`server/tools.mjs` `killTree`). `child.kill()` alone
   would end only `cmd.exe` and leave the Node.js process of an npm shim running. If taskkill cannot start, the

@@ -6,9 +6,10 @@
 
 <p align="center">
   <b>Kod yazmadan, yapay zekâyla bir şey yap.</b><br>
-  Zaten sahip olduğun yapay zekâ kodlama aracını senin için hazırlayan, başlatan ve ne yaptığını gösteren<br>
+  Kullandığın yapay zekâ kodlama aracını senin için hazırlayan, başlatan ve ne yaptığını gösteren<br>
   ücretsiz ve açık kaynak masaüstü uygulaması: Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor CLI,
-  Qwen Code ve OpenCode.
+  Qwen Code ve OpenCode.<br>
+  <sub>Uygulama ücretsiz. Yapay zekâ aracının kendi hesabı gerekir ve çoğu ücretli bir plan ister; GitHub Copilot CLI ücretsiz başlar.</sub>
 </p>
 
 <p align="center">
@@ -26,7 +27,9 @@
   <a href="../../issues/new/choose">Sorun bildir</a>
 </p>
 
-![SiberSentez: işi kendi sözlerinle yaz, Başlat'a bas, yapay zekâ ekibinin Bina'da planlamasını, yapmasını ve kontrol etmesini izle](docs/screenshots/hero-tr.webp)
+![SiberSentez'in Bina'daki hazır örneği: yapay zekâ ekibi işi planlar, yapar ve kontrol eder, sonra sonuç seni bekler](docs/screenshots/demo-tr.webp)
+
+<sub>Uygulamanın kendi örneği ("Örneği izle"), hızlandırılmış; içinde hiçbir şey gerçekten çalışmaz. Durağan görüntü: [hero-tr.webp](docs/screenshots/hero-tr.webp).</sub>
 
 ## İndir
 
@@ -35,8 +38,9 @@
 | **Windows 10 / 11** (64 bit) | [`SiberSentez-Setup-<sürüm>.exe`](../../releases/latest) | Çalıştır. Yalnız senin için kurulur, yönetici izni istemez. |
 | **Linux** (64 bit, x86_64) | [`SiberSentez-<sürüm>-x86_64.AppImage`](../../releases/latest) | Çalıştırılabilir yap (`chmod +x`) ve aç. Kurulum yok. |
 
-Ücretsiz; hesap ve reklam yok. Kendi hesabıyla bir yapay zekâ kodlama aracı gerekir (ör. Claude Code için bir Claude
-aboneliği); SiberSentez onu kurmana yardım eder. Kurulum dosyası henüz kod imzalı değil, bu yüzden Windows ilk seferde
+Ücretsiz; hesap ve reklam yok. Kendi hesabıyla bir yapay zekâ kodlama aracı gerekir; çoğu ücretli bir plan ister (ör.
+Claude Code için bir Claude aboneliği), GitHub Copilot CLI küçük bir ücretsiz aylık hakla başlar. SiberSentez onu
+kurmana yardım eder. Kurulum dosyası henüz kod imzalı değil, bu yüzden Windows ilk seferde ve her yeni sürümde
 uyarabilir: "Ek bilgi" → "Yine de çalıştır" ([ayrıntı](https://sibersentez.com/#smartscreen)).
 
 ## Neden SiberSentez?
@@ -53,7 +57,7 @@ nasıl geri alacağını bildiğini varsayarlar. SiberSentez onların etrafında
 | Bir hata | Biliyorsan `git` | Her işten önce kopya alınır: tek tıkla geri dön, onu da geri al |
 | Ne olduğunu görmek | Akan terminal çıktısı | Kimin çalıştığını, kimin seni beklediğini ve neyin değiştiğini gösteren bir bina |
 
-Yalnız senin bilgisayarında çalışır, kendi yapay zekâsını getirmez ve işini hiçbir yere göndermez.
+Yalnız senin bilgisayarında çalışır ve kendi yapay zekâsını getirmez. SiberSentez senin hakkında ya da işinle ilgili hiçbir şeyi hiçbir yere göndermez; yapay zekâ aracın, SiberSentez olmadan da yaptığı gibi kendi sağlayıcısıyla konuşur.
 
 ## Nasıl çalışır?
 

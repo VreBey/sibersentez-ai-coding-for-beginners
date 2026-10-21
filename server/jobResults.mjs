@@ -108,21 +108,85 @@ export function listJobResults({ hubDir, projectId }) {
   }
 }
 
+// The records file's state: 'missing', 'ok' (this version's, readable), 'broken' (there, but cut short, edited by hand,
+// too big, not a file, or written by a newer SiberSentez) or 'busy' (it could not be read just now: held by a virus
+// scanner or a sync program, no permission; independent review of 0.20.0: that is no reason to set a good file aside).
+function fileState(file) {
+  let text;
+  try {
+    const st = fs.lstatSync(file);
+    if (!st.isFile() || st.size > JOB_RESULTS_MAX) return 'broken';
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    return e?.code === 'ENOENT' ? 'missing' : 'busy';
+  }
+  try {
+    return JSON.parse(text)?.version === JOB_RESULTS_VERSION ? 'ok' : 'broken';
+  } catch {
+    return 'broken';
+  }
+}
+
+// Broken copies kept beside the records (the newest; older ones go when a new one is set aside)
+export const JOB_RESULTS_BROKEN_KEEP = 3;
+
+// Sets a broken records file aside (job-results.json.broken-<time>-<random>: never the name of an earlier copy)
+function setAside(file, now) {
+  const aside = `${file}.broken-${now()}-${crypto.randomBytes(3).toString('hex')}`;
+  fs.renameSync(file, aside);
+  console.error('job results file could not be read; set aside as', path.basename(aside));
+}
+
+// Keeps the newest JOB_RESULTS_BROKEN_KEEP copies set aside. After the record is written and on its own: a copy that
+// cannot be removed now (held by a scanner) never stops a record; it goes next time.
+function pruneAside(base) {
+  const prefix = `${JOB_RESULTS_FILE}.broken-`;
+  const copies = fs
+    .readdirSync(base)
+    .filter((n) => n.startsWith(prefix))
+    .map((n) => ({ n, t: Number(n.slice(prefix.length).split('-')[0]) || 0 }))
+    .sort((x, y) => y.t - x.t || (x.n < y.n ? 1 : -1));
+  for (const c of copies.slice(JOB_RESULTS_BROKEN_KEEP)) {
+    try {
+      fs.rmSync(path.join(base, c.n), { force: true });
+    } catch {
+      // Held just now: removed next time
+    }
+  }
+}
+
 // Writes the record (newest first, the job's older record replaced). Never throws: false when it could not be written.
-export function writeJobResult({ hubDir, projectId, record }) {
+// A broken records file is set aside first, never written over: what it held may still be read by hand or by a newer
+// version (independent review of 0.20.0: the install record refuses instead, but a job's result must still be kept). A
+// file that could not be read just now is left as it is and nothing is written.
+export function writeJobResult({ hubDir, projectId, record, now = Date.now, stateOf = fileState }) {
   const rec = jobResultRecord(record);
   if (!hubDir || !rec) return false;
   const base = pointsDir(hubDir, projectId);
-  const jobs = [rec, ...listJobResults({ hubDir, projectId }).filter((r) => r.jobId !== rec.jobId)].slice(0, JOB_RESULTS_KEEP);
+  const file = path.join(base, JOB_RESULTS_FILE);
+  const state = stateOf(file);
+  if (state === 'busy') {
+    console.error('job result not written: the records file could not be read just now');
+    return false;
+  }
+  const jobs = [rec, ...(state === 'ok' ? listJobResults({ hubDir, projectId }) : []).filter((r) => r.jobId !== rec.jobId)].slice(0, JOB_RESULTS_KEEP);
   const tmp = path.join(base, `.${JOB_RESULTS_FILE}.${crypto.randomBytes(4).toString('hex')}.tmp`);
   try {
+    if (state === 'broken') setAside(file, now);
     fs.mkdirSync(base, { recursive: true });
-    writeFileAtomic(path.join(base, JOB_RESULTS_FILE), JSON.stringify({ version: JOB_RESULTS_VERSION, jobs }), { tmp });
-    return true;
+    writeFileAtomic(file, JSON.stringify({ version: JOB_RESULTS_VERSION, jobs }), { tmp });
   } catch (e) {
     console.error('job result not written:', e?.code || 'error');
     return false;
   }
+  if (state === 'broken') {
+    try {
+      pruneAside(base);
+    } catch {
+      // The folder could not be listed: the copies stay until next time
+    }
+  }
+  return true;
 }
 
 // The whole-job verdict of the plan's job in a /team answer, or null (a task review, another job's, none)

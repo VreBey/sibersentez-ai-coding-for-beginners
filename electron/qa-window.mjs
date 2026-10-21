@@ -93,7 +93,7 @@ export function windowOptions({ qaHidden = false, preload = undefined, icon = un
     backgroundColor: WINDOW_BACKGROUND.dark,
     autoHideMenuBar: true,
     webPreferences: {
-      // One preload for the window's three bridge functions (electron/preload.cjs); sandboxed, isolated, top frame only
+      // One preload for the window's bridge (electron/preload.cjs); sandboxed, isolated, top frame only
       preload,
       contextIsolation: true,
       sandbox: true,

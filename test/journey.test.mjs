@@ -231,7 +231,7 @@ test('a beginner\'s journey: new project from an idea → a job in the app\'s te
     const restore = (await get(`/api/projects/${projectId}/restore`)).json;
     const point = restore.jobs.find((j) => j.jobId === jobId);
     assert.ok(point, 'the job\'s copy is listed with its job');
-    const busy = await post({ action: 'restore-apply', projectId, pointId: point.id });
+    const busy = await post({ action: 'restore-apply', projectId, pointId: point.id, planId: '0123456789abcdef' });
     assert.deepEqual([busy.status, busy.json.error], [409, 'ai-working']);
     assert.equal(call({ type: 'terminal-state', sessions: [{ id: 't1', projectId, ai: true, tool: 'claude', jobId, running: false }] }).ok, true, 'the tool ended, its shell stays');
     const preview = await post({ action: 'restore-preview', projectId, pointId: point.id });

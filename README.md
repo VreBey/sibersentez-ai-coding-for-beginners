@@ -6,8 +6,9 @@
 
 <p align="center">
   <b>Build something with AI, even if you have never written code.</b><br>
-  A free, open-source desktop app that sets up, starts and shows the AI coding tool you already have:<br>
-  Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor CLI, Qwen Code and OpenCode.
+  A free, open-source desktop app that sets up, starts and shows your own AI coding tool:<br>
+  Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor CLI, Qwen Code and OpenCode.<br>
+  <sub>The app is free. The AI tool needs its own account, and most ask for a paid plan; GitHub Copilot CLI starts free.</sub>
 </p>
 
 <p align="center">
@@ -26,7 +27,9 @@
   <a href="../../issues/new/choose">Report a problem</a>
 </p>
 
-![SiberSentez: write the job in your own words, press Start, and watch your AI team plan, build and check it in the Building](docs/screenshots/hero.webp)
+![SiberSentez's built-in example in the Building: the AI team plans, builds and checks a job, then the result waits for you](docs/screenshots/demo.webp)
+
+<sub>The app's own example ("Watch the example"), sped up; nothing in it really runs. A still: [hero.webp](docs/screenshots/hero.webp).</sub>
 
 ## Download
 
@@ -35,9 +38,10 @@
 | **Windows 10 / 11** (64-bit) | [`SiberSentez-Setup-<version>.exe`](../../releases/latest) | Run it. Installs for you only, asks for no administrator rights. |
 | **Linux** (64-bit, x86_64) | [`SiberSentez-<version>-x86_64.AppImage`](../../releases/latest) | Make it executable (`chmod +x`) and open it. Nothing to install. |
 
-Free, no account, no ads. You need one AI coding tool with its own account (for example a Claude subscription for
-Claude Code); SiberSentez helps you set it up. The installer is not code-signed yet, so Windows may warn the first
-time: [what to do](#installation).
+Free, no account, no ads. You need one AI coding tool with its own account; most ask for a paid plan (for example a
+Claude subscription for Claude Code), and GitHub Copilot CLI starts with a small free monthly allowance. SiberSentez
+helps you set it up. The installer is not code-signed yet, so Windows may warn the first
+time, and again with each new version: [what to do](#installation).
 
 ## Why SiberSentez?
 
@@ -53,7 +57,7 @@ to undo a mistake. SiberSentez is the friendly room around them.
 | A mistake | `git` if you know it | Every job keeps a copy first: go back in one click, and undo that too |
 | Seeing what happens | Scrolling terminal output | A building where you watch who works, who waits for you and what changed |
 
-It runs only on your computer, brings no AI of its own and sends your work nowhere.
+It runs only on your computer and brings no AI of its own. SiberSentez sends nothing about you or your work anywhere; your AI tool talks to its own provider, as it does without SiberSentez.
 
 ## How it works
 
@@ -119,7 +123,8 @@ You do not need to install Node.js or anything else to use the program.
 2. Run it. SiberSentez installs into `%LOCALAPPDATA%\Programs\SiberSentez`, for the current user only, and **does not ask for administrator rights**.
 3. When setup finishes you have a **SiberSentez** shortcut on the Desktop and in the Start menu. Open SiberSentez.
 
-> **"Windows protected your PC" warning:** the installer is not code-signed yet, so Windows SmartScreen may warn you the first time.
+> **"Windows protected your PC" warning:** the installer is not code-signed yet, so Windows SmartScreen may warn you the first time,
+> and again with each new version (every installer is a new unsigned file).
 > If you downloaded the file from the project's own page, click **More info**, then **Run anyway**.
 
 ### Linux
@@ -176,7 +181,7 @@ In Off the menu only copies paths and ids and opens details. In Preview each ite
 For a new project there is one path, from an empty folder to an AI tool at work in it:
 
 1. **New project**: the button in the header, the **Getting started** card in the Projects tab (shown while you have two or fewer projects of your own), **New project…** in the tray or **New project** in the command palette (`Ctrl+K`).
-2. **Choose or create the folder** in the system folder picker (it has **New folder**). Some folders cannot be projects and are refused with the reason: a network or WSL folder, a whole drive, your user folder, Desktop / Documents / Downloads themselves, the Windows, Program Files and ProgramData folders and everything in them, the OneDrive folders themselves (a project folder inside OneDrive is fine), the hub folder, anything inside it or holding it, the program folder, Claude Code's own settings folder, a link, a folder that holds listed projects. A folder that is already listed opens that project.
+2. **Choose or create the folder** in the system folder picker (it has **New folder**). Some folders cannot be projects and are refused with the reason: a network or WSL folder, a whole drive, your user folder and the folder that holds it (`C:\Users`, with its shared Public and Default profiles), your personal folders themselves (Desktop, Documents, Downloads, Pictures, Music, Videos, also where Windows moved them into OneDrive or Linux names them in your language), the Windows, Program Files and ProgramData folders and everything in them, the OneDrive folders themselves (a project folder inside OneDrive is fine), the hub folder, anything inside it or holding it, the program folder, Claude Code's own settings folder, a link, a folder that holds listed projects. A folder that is already listed opens that project.
 3. **Write your idea**: the project's drawer opens at *Skills that fit this project* with the cursor in the idea box ("What do you want to build in this project?", for example "a 2D platform game in Unity"). SiberSentez reads the idea and the folder on this computer (nothing is sent to an AI) and ticks the skills and agents that fit.
 4. **Look at the suggestions**: each with its reason in plain words ("your idea mentions “Unity”", "Unity project", "installed in Demo").
 5. **Install** them if you want (actions On; in Preview the button only lists what would be installed). You do not have to: **Start** sets up the team and the helpers that fit your job by itself.

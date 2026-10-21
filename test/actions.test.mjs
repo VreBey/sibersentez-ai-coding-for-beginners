@@ -434,6 +434,9 @@ test('validation: unknown action and unexpected field -> 400 (no path or command
     }
     assert.equal((await env.post('{"action":"explorer","projectId":"alpha","__proto__":{"x":1}}')).status, 400, '__proto__ key');
     assert.equal((await env.post({ action: 'rm' })).json.error, 'unknown-action');
+    // A missing field is named by an English code the page maps to its own words (it was Turkish text before)
+    assert.equal((await env.post({ action: 'explorer' })).json.error, 'missing-field', 'no target');
+    assert.equal((await env.post({ action: 'resume' })).json.error, 'missing-field', 'no session');
     assert.equal(env.spawnCalls.length, 0);
   } finally {
     await env.close();

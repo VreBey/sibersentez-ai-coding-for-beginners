@@ -42,6 +42,8 @@ jobs:
       # After the tests, so a new advisory never hides their result: what ships in the app (node-pty) has no known
       # advisory; the build tools are checked by hand (docs/release.md)
       - run: npm audit --omit=dev --audit-level=low
+      # Electron is a dev dependency (the installer bundles it) but it is the app's runtime: its own advisories
+      - run: node tools/audit-electron.mjs
 
   # Linux (plan G2): the same suite on Ubuntu; node-pty is built from source by npm ci (the runner has a compiler, make
   # and Python). Tests written with Windows' own paths are skipped there (test/lib/winonly.mjs); Linux' own behaviour,
